@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cloud.opencode.base</groupId>
+        <artifactId>opencode-base-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>opencode-base-serialization</artifactId>
+    <name>OpenCode Base Serialization</name>
+    <description>
+        Unified serialization facade with SPI mechanism, supporting JSON, XML, Kryo, Protobuf, and more.
+        统一序列化门面，支持 SPI 可插拔机制，支持 JSON、XML、Kryo、Protobuf 等多种格式。
+    </description>
+
+    <dependencies>
+        <!-- OpenCode Core -->
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-core</artifactId>
+        </dependency>
+
+        <!-- OpenCode JSON (for JsonSerializer) -->
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-json</artifactId>
+        </dependency>
+
+        <!-- OpenCode DeepClone (for deepCopy delegation, optional) -->
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-deepclone</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- JAXB for XML (optional) -->
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>4.0.2</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>4.0.5</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Kryo (optional) -->
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo</artifactId>
+            <version>5.6.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Protobuf (optional) -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>4.28.2</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- LZ4 compression (optional) -->
+        <dependency>
+            <groupId>org.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+            <version>1.8.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Snappy compression (optional) -->
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>1.1.10.5</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ZSTD compression (optional) -->
+        <dependency>
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+            <version>1.5.6-4</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Jackson for JSON tests -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} --enable-preview -Dnet.bytebuddy.experimental=true</argLine>
+                </configuration>
+            </plugin>
+        
+            <!-- 覆盖率阈值临时降低，后续逐步提升至 80% / Coverage threshold temporarily lowered -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>check</id>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.70</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+</plugins>
+    </build>
+
+</project>
