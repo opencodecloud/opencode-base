@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cloud.opencode.base</groupId>
+        <artifactId>opencode-base-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>opencode-base-feature</artifactId>
+    <name>OpenCode Base Feature</name>
+    <description>Feature toggle/flag support - grayscale release, A/B testing, dynamic configuration for JDK 25+</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-core</artifactId>
+        </dependency>
+
+        <!-- OpenCode Cache for cached feature store (optional) -->
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-cache</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- OpenCode Expression for expression-based strategies (optional) -->
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-expression</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

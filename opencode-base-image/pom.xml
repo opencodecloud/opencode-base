@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cloud.opencode.base</groupId>
+        <artifactId>opencode-base-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>opencode-base-image</artifactId>
+    <name>OpenCode Base Image</name>
+    <description>Image processing utilities - resize, crop, rotate, watermark, compress, format conversion for JDK 25+</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-core</artifactId>
+        </dependency>
+
+        <!--
+            Optional: WebP format support
+            可选：WebP 格式支持
+
+            Usage: Add this dependency to your project to enable WebP support.
+            ImageIO will automatically discover the plugin at runtime.
+
+            用法：在你的项目中添加此依赖以启用 WebP 支持。
+            ImageIO 会在运行时自动发现插件。
+        -->
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>3.12.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

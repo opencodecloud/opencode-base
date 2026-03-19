@@ -1,0 +1,145 @@
+# OpenCode Base Log
+
+**轻量级日志门面，支持 SPI 可插拔日志引擎**
+
+`opencode-base-log` 是一个现代日志框架，提供统一的日志门面，支持可插拔后端、结构化日志、审计日志、性能日志和敏感数据脱敏。
+
+## 功能特性
+
+### 核心功能
+- **统一日志门面**：通过 `OpenLog` 提供静态方法，自动检测调用类
+- **SPI 可插拔后端**：通过 `LogProvider` SPI 支持 SLF4J、Log4j2、JUL
+- **参数化日志**：`{}` 占位符支持，高效消息格式化
+- **Lambda 延迟求值**：延迟消息构造，提升性能
+- **标记支持**：通过标记实现日志分类和过滤
+
+### 增强功能
+- **结构化日志**：JSON 风格的键值对结构化日志条目，适用于 ELK/Loki
+- **日志脱敏**：密码、手机号、身份证等敏感数据脱敏
+- **采样日志**：概率、时间和计数三种采样模式
+- **审计日志**：结构化审计事件记录，支持可插拔持久化
+- **性能日志**：StopWatch 计时、定时执行、慢操作检测
+- **虚拟线程上下文**：虚拟线程上下文传播
+- **MDC/NDC**：映射诊断上下文和嵌套诊断上下文支持
+- **条件日志**：基于动态规则的条件日志输出
+- **作用域日志上下文**：自动关闭的作用域上下文管理
+
+## 快速开始
+
+### Maven 依赖
+```xml
+<dependency>
+    <groupId>cloud.opencode.base</groupId>
+    <artifactId>opencode-base-log</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+### 基本用法
+
+```java
+import cloud.opencode.base.log.OpenLog;
+import cloud.opencode.base.log.Logger;
+
+// 简单日志（自动检测调用类）
+OpenLog.info("应用启动");
+
+// 参数化日志
+OpenLog.info("用户 {} 从 {} 登录", userId, ipAddress);
+
+// Lambda 延迟求值
+OpenLog.debug(() -> "耗时计算: " + computeValue());
+
+// 异常日志
+OpenLog.error("操作失败", exception);
+
+// 获取 Logger 实例
+Logger log = OpenLog.get(MyClass.class);
+log.info("来自 {} 的消息", "MyClass");
+```
+
+### 结构化日志
+
+```java
+import cloud.opencode.base.log.enhance.StructuredLog;
+
+StructuredLog.info()
+    .message("用户登录成功")
+    .field("userId", "user123")
+    .field("ip", "192.168.1.1")
+    .field("duration", 150)
+    .log();
+// 输出: {"message":"用户登录成功","userId":"user123","ip":"192.168.1.1","duration":150}
+```
+
+### 性能日志
+
+```java
+import cloud.opencode.base.log.perf.PerfLog;
+import cloud.opencode.base.log.perf.StopWatch;
+
+// 计时器
+StopWatch watch = PerfLog.start("queryUsers");
+List<User> users = userDao.findAll();
+watch.stopAndLog();
+
+// 定时执行
+PerfLog.timed("processOrder", () -> orderService.process(order));
+```
+
+### 日志脱敏
+
+```java
+import cloud.opencode.base.log.enhance.LogMasking;
+
+String masked = LogMasking.mask("13812345678", MaskingStrategy.PHONE);
+// 输出: 138****5678
+```
+
+## 类参考
+
+| 类名 | 说明 |
+|------|------|
+| `OpenLog` | 主入口 - 统一的静态日志门面，自动检测调用类 |
+| `Logger` | 核心日志接口，定义标准日志操作 |
+| `LoggerFactory` | 日志记录器工厂，按类或名称创建 Logger 实例 |
+| `LogLevel` | 日志级别枚举：TRACE、DEBUG、INFO、WARN、ERROR、OFF |
+| `AuditEvent` | 不可变审计事件记录，包含用户、操作和资源 |
+| `AuditLog` | 审计事件记录的静态门面 |
+| `AuditLogger` | 自定义审计日志持久化的 SPI 接口 |
+| `LogContext` | 跨线程日志上下文管理工具 |
+| `MDC` | 映射诊断上下文，键值对线程上下文 |
+| `NDC` | 嵌套诊断上下文，栈式线程上下文 |
+| `ConditionalLog` | 基于动态规则的条件日志输出 |
+| `ExceptionLog` | 增强异常日志，支持堆栈跟踪格式化 |
+| `LogMasking` | 敏感数据脱敏工具（密码、手机号、身份证） |
+| `LogMetrics` | 日志指标收集和报告 |
+| `SampledLog` | 限流和采样日志（概率、时间、计数） |
+| `ScopedLogContext` | 自动关闭的作用域日志上下文管理 |
+| `StructuredLog` | JSON 风格的结构化日志，流式 API |
+| `VirtualThreadContext` | 虚拟线程上下文传播支持 |
+| `OpenLogException` | 日志框架异常类型 |
+| `Marker` | 日志标记，用于分类和过滤 |
+| `Markers` | 预定义标记常量和工厂方法 |
+| `PerfLog` | 性能日志工具，集成 StopWatch |
+| `SlowOperationConfig` | 慢操作检测阈值配置 |
+| `StopWatch` | 高精度操作计时器，集成日志输出 |
+| `DefaultLogProvider` | 默认 SPI 日志提供者实现 |
+| `LogAdapter` | 外部日志框架桥接适配器 |
+| `LogProvider` | 可插拔日志引擎后端的 SPI 接口 |
+| `LogProviderFactory` | 日志提供者发现和管理工厂 |
+| `MDCAdapter` | MDC 实现的 SPI 接口 |
+| `NDCAdapter` | NDC 实现的 SPI 接口 |
+
+## 环境要求
+
+- Java 25+（使用虚拟线程、StackWalker、记录类）
+- 核心功能无外部依赖
+
+## 许可证
+
+Apache License 2.0
+
+## 作者
+
+Leon Soo - [OpenCode.cloud](https://opencode.cloud)
