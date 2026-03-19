@@ -407,7 +407,9 @@
                     <artifactId>maven-javadoc-plugin</artifactId>
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
+                        <release>${java.version}</release>
                         <additionalOptions>--enable-preview</additionalOptions>
+                        <doclint>html,syntax,reference</doclint>
                     </configuration>
                     <executions>
                         <execution>

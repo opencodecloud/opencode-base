@@ -1,6 +1,7 @@
 package cloud.opencode.base.lock.distributed;
 
 import cloud.opencode.base.lock.Lock;
+import cloud.opencode.base.lock.spi.DistributedLockProvider;
 
 import java.time.Duration;
 import java.util.Optional;

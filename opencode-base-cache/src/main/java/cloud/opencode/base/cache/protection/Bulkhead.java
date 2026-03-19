@@ -166,6 +166,13 @@ public sealed interface Bulkhead permits Bulkhead.SemaphoreBulkhead, Bulkhead.Th
     /**
      * Bulkhead metrics
      * 舱壁指标
+     *
+     * @param name the bulkhead name | 舱壁名称
+     * @param maxAllowedConcurrentCalls the maximum allowed concurrent calls | 最大并发调用数
+     * @param availableConcurrentCalls the available concurrent call slots | 可用并发调用槽位
+     * @param successfulCallsCount the number of successful calls | 成功调用数
+     * @param rejectedCallsCount the number of rejected calls | 拒绝调用数
+     * @param totalCallsCount the total number of calls | 总调用数
      */
     record Metrics(
             String name,
@@ -626,6 +633,11 @@ public sealed interface Bulkhead permits Bulkhead.SemaphoreBulkhead, Bulkhead.Th
      * 舱壁已满时抛出的异常
      */
     class BulkheadFullException extends RuntimeException {
+        /**
+         * Creates a BulkheadFullException | 创建舱壁已满异常
+         *
+         * @param message the error message | 错误消息
+         */
         public BulkheadFullException(String message) {
             super(message);
         }

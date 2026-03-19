@@ -57,6 +57,14 @@ import java.util.Optional;
  *   <li>Null-safe: Partial (key required, value optional) - 空值安全: 部分（键必需，值可选）</li>
  * </ul>
  *
+ * @param type the event type | 事件类型
+ * @param cacheName the cache name | 缓存名称
+ * @param key the cache key | 缓存键
+ * @param value the current value | 当前值
+ * @param oldValue the previous value | 旧值
+ * @param removalCause the removal cause, if applicable | 移除原因（如适用）
+ * @param isHit whether the access was a cache hit | 是否命中缓存
+ * @param timestamp the event timestamp | 事件时间戳
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>

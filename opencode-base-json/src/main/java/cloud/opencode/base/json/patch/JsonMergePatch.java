@@ -17,11 +17,12 @@ import java.util.Objects;
  * <p><strong>Rules | 规则:</strong></p>
  * <ul>
  *   <li>If patch is not an object, replace the target - 如果补丁不是对象，替换目标</li>
- *   <li>For each property in the patch object: - 对于补丁对象中的每个属性：</li>
- *   <ul>
- *     <li>If value is null, remove the property - 如果值为 null，移除属性</li>
- *     <li>Otherwise, recursively merge - 否则，递归合并</li>
- *   </ul>
+ *   <li>For each property in the patch object: - 对于补丁对象中的每个属性：
+ *     <ul>
+ *       <li>If value is null, remove the property - 如果值为 null，移除属性</li>
+ *       <li>Otherwise, recursively merge - 否则，递归合并</li>
+ *     </ul>
+ *   </li>
  * </ul>
  *
  * <p><strong>Example | 示例:</strong></p>

@@ -550,6 +550,14 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
     /**
      * Level configuration
      * 级别配置
+     *
+     * @param name the level name | 级别名称
+     * @param cache the cache instance for this level | 此级别的缓存实例
+     * @param ttl the time-to-live for this level | 此级别的过期时间
+     * @param promoteOnHit whether to promote entries on hit | 命中时是否提升条目
+     * @param writeEnabled whether writes are enabled for this level | 此级别是否启用写入
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public record LevelConfig<K, V>(
             String name,
@@ -558,6 +566,13 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
             boolean promoteOnHit,
             boolean writeEnabled
     ) {
+        /**
+         * Creates a new level config builder | 创建新的级别配置构建器
+         *
+         * @param <K> the key type | 键类型
+         * @param <V> the value type | 值类型
+         * @return a new builder | 新的构建器
+         */
         public static <K, V> LevelConfigBuilder<K, V> builder() {
             return new LevelConfigBuilder<>();
         }
@@ -566,39 +581,75 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
     /**
      * Level configuration builder
      * 级别配置构建器
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class LevelConfigBuilder<K, V> {
+
+        /** Creates a new LevelConfigBuilder instance | 创建新的 LevelConfigBuilder 实例 */
+        public LevelConfigBuilder() {}
         private String name = "unnamed";
         private Cache<K, V> cache;
         private Duration ttl;
         private boolean promoteOnHit = false;
         private boolean writeEnabled = true;
 
+        /**
+         * name | name
+         * @param name the name | name
+         * @return the result | 结果
+         */
         public LevelConfigBuilder<K, V> name(String name) {
             this.name = name;
             return this;
         }
 
+        /**
+         * Sets the cache for this level | 设置此级别的缓存
+         *
+         * @param cache the cache instance | 缓存实例
+         * @return this builder | 此构建器
+         */
         public LevelConfigBuilder<K, V> cache(Cache<K, V> cache) {
             this.cache = cache;
             return this;
         }
 
+        /**
+         * ttl | ttl
+         * @param ttl the ttl | ttl
+         * @return the result | 结果
+         */
         public LevelConfigBuilder<K, V> ttl(Duration ttl) {
             this.ttl = ttl;
             return this;
         }
 
+        /**
+         * promoteOnHit | promoteOnHit
+         * @param promote the promote | promote
+         * @return the result | 结果
+         */
         public LevelConfigBuilder<K, V> promoteOnHit(boolean promote) {
             this.promoteOnHit = promote;
             return this;
         }
 
+        /**
+         * writeEnabled | writeEnabled
+         * @param enabled the enabled | enabled
+         * @return the result | 结果
+         */
         public LevelConfigBuilder<K, V> writeEnabled(boolean enabled) {
             this.writeEnabled = enabled;
             return this;
         }
 
+        /**
+         * build | build
+         * @return the result | 结果
+         */
         public LevelConfig<K, V> build() {
             Objects.requireNonNull(cache, "cache cannot be null");
             return new LevelConfig<>(name, cache, ttl, promoteOnHit, writeEnabled);
@@ -623,11 +674,28 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
         void recordMiss() { misses.incrementAndGet(); }
         void recordPromotion() { promotions.incrementAndGet(); }
 
+        /**
+         * snapshot | snapshot
+         * @return the result | 结果
+         */
         public Snapshot snapshot() {
             return new Snapshot(levelName, hits.get(), misses.get(), promotions.get());
         }
 
+        /**
+         * Level metrics snapshot
+         * 级别指标快照
+         *
+         * @param levelName the level name | 级别名称
+         * @param hits the hit count | 命中数
+         * @param misses the miss count | 未命中数
+         * @param promotions the promotion count | 提升数
+         */
         public record Snapshot(String levelName, long hits, long misses, long promotions) {
+            /**
+             * hitRate | hitRate
+             * @return the result | 结果
+             */
             public double hitRate() {
                 long total = hits + misses;
                 return total > 0 ? (double) hits / total : 0;
@@ -638,6 +706,11 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
     /**
      * Multi-level statistics
      * 多级统计
+     *
+     * @param totalHits the total number of hits across all levels | 所有级别的总命中数
+     * @param totalMisses the total number of misses | 总未命中数
+     * @param totalPromotions the total number of promotions | 总提升数
+     * @param levelStats per-level statistics snapshots | 每级统计快照
      */
     public record MultiLevelStats(
             long totalHits,
@@ -645,6 +718,10 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
             long totalPromotions,
             Map<String, LevelMetrics.Snapshot> levelStats
     ) {
+        /**
+         * overallHitRate | overallHitRate
+         * @return the result | 结果
+         */
         public double overallHitRate() {
             long total = totalHits + totalMisses;
             return total > 0 ? (double) totalHits / total : 0;
@@ -679,32 +756,67 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
 
     // ==================== Builder | 构建器 ====================
 
+    /**
+     * Builder for MultiLevelCache
+     * MultiLevelCache 构建器
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
+     */
     public static class Builder<K, V> {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
         private String name = "multi-level-cache";
         private final List<LevelConfig<K, V>> levels = new ArrayList<>();
         private WritePolicy writePolicy = WritePolicy.WRITE_ALL;
         private InvalidationPolicy invalidationPolicy = InvalidationPolicy.INVALIDATE_ALL;
 
+        /**
+         * name | name
+         * @param name the name | name
+         * @return the result | 结果
+         */
         public Builder<K, V> name(String name) {
             this.name = name;
             return this;
         }
 
+        /**
+         * Adds a cache level | 添加缓存级别
+         *
+         * @param config the level configuration | 级别配置
+         * @return this builder | 此构建器
+         */
         public Builder<K, V> level(LevelConfig<K, V> config) {
             this.levels.add(config);
             return this;
         }
 
+        /**
+         * writePolicy | writePolicy
+         * @param policy the policy | policy
+         * @return the result | 结果
+         */
         public Builder<K, V> writePolicy(WritePolicy policy) {
             this.writePolicy = policy;
             return this;
         }
 
+        /**
+         * invalidationPolicy | invalidationPolicy
+         * @param policy the policy | policy
+         * @return the result | 结果
+         */
         public Builder<K, V> invalidationPolicy(InvalidationPolicy policy) {
             this.invalidationPolicy = policy;
             return this;
         }
 
+        /**
+         * build | build
+         * @return the result | 结果
+         */
         public MultiLevelCache<K, V> build() {
             if (levels.isEmpty()) {
                 throw new IllegalArgumentException("At least one level is required");

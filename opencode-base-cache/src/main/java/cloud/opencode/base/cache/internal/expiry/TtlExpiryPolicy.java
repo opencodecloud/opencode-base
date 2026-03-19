@@ -42,6 +42,10 @@ public final class TtlExpiryPolicy<K, V> implements ExpiryPolicy<K, V> {
 
     private final Duration ttl;
 
+    /**
+     * TtlExpiryPolicy | TtlExpiryPolicy
+     * @param ttl the ttl | ttl
+     */
     public TtlExpiryPolicy(Duration ttl) {
         this.ttl = ttl;
     }

@@ -47,8 +47,10 @@ public final class Bytes {
     // ==================== 数组操作 ====================
 
     /**
-     * Concatenates multiple arrays
-     * 合并多个数组
+     * Concatenates multiple arrays | 合并多个数组
+     *
+     * @param arrays the arrays to concatenate | 要合并的数组
+     * @return the concatenated array | 合并后的数组
      */
     public static byte[] concat(byte[]... arrays) {
         long totalLength = 0;
@@ -68,16 +70,22 @@ public final class Bytes {
     }
 
     /**
-     * Checks whether the array contains the specified element
-     * 检查数组是否包含指定元素
+     * Checks whether the array contains the specified element | 检查数组是否包含指定元素
+     *
+     * @param array the array to search | 要搜索的数组
+     * @param target the element to find | 要查找的元素
+     * @return true if found | 找到返回 true
      */
     public static boolean contains(byte[] array, byte target) {
         return indexOf(array, target) >= 0;
     }
 
     /**
-     * Finds the index of the specified element
-     * 查找元素索引
+     * Finds the index of the specified element | 查找元素索引
+     *
+     * @param array the array to search | 要搜索的数组
+     * @param target the element to find | 要查找的元素
+     * @return the index, or -1 if not found | 索引，未找到返回 -1
      */
     public static int indexOf(byte[] array, byte target) {
         return indexOf(array, target, 0, array.length);

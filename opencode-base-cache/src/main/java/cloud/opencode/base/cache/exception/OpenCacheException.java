@@ -43,7 +43,9 @@ public class OpenCacheException extends OpenException {
 
     private static final String COMPONENT = "cache";
 
+    /** private final String cacheName; */
     private final String cacheName;
+    /** private final Object key; */
     private final Object key;
 
     /**

@@ -340,6 +340,13 @@ public class WriteCoalescer<K, V> implements AutoCloseable {
     /**
      * Coalescer statistics
      * 合并器统计
+     *
+     * @param totalWrites total number of writes | 总写入数
+     * @param totalFlushes total number of flushes | 总刷新数
+     * @param totalBatched total number of batched writes | 总批量写入数
+     * @param totalDeduplicated total number of deduplicated writes | 总去重写入数
+     * @param totalErrors total number of errors | 总错误数
+     * @param currentPending current number of pending writes | 当前待处理写入数
      */
     public record CoalescerStats(
             long totalWrites,
@@ -464,6 +471,9 @@ public class WriteCoalescer<K, V> implements AutoCloseable {
      * @param <V> value type | 值类型
      */
     public static class Builder<K, V> {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
         private BatchWriter<K, V> writer;
         private int batchSize = 100;
         private Duration flushInterval = Duration.ofSeconds(5);

@@ -5,9 +5,9 @@ package cloud.opencode.base.collections;
  * EntryTransformer - 转换 Map 条目的函数
  *
  * <p>A functional interface for transforming a key-value pair into a new value.
- * Used in {@link MapUtil#transformEntries(java.util.Map, EntryTransformer)}.</p>
+ * Used in {@link MapUtil#transformEntries}.</p>
  * <p>将键值对转换为新值的函数式接口。
- * 用于 {@link MapUtil#transformEntries(java.util.Map, EntryTransformer)}。</p>
+ * 用于 {@link MapUtil#transformEntries}。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>

@@ -35,6 +35,9 @@ package cloud.opencode.base.core.page;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @see Sort
  * @see Page
+ * @param page the page number (1-based) | 页码（从 1 开始）
+ * @param size the page size | 每页大小
+ * @param sort the sort criteria | 排序条件
  * @since JDK 25, opencode-base-core V1.0.0
  */
 public record PageRequest(long page, long size, Sort sort) {

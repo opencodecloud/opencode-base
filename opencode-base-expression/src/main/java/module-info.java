@@ -10,8 +10,8 @@
  * <ul>
  *   <li>OpenExpression - Expression engine facade - 表达式引擎门面</li>
  *   <li>Arithmetic operators (+, -, *, /, %, **) - 算术运算符</li>
- *   <li>Comparison operators (==, !=, >, <, >=, <=) - 比较运算符</li>
- *   <li>Logical operators (&&, ||, !) - 逻辑运算符</li>
+ *   <li>Comparison operators ({@code ==, !=, >, <, >=, <=}) - 比较运算符</li>
+ *   <li>Logical operators ({@code &&, ||, !}) - 逻辑运算符</li>
  *   <li>Ternary operator (? :) - 三元运算符</li>
  *   <li>Property access (user.name, list[0]) - 属性访问</li>
  *   <li>Null-safe navigation (user?.address?.city) - 空安全导航</li>

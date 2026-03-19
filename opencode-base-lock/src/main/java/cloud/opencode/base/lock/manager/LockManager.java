@@ -2,6 +2,7 @@ package cloud.opencode.base.lock.manager;
 
 import cloud.opencode.base.lock.Lock;
 import cloud.opencode.base.lock.LockConfig;
+import cloud.opencode.base.lock.OpenLock;
 import cloud.opencode.base.lock.ReadWriteLock;
 import cloud.opencode.base.lock.local.LocalLock;
 import cloud.opencode.base.lock.local.LocalReadWriteLock;

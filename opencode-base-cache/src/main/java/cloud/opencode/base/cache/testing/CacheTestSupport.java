@@ -148,10 +148,16 @@ public final class CacheTestSupport {
     public static class TestClock {
         private final AtomicLong currentTimeMillis;
 
+        /** Creates a TestClock at the current time | 创建当前时间的测试时钟 */
         public TestClock() {
             this(Instant.now());
         }
 
+        /**
+         * Creates a TestClock at the specified time | 创建指定时间的测试时钟
+         *
+         * @param initialTime the initial time | 初始时间
+         */
         public TestClock(Instant initialTime) {
             this.currentTimeMillis = new AtomicLong(initialTime.toEpochMilli());
         }
@@ -202,6 +208,9 @@ public final class CacheTestSupport {
     /**
      * Simple mock cache implementation for testing
      * 用于测试的简单模拟缓存实现
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class MockCache<K, V> implements Cache<K, V> {
 
@@ -211,18 +220,35 @@ public final class CacheTestSupport {
         private final AtomicLong hitCount = new AtomicLong();
         private final AtomicLong missCount = new AtomicLong();
 
+        /** Creates a MockCache with default name and clock | 创建默认名称和时钟的模拟缓存 */
         public MockCache() {
             this("mock-cache", new TestClock());
         }
 
+        /**
+         * Creates a MockCache with specified name | 创建指定名称的模拟缓存
+         *
+         * @param name the cache name | 缓存名称
+         */
         public MockCache(String name) {
             this(name, new TestClock());
         }
 
+        /**
+         * Creates a MockCache with specified clock | 创建指定时钟的模拟缓存
+         *
+         * @param clock the test clock | 测试时钟
+         */
         public MockCache(TestClock clock) {
             this("mock-cache", clock);
         }
 
+        /**
+         * Creates a MockCache with specified name and clock | 创建指定名称和时钟的模拟缓存
+         *
+         * @param name the cache name | 缓存名称
+         * @param clock the test clock | 测试时钟
+         */
         public MockCache(String name, TestClock clock) {
             this.name = name;
             this.clock = clock;
@@ -464,8 +490,14 @@ public final class CacheTestSupport {
     /**
      * Cache that records all operations for verification
      * 记录所有操作以供验证的缓存
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class RecordingCache<K, V> implements Cache<K, V> {
+
+        /** Creates a new RecordingCache | 创建新的记录缓存 */
+        public RecordingCache() {}
 
         private final MockCache<K, V> delegate = new MockCache<>();
         private final List<CacheOperation<K, V>> operations = Collections.synchronizedList(new ArrayList<>());
@@ -652,39 +684,115 @@ public final class CacheTestSupport {
     /**
      * Sealed interface for cache operations
      * 缓存操作密封接口
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public sealed interface CacheOperation<K, V> {
 
+        /**
+         * Get operation | 获取操作
+         * @param key the key | 键
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record Get<K, V>(K key) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Get with loader operation | 带加载器的获取操作
+         * @param key the key | 键
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record GetWithLoader<K, V>(K key) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Get all operation | 批量获取操作
+         * @param keys the keys | 键集合
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record GetAll<K, V>(Iterable<? extends K> keys) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Put operation | 放入操作
+         * @param key the key | 键
+         * @param value the value | 值
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record Put<K, V>(K key, V value) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Put all operation | 批量放入操作
+         * @param map the entries | 条目映射
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record PutAll<K, V>(Map<? extends K, ? extends V> map) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Put if absent operation | 不存在则放入操作
+         * @param key the key | 键
+         * @param value the value | 值
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record PutIfAbsent<K, V>(K key, V value) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Put with TTL operation | 带过期时间的放入操作
+         * @param key the key | 键
+         * @param value the value | 值
+         * @param ttl the time-to-live | 过期时间
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record PutWithTtl<K, V>(K key, V value, Duration ttl) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Put all with TTL operation | 带过期时间的批量放入操作
+         * @param map the entries | 条目映射
+         * @param ttl the time-to-live | 过期时间
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record PutAllWithTtl<K, V>(Map<? extends K, ? extends V> map, Duration ttl) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Put if absent with TTL operation | 带过期时间的不存在则放入操作
+         * @param key the key | 键
+         * @param value the value | 值
+         * @param ttl the time-to-live | 过期时间
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record PutIfAbsentWithTtl<K, V>(K key, V value, Duration ttl) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Invalidate operation | 失效操作
+         * @param key the key | 键
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record Invalidate<K, V>(K key) implements CacheOperation<K, V> {
         }
 
+        /**
+         * Invalidate all operation | 批量失效操作
+         * @param keys the keys | 键集合
+         * @param <K> key type | 键类型
+         * @param <V> value type | 值类型
+         */
         record InvalidateAll<K, V>(Iterable<? extends K> keys) implements CacheOperation<K, V> {
         }
     }

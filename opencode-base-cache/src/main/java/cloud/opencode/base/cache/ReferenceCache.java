@@ -855,6 +855,9 @@ public final class ReferenceCache<K, V> implements Cache<K, V> {
 
     /**
      * Builder for ReferenceCache
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class Builder<K, V> {
         private final String name;

@@ -308,7 +308,7 @@ public final class KsuidGenerator implements IdGenerator<String> {
      *
      * @param ksuid1 first KSUID | 第一个KSUID
      * @param ksuid2 second KSUID | 第二个KSUID
-     * @return comparison result (negative if ksuid1 < ksuid2) | 比较结果
+     * @return comparison result (negative if {@code ksuid1 < ksuid2}) | 比较结果
      */
     public static int compare(String ksuid1, String ksuid2) {
         return ksuid1.compareTo(ksuid2);

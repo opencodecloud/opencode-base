@@ -1,6 +1,7 @@
 package cloud.opencode.base.lock.manager;
 
 import cloud.opencode.base.lock.Lock;
+import cloud.opencode.base.lock.OpenLock;
 import cloud.opencode.base.lock.exception.OpenLockAcquireException;
 import cloud.opencode.base.lock.exception.OpenLockTimeoutException;
 

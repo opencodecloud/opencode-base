@@ -141,6 +141,8 @@ public sealed interface TtlDecayPolicy permits
     /**
      * No decay - constant TTL
      * 不衰减 - 恒定 TTL
+     *
+     * @param ttl the constant time-to-live | 恒定过期时间
      */
     record NoDecay(Duration ttl) implements TtlDecayPolicy {
         @Override
@@ -162,8 +164,13 @@ public sealed interface TtlDecayPolicy permits
     /**
      * Linear decay implementation
      * 线性衰减实现
+     *
+     * @param initialTtl the initial TTL | 初始过期时间
+     * @param minimumTtl the minimum TTL | 最小过期时间
+     * @param decaySteps the number of decay steps | 衰减步数
      */
     record LinearDecay(Duration initialTtl, Duration minimumTtl, int decaySteps) implements TtlDecayPolicy {
+        /** public LinearDecay */
         public LinearDecay {
             Objects.requireNonNull(initialTtl, "initialTtl cannot be null");
             Objects.requireNonNull(minimumTtl, "minimumTtl cannot be null");
@@ -194,8 +201,13 @@ public sealed interface TtlDecayPolicy permits
     /**
      * Exponential decay implementation
      * 指数衰减实现
+     *
+     * @param initialTtl the initial TTL | 初始过期时间
+     * @param minimumTtl the minimum TTL | 最小过期时间
+     * @param decayFactor the decay factor (0 to 1 exclusive) | 衰减因子（0到1之间）
      */
     record ExponentialDecay(Duration initialTtl, Duration minimumTtl, double decayFactor) implements TtlDecayPolicy {
+        /** public ExponentialDecay */
         public ExponentialDecay {
             Objects.requireNonNull(initialTtl, "initialTtl cannot be null");
             Objects.requireNonNull(minimumTtl, "minimumTtl cannot be null");
@@ -219,8 +231,11 @@ public sealed interface TtlDecayPolicy permits
     /**
      * Step decay implementation
      * 阶梯衰减实现
+     *
+     * @param steps the decay steps | 衰减步骤
      */
     record StepDecay(Step[] steps) implements TtlDecayPolicy {
+        /** public StepDecay */
         public StepDecay {
             if (steps == null || steps.length == 0) {
                 throw new IllegalArgumentException("steps cannot be empty");
@@ -257,6 +272,7 @@ public sealed interface TtlDecayPolicy permits
      * @param ttl       TTL at this step | 此步骤的 TTL
      */
     record Step(long threshold, Duration ttl) {
+        /** public Step */
         public Step {
             Objects.requireNonNull(ttl, "ttl cannot be null");
             if (threshold < 0) {

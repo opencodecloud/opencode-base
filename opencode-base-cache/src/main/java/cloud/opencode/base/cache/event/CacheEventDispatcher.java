@@ -326,6 +326,11 @@ public final class CacheEventDispatcher<K, V> implements AutoCloseable {
     /**
      * Dispatcher metrics
      * 分发器指标
+     *
+     * @param listenerCount the number of registered listeners | 注册的监听器数
+     * @param eventsDispatched the total events dispatched | 已分发的事件总数
+     * @param eventsDropped the total events dropped | 已丢弃的事件总数
+     * @param errors the total number of errors | 错误总数
      */
     public record Metrics(
             int listenerCount,
@@ -450,6 +455,10 @@ public final class CacheEventDispatcher<K, V> implements AutoCloseable {
      * @param <V> value type | 值类型
      */
     public static class Builder<K, V> {
+
+        /** Creates a new Builder instance | 创建新的构建器实例 */
+        public Builder() {}
+
         private ExecutorService asyncExecutor;
         private EventErrorHandler<K, V> errorHandler = EventErrorHandler.logAndContinue();
 

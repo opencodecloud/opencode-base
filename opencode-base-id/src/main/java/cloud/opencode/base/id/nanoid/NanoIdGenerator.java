@@ -325,8 +325,8 @@ public final class NanoIdGenerator implements IdGenerator<String> {
             long countToGen
     ) {
         /**
-         * Checks if the collision risk is acceptable (probability < 1e-15)
-         * 检查碰撞风险是否可接受（概率 < 1e-15）
+         * Checks if the collision risk is acceptable ({@code probability < 1e-15}).
+         * 检查碰撞风险是否可接受（{@code 概率 < 1e-15}）。
          *
          * @return true if acceptable | 如果可接受返回true
          */
@@ -335,8 +335,8 @@ public final class NanoIdGenerator implements IdGenerator<String> {
         }
 
         /**
-         * Checks if the collision risk is low (probability < 1e-9)
-         * 检查碰撞风险是否低（概率 < 1e-9）
+         * Checks if the collision risk is low ({@code probability < 1e-9}).
+         * 检查碰撞风险是否低（{@code 概率 < 1e-9}）。
          *
          * @return true if low risk | 如果低风险返回true
          */

@@ -64,21 +64,32 @@ public class BeanBuilder<T> implements Builder<T> {
     private final Map<String, Object> properties = new LinkedHashMap<>();
     private T source;
 
+    /**
+     * Creates a BeanBuilder for the given class | 为指定类创建 BeanBuilder
+     *
+     * @param beanClass the target bean class | 目标 Bean 类
+     */
     public BeanBuilder(Class<T> beanClass) {
         this.beanClass = beanClass;
     }
 
     /**
-     * Creates
-     * 创建构建器
+     * Creates a BeanBuilder for the given class | 为指定类创建 BeanBuilder
+     *
+     * @param <T> the bean type | Bean 类型
+     * @param beanClass the target bean class | 目标 Bean 类
+     * @return a new BeanBuilder | 新的 BeanBuilder
      */
     public static <T> BeanBuilder<T> of(Class<T> beanClass) {
         return new BeanBuilder<>(beanClass);
     }
 
     /**
-     * Creates a builder from an existing instance
-     * 从现有实例创建构建器
+     * Creates a builder from an existing instance | 从现有实例创建构建器
+     *
+     * @param <T> the bean type | Bean 类型
+     * @param source the source instance | 源实例
+     * @return a new BeanBuilder | 新的 BeanBuilder
      */
     public static <T> BeanBuilder<T> from(T source) {
         @SuppressWarnings("unchecked")
@@ -89,8 +100,11 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Sets
-     * 设置属性
+     * Sets a property value | 设置属性值
+     *
+     * @param propertyName the property name | 属性名
+     * @param value the value | 值
+     * @return this builder | 此构建器
      */
     public BeanBuilder<T> set(String propertyName, Object value) {
         properties.put(propertyName, value);
@@ -98,8 +112,12 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Type-safe property setting (using getter method reference)
-     * 类型安全设置属性（使用 getter 方法引用）
+     * Type-safe property setting (using getter method reference) | 类型安全设置属性（使用 getter 方法引用）
+     *
+     * @param <V> the value type | 值类型
+     * @param getter the getter reference | getter 引用
+     * @param value the value | 值
+     * @return this builder | 此构建器
      */
     public <V> BeanBuilder<T> set(Function<T, V> getter, V value) {
         String propertyName = resolvePropertyName(getter);
@@ -110,8 +128,11 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Conditionally sets a property (sets when non-null)
-     * 条件设置属性（非 null 时设置）
+     * Conditionally sets a property (sets when non-null) | 条件设置属性（非 null 时设置）
+     *
+     * @param propertyName the property name | 属性名
+     * @param value the value | 值
+     * @return this builder | 此构建器
      */
     public BeanBuilder<T> setIfNotNull(String propertyName, Object value) {
         if (value != null) {
@@ -121,8 +142,12 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Conditionally sets a property
-     * 条件设置属性
+     * Conditionally sets a property | 条件设置属性
+     *
+     * @param condition the condition | 条件
+     * @param propertyName the property name | 属性名
+     * @param value the value | 值
+     * @return this builder | 此构建器
      */
     public BeanBuilder<T> setIf(boolean condition, String propertyName, Object value) {
         if (condition) {
@@ -132,8 +157,10 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Sets multiple properties in batch
-     * 批量设置属性
+     * Sets multiple properties in batch | 批量设置属性
+     *
+     * @param props the property map | 属性映射
+     * @return this builder | 此构建器
      */
     public BeanBuilder<T> setAll(Map<String, Object> props) {
         properties.putAll(props);
@@ -141,8 +168,10 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Configuration callback
-     * 配置回调
+     * Configuration callback | 配置回调
+     *
+     * @param consumer the configuration consumer | 配置消费者
+     * @return this builder | 此构建器
      */
     public BeanBuilder<T> configure(Consumer<BeanBuilder<T>> consumer) {
         consumer.accept(this);
@@ -171,8 +200,10 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Builds and validates
-     * 构建并验证
+     * Builds and validates the bean | 构建并验证 Bean
+     *
+     * @param validator the validation consumer | 验证消费者
+     * @return the built bean | 构建的 Bean
      */
     public T buildAndValidate(Consumer<T> validator) {
         T bean = build();

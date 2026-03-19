@@ -268,6 +268,12 @@ public final class SamplingStatsCounter implements StatsCounter {
     /**
      * Sampling statistics record
      * 采样统计记录
+     *
+     * @param sampleRate the sampling rate | 采样率
+     * @param hitSamples the number of hit samples | 命中样本数
+     * @param missSamples the number of miss samples | 未命中样本数
+     * @param rawHitCount the raw hit count | 原始命中计数
+     * @param rawMissCount the raw miss count | 原始未命中计数
      */
     public record SamplingStats(
             double sampleRate,

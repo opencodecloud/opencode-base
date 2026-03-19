@@ -49,6 +49,9 @@ import java.util.Optional;
  */
 public final class LfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> {
 
+    /** Creates a new LfuEvictionPolicy instance | 创建新的 LfuEvictionPolicy 实例 */
+    public LfuEvictionPolicy() {}
+
     private final Map<K, Long> frequency = new HashMap<>();
 
     @Override

@@ -167,8 +167,12 @@ public final class OptionalUtil {
     }
 
     /**
-     * Flattens Optional<Optional<T>> to Optional<T>
-     * 将 Optional<Optional<T>> 扁平化为 Optional<T>
+     * Flattens {@code Optional<Optional<T>>} to {@code Optional<T>}.
+     * 将 {@code Optional<Optional<T>>} 扁平化为 {@code Optional<T>}。
+     *
+     * @param optional the nested optional to flatten | 要扁平化的嵌套 Optional
+     * @param <T> the value type | 值类型
+     * @return the flattened optional | 扁平化后的 Optional
      */
     public static <T> Optional<T> flatten(Optional<Optional<T>> optional) {
         return optional.flatMap(Function.identity());
@@ -203,11 +207,24 @@ public final class OptionalUtil {
     }
 
     /**
-     * Three-argument function interface
-     * 三参数函数接口
+     * Three-argument function interface.
+     * 三参数函数接口。
+     *
+     * @param <T> the first argument type | 第一个参数类型
+     * @param <U> the second argument type | 第二个参数类型
+     * @param <V> the third argument type | 第三个参数类型
+     * @param <R> the result type | 返回值类型
      */
     @FunctionalInterface
     public interface TriFunction<T, U, V, R> {
+        /**
+         * Applies this function | 应用此函数
+         *
+         * @param t the first argument | 第一个参数
+         * @param u the second argument | 第二个参数
+         * @param v the third argument | 第三个参数
+         * @return the result | 结果
+         */
         R apply(T t, U u, V v);
     }
 }

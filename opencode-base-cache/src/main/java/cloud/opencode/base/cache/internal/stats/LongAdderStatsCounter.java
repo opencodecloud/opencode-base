@@ -47,6 +47,9 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public final class LongAdderStatsCounter implements StatsCounter {
 
+    /** Creates a new LongAdderStatsCounter instance | 创建新的 LongAdderStatsCounter 实例 */
+    public LongAdderStatsCounter() {}
+
     private final LongAdder hitCount = new LongAdder();
     private final LongAdder missCount = new LongAdder();
     private final LongAdder loadSuccessCount = new LongAdder();

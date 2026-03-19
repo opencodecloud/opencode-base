@@ -13,7 +13,7 @@
  *   <li>TypeReference - Generic type support - 泛型类型支持</li>
  *   <li>Compression - GZIP, LZ4, Snappy, ZSTD - 压缩支持</li>
  *   <li>SPI Extension - Pluggable serializers - 可插拔序列化器</li>
- *   <li>Deep Copy & Type Conversion - 深拷贝与类型转换</li>
+ *   <li>Deep Copy &amp; Type Conversion - 深拷贝与类型转换</li>
  * </ul>
  *
  * @author Leon Soo

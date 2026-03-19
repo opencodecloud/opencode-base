@@ -330,6 +330,14 @@ public class CompressedCache<K, V> implements Cache<K, V> {
     /**
      * Compression statistics record
      * 压缩统计记录
+     *
+     * @param algorithm the compression algorithm | 压缩算法
+     * @param totalCompressed total number of compressions | 总压缩次数
+     * @param totalDecompressed total number of decompressions | 总解压次数
+     * @param bytesBeforeCompression total bytes before compression | 压缩前总字节数
+     * @param bytesAfterCompression total bytes after compression | 压缩后总字节数
+     * @param compressionTimeNanos total compression time in nanoseconds | 压缩总时间（纳秒）
+     * @param decompressionTimeNanos total decompression time in nanoseconds | 解压总时间（纳秒）
      */
     public record CompressionStats(
             CompressionAlgorithm algorithm,

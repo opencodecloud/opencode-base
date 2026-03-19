@@ -48,6 +48,9 @@ import java.util.Optional;
  */
 public final class LruEvictionPolicy<K, V> implements EvictionPolicy<K, V> {
 
+    /** Creates a new LruEvictionPolicy instance | 创建新的 LruEvictionPolicy 实例 */
+    public LruEvictionPolicy() {}
+
     private final LinkedHashMap<K, Long> accessOrder = new LinkedHashMap<>(16, 0.75f, true);
 
     @Override

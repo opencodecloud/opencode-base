@@ -13,9 +13,9 @@ import java.util.function.Consumer;
  * OpenCode 缓存管理器 - 用于 Spring Cache 抽象
  *
  * <p>Implements Spring's CacheManager interface to integrate OpenCode Cache
- * with Spring's @Cacheable, @CachePut, @CacheEvict annotations.</p>
+ * with Spring's {@code @Cacheable}, {@code @CachePut}, {@code @CacheEvict} annotations.</p>
  * <p>实现 Spring 的 CacheManager 接口，将 OpenCode Cache 与 Spring 的
- * @Cacheable、@CachePut、@CacheEvict 注解集成。</p>
+ * {@code @Cacheable}、{@code @CachePut}、{@code @CacheEvict} 注解集成。</p>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
@@ -230,6 +230,9 @@ public class OpenCodeCacheManager implements SpringCacheManager {
      * Builder for OpenCodeCacheManager
      */
     public static class Builder {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
         private Consumer<CacheConfig.Builder<Object, Object>> defaultConfig;
         private final Map<String, Consumer<CacheConfig.Builder<Object, Object>>> cacheConfigs = new LinkedHashMap<>();
         private boolean allowNullValues = true;

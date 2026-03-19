@@ -399,10 +399,19 @@ public class TenantCache<K, V> {
      * 租户配额超限时抛出的异常
      */
     public static class TenantQuotaExceededException extends RuntimeException {
+        /** private final String tenantId; */
         private final String tenantId;
+        /** private final long quota; */
         private final long quota;
+        /** private final long currentSize; */
         private final long currentSize;
 
+        /**
+         * TenantQuotaExceededException | TenantQuotaExceededException
+         * @param tenantId the tenantId | tenantId
+         * @param quota the quota | quota
+         * @param currentSize the currentSize | currentSize
+         */
         public TenantQuotaExceededException(String tenantId, long quota, long currentSize) {
             super(String.format("Tenant '%s' quota exceeded: limit=%d, current=%d",
                     tenantId, quota, currentSize));
@@ -411,14 +420,26 @@ public class TenantCache<K, V> {
             this.currentSize = currentSize;
         }
 
+        /**
+         * getTenantId | getTenantId
+         * @return the result | 结果
+         */
         public String getTenantId() {
             return tenantId;
         }
 
+        /**
+         * getQuota | getQuota
+         * @return the result | 结果
+         */
         public long getQuota() {
             return quota;
         }
 
+        /**
+         * getCurrentSize | getCurrentSize
+         * @return the result | 结果
+         */
         public long getCurrentSize() {
             return currentSize;
         }
@@ -582,6 +603,9 @@ public class TenantCache<K, V> {
     /**
      * Builder for TenantCache
      * TenantCache 构建器
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class Builder<K, V> {
         private final String name;

@@ -542,6 +542,9 @@ public final class RefreshAheadCache<K, V> implements Cache<K, V> {
     /**
      * Refresh statistics record
      * 刷新统计记录
+     *
+     * @param trackedEntries the number of tracked entries | 跟踪的条目数
+     * @param inFlightRefreshes the number of in-flight refreshes | 进行中的刷新数
      */
     public record RefreshStats(
             int trackedEntries,
@@ -553,6 +556,9 @@ public final class RefreshAheadCache<K, V> implements Cache<K, V> {
 
     /**
      * Builder for RefreshAheadCache
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class Builder<K, V> {
         private final Cache<K, V> delegate;

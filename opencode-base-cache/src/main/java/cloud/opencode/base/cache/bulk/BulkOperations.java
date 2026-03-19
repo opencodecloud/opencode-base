@@ -406,14 +406,29 @@ public class BulkOperations<K, V> {
      * @param <K>      key type | 键类型
      */
     public record BulkPutResult<K>(Set<K> inserted, Set<K> skipped) {
+        /**
+         * Returns the inserted count | 返回插入数
+         *
+         * @return inserted count | 插入数
+         */
         public int insertedCount() {
             return inserted.size();
         }
 
+        /**
+         * Returns the skipped count | 返回跳过数
+         *
+         * @return skipped count | 跳过数
+         */
         public int skippedCount() {
             return skipped.size();
         }
 
+        /**
+         * Returns the total count | 返回总数
+         *
+         * @return total count | 总数
+         */
         public int totalCount() {
             return inserted.size() + skipped.size();
         }
@@ -428,10 +443,20 @@ public class BulkOperations<K, V> {
      * @param batchCount     number of batches | 批次数
      */
     public record BatchResult(int processedCount, int errorCount, int batchCount) {
+        /**
+         * Returns whether there were errors | 返回是否有错误
+         *
+         * @return true if errors occurred | 有错误返回 true
+         */
         public boolean hasErrors() {
             return errorCount > 0;
         }
 
+        /**
+         * Returns the error rate | 返回错误率
+         *
+         * @return error rate (0.0 to 1.0) | 错误率
+         */
         public double errorRate() {
             int total = processedCount + errorCount;
             return total > 0 ? (double) errorCount / total : 0;
@@ -447,6 +472,14 @@ public class BulkOperations<K, V> {
      * @param <V>   value type | 值类型
      */
     public record TtlValue<V>(V value, Duration ttl) {
+        /**
+         * Creates a TtlValue | 创建 TtlValue
+         *
+         * @param value the value | 值
+         * @param ttl the time-to-live | 存活时间
+         * @param <V> value type | 值类型
+         * @return the TtlValue | TtlValue 实例
+         */
         public static <V> TtlValue<V> of(V value, Duration ttl) {
             return new TtlValue<>(value, ttl);
         }

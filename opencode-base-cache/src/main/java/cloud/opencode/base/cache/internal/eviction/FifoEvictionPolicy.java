@@ -48,6 +48,9 @@ import java.util.Optional;
  */
 public final class FifoEvictionPolicy<K, V> implements EvictionPolicy<K, V> {
 
+    /** Creates a new FifoEvictionPolicy instance | 创建新的 FifoEvictionPolicy 实例 */
+    public FifoEvictionPolicy() {}
+
     private final LinkedHashSet<K> insertionOrder = new LinkedHashSet<>();
 
     @Override

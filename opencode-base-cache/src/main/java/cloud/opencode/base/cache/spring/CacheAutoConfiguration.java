@@ -208,6 +208,9 @@ public final class CacheAutoConfiguration {
      */
     public static class ConfigurationFactory {
 
+        /** Creates a new ConfigurationFactory instance | 创建新的配置工厂实例 */
+        public ConfigurationFactory() {}
+
         /**
          * Create cache manager with programmatic configuration
          * 使用编程配置创建缓存管理器

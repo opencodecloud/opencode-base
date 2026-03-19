@@ -42,6 +42,10 @@ public final class TtiExpiryPolicy<K, V> implements ExpiryPolicy<K, V> {
 
     private final Duration tti;
 
+    /**
+     * TtiExpiryPolicy | TtiExpiryPolicy
+     * @param tti the tti | tti
+     */
     public TtiExpiryPolicy(Duration tti) {
         this.tti = tti;
     }

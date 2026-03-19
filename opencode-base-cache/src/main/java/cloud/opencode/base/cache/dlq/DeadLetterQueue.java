@@ -519,18 +519,55 @@ public class DeadLetterQueue<K> implements AutoCloseable {
             return now.isAfter(nextRetryTime);
         }
 
+        /**
+         * key | key
+         * @return the result | 结果
+         */
         public K key() { return key; }
+        /**
+         * firstFailure | firstFailure
+         * @return the result | 结果
+         */
         public Instant firstFailure() { return firstFailure; }
+        /**
+         * lastFailure | lastFailure
+         * @return the result | 结果
+         */
         public Instant lastFailure() { return lastFailure; }
+        /**
+         * lastError | lastError
+         * @return the result | 结果
+         */
         public Throwable lastError() { return lastError; }
+        /**
+         * failureCount | failureCount
+         * @return the result | 结果
+         */
         public int failureCount() { return failureCount; }
+        /**
+         * retryCount | retryCount
+         * @return the result | 结果
+         */
         public int retryCount() { return retryCount; }
+        /**
+         * nextRetryTime | nextRetryTime
+         * @return the result | 结果
+         */
         public Instant nextRetryTime() { return nextRetryTime; }
     }
 
     /**
      * DLQ analysis result
      * DLQ 分析结果
+     *
+     * @param totalEntries the total number of entries | 总条目数
+     * @param totalRetries the total number of retries | 总重试数
+     * @param avgRetriesPerEntry the average retries per entry | 每条目平均重试数
+     * @param errorTypeCounts the error type counts | 错误类型计数
+     * @param oldestFailure the oldest failure time | 最早失败时间
+     * @param newestFailure the newest failure time | 最近失败时间
+     * @param frequentFailures the frequently failing keys | 频繁失败的键
+     * @param <K> the key type | 键类型
      */
     public record DlqAnalysis<K>(
             int totalEntries,
@@ -546,6 +583,10 @@ public class DeadLetterQueue<K> implements AutoCloseable {
             return new DlqAnalysis<>(0, 0, 0, Map.of(), null, null, List.of());
         }
 
+        /**
+         * mostCommonErrorType | mostCommonErrorType
+         * @return the result | 结果
+         */
         public String mostCommonErrorType() {
             return errorTypeCounts.entrySet().stream()
                     .max(Map.Entry.comparingByValue())
@@ -557,6 +598,12 @@ public class DeadLetterQueue<K> implements AutoCloseable {
     /**
      * DLQ statistics
      * DLQ 统计
+     *
+     * @param totalAdded total entries added | 总添加数
+     * @param totalRetried total entries retried | 总重试数
+     * @param totalRecovered total entries recovered | 总恢复数
+     * @param totalDiscarded total entries discarded | 总丢弃数
+     * @param currentSize current queue size | 当前队列大小
      */
     public record DlqStats(
             long totalAdded,
@@ -565,6 +612,10 @@ public class DeadLetterQueue<K> implements AutoCloseable {
             long totalDiscarded,
             int currentSize
     ) {
+        /**
+         * recoveryRate | recoveryRate
+         * @return the result | 结果
+         */
         public double recoveryRate() {
             return totalRetried > 0 ? (double) totalRecovered / totalRetried : 0;
         }
@@ -575,23 +626,61 @@ public class DeadLetterQueue<K> implements AutoCloseable {
      * 丢弃原因枚举
      */
     public enum DiscardReason {
+        /** MAX_RETRIES, */
         MAX_RETRIES,
+        /** QUEUE_FULL, */
         QUEUE_FULL,
+        /** MANUAL */
         MANUAL
     }
 
     /**
      * DLQ event handler
      * DLQ 事件处理器
+     *
+     * @param <K> the key type | 键类型
      */
     public interface DlqEventHandler<K> {
+        /**
+         * onAdd | onAdd
+         * @param key the key | key
+         * @param error the error | error
+         */
         default void onAdd(K key, Throwable error) {}
+        /**
+         * onRetryFailed | onRetryFailed
+         * @param key the key | key
+         * @param error the error | error
+         * @param retryCount the retryCount | retryCount
+         */
         default void onRetryFailed(K key, Throwable error, int retryCount) {}
+        /**
+         * onRecovered | onRecovered
+         * @param key the key | key
+         * @param retryCount the retryCount | retryCount
+         */
         default void onRecovered(K key, int retryCount) {}
+        /**
+         * onDiscard | onDiscard
+         * @param key the key | key
+         * @param reason the reason | reason
+         */
         default void onDiscard(K key, DiscardReason reason) {}
 
+        /**
+         * Returns a no-op handler | 返回空操作处理器
+         *
+         * @param <K> the key type | 键类型
+         * @return a no-op handler | 空操作处理器
+         */
         static <K> DlqEventHandler<K> noOp() { return new DlqEventHandler<>() {}; }
 
+        /**
+         * Returns a logging handler | 返回日志处理器
+         *
+         * @param <K> the key type | 键类型
+         * @return a logging handler | 日志处理器
+         */
         static <K> DlqEventHandler<K> logging() {
             System.Logger logger = System.getLogger(DeadLetterQueue.class.getName());
             return new DlqEventHandler<>() {
@@ -613,7 +702,17 @@ public class DeadLetterQueue<K> implements AutoCloseable {
 
     // ==================== Builder | 构建器 ====================
 
+    /**
+     * Builder for DeadLetterQueue
+     * DeadLetterQueue 构建器
+     *
+     * @param <K> the key type | 键类型
+     */
     public static class Builder<K> {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
+
         private int maxRetries = 3;
         private Duration initialBackoff = Duration.ofSeconds(1);
         private Duration maxBackoff = Duration.ofMinutes(5);
@@ -622,41 +721,81 @@ public class DeadLetterQueue<K> implements AutoCloseable {
         private Function<K, ?> retryLoader = null;
         private DlqEventHandler<K> eventHandler = DlqEventHandler.noOp();
 
+        /**
+         * maxRetries | maxRetries
+         * @param maxRetries the maxRetries | maxRetries
+         * @return the result | 结果
+         */
         public Builder<K> maxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
             return this;
         }
 
+        /**
+         * initialBackoff | initialBackoff
+         * @param backoff the backoff | backoff
+         * @return the result | 结果
+         */
         public Builder<K> initialBackoff(Duration backoff) {
             this.initialBackoff = backoff;
             return this;
         }
 
+        /**
+         * maxBackoff | maxBackoff
+         * @param backoff the backoff | backoff
+         * @return the result | 结果
+         */
         public Builder<K> maxBackoff(Duration backoff) {
             this.maxBackoff = backoff;
             return this;
         }
 
+        /**
+         * backoffMultiplier | backoffMultiplier
+         * @param multiplier the multiplier | multiplier
+         * @return the result | 结果
+         */
         public Builder<K> backoffMultiplier(double multiplier) {
             this.backoffMultiplier = multiplier;
             return this;
         }
 
+        /**
+         * maxQueueSize | maxQueueSize
+         * @param size the size | size
+         * @return the result | 结果
+         */
         public Builder<K> maxQueueSize(int size) {
             this.maxQueueSize = size;
             return this;
         }
 
+        /**
+         * Sets the retry loader | 设置重试加载器
+         *
+         * @param loader the retry loader function | 重试加载函数
+         * @return this builder | 此构建器
+         */
         public Builder<K> retryLoader(Function<K, ?> loader) {
             this.retryLoader = loader;
             return this;
         }
 
+        /**
+         * eventHandler | eventHandler
+         * @param handler the handler | handler
+         * @return the result | 结果
+         */
         public Builder<K> eventHandler(DlqEventHandler<K> handler) {
             this.eventHandler = handler;
             return this;
         }
 
+        /**
+         * build | build
+         * @return the result | 结果
+         */
         public DeadLetterQueue<K> build() {
             return new DeadLetterQueue<>(maxRetries, initialBackoff, maxBackoff,
                     backoffMultiplier, maxQueueSize, retryLoader, eventHandler);

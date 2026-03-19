@@ -438,6 +438,11 @@ public class CacheQuery<K, V> {
      * Query result containing matched entries and metadata
      * 包含匹配条目和元数据的查询结果
      *
+     * @param entries the matched entries | 匹配的条目
+     * @param totalInCache the total entries in cache | 缓存中的总条目数
+     * @param skipped the number of skipped entries | 跳过的条目数
+     * @param limit the query limit | 查询限制
+     * @param executionTimeNanos the execution time in nanoseconds | 执行时间（纳秒）
      * @param <K> key type | 键类型
      * @param <V> value type | 值类型
      */

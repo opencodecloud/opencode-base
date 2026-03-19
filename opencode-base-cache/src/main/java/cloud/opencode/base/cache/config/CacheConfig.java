@@ -90,58 +90,128 @@ public final class CacheConfig<K, V> {
 
     // ==================== Getters ====================
 
+    /**
+     * Returns the maximum size | 返回最大大小
+     *
+     * @return maximum size | 最大大小
+     */
     public long maximumSize() {
         return maximumSize;
     }
 
+    /**
+     * Returns the maximum weight | 返回最大权重
+     *
+     * @return maximum weight | 最大权重
+     */
     public long maximumWeight() {
         return maximumWeight;
     }
 
+    /**
+     * Returns the expire-after-write duration | 返回写入后过期时间
+     *
+     * @return expire-after-write | 写入后过期时间
+     */
     public Duration expireAfterWrite() {
         return expireAfterWrite;
     }
 
+    /**
+     * Returns the expire-after-access duration | 返回访问后过期时间
+     *
+     * @return expire-after-access | 访问后过期时间
+     */
     public Duration expireAfterAccess() {
         return expireAfterAccess;
     }
 
+    /**
+     * Returns the refresh-after-write duration | 返回写入后刷新时间
+     *
+     * @return refresh-after-write | 写入后刷新时间
+     */
     public Duration refreshAfterWrite() {
         return refreshAfterWrite;
     }
 
+    /**
+     * Returns the eviction policy | 返回淘汰策略
+     *
+     * @return eviction policy | 淘汰策略
+     */
     public EvictionPolicy<K, V> evictionPolicy() {
         return evictionPolicy;
     }
 
+    /**
+     * Returns the expiry policy | 返回过期策略
+     *
+     * @return expiry policy | 过期策略
+     */
     public ExpiryPolicy<K, V> expiryPolicy() {
         return expiryPolicy;
     }
 
+    /**
+     * Returns the cache loader | 返回缓存加载器
+     *
+     * @return cache loader | 缓存加载器
+     */
     public CacheLoader<K, V> loader() {
         return loader;
     }
 
+    /**
+     * Returns the removal listener | 返回移除监听器
+     *
+     * @return removal listener | 移除监听器
+     */
     public RemovalListener<K, V> removalListener() {
         return removalListener;
     }
 
+    /**
+     * Returns whether stats recording is enabled | 返回是否启用统计记录
+     *
+     * @return true if stats enabled | 启用统计返回 true
+     */
     public boolean recordStats() {
         return recordStats;
     }
 
+    /**
+     * Returns whether virtual threads are used | 返回是否使用虚拟线程
+     *
+     * @return true if virtual threads | 使用虚拟线程返回 true
+     */
     public boolean useVirtualThreads() {
         return useVirtualThreads;
     }
 
+    /**
+     * Returns the executor | 返回执行器
+     *
+     * @return executor | 执行器
+     */
     public Executor executor() {
         return executor;
     }
 
+    /**
+     * Returns the concurrency level | 返回并发级别
+     *
+     * @return concurrency level | 并发级别
+     */
     public int concurrencyLevel() {
         return concurrencyLevel;
     }
 
+    /**
+     * Returns the initial capacity | 返回初始容量
+     *
+     * @return initial capacity | 初始容量
+     */
     public int initialCapacity() {
         return initialCapacity;
     }
@@ -218,6 +288,10 @@ public final class CacheConfig<K, V> {
      * @param <V> value type | 值类型
      */
     public static final class Builder<K, V> {
+
+        /** Creates a new Builder instance | 创建新的构建器实例 */
+        public Builder() {}
+
         private long maximumSize = 10000;
         private long maximumWeight = -1;
         private Duration expireAfterWrite;

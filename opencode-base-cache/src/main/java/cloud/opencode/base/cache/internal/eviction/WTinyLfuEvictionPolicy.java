@@ -59,6 +59,9 @@ import java.util.*;
  */
 public final class WTinyLfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> {
 
+    /** Creates a new WTinyLfuEvictionPolicy instance | 创建新的 WTinyLfuEvictionPolicy 实例 */
+    public WTinyLfuEvictionPolicy() {}
+
     // Window size ratio (1% of total)
     private static final double WINDOW_RATIO = 0.01;
 

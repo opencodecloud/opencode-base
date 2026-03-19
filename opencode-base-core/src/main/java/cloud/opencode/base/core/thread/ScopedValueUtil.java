@@ -17,6 +17,7 @@ package cloud.opencode.base.core.thread;
  *
  * <p><strong>Comparison with ThreadLocal | 与 ThreadLocal 对比:</strong></p>
  * <table border="1">
+ *   <caption>ScopedValue vs ThreadLocal comparison | ScopedValue 与 ThreadLocal 对比</caption>
  *   <tr><th>Feature</th><th>ScopedValue</th><th>ThreadLocal</th></tr>
  *   <tr><td>Mutability</td><td>Immutable</td><td>Mutable</td></tr>
  *   <tr><td>Cleanup</td><td>Automatic</td><td>Manual</td></tr>

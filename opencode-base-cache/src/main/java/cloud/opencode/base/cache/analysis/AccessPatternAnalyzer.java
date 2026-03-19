@@ -390,6 +390,17 @@ public class AccessPatternAnalyzer<K> {
      * Access pattern analysis report
      * 访问模式分析报告
      *
+     * @param analysisTime the time of analysis | 分析时间
+     * @param totalKeys the total number of keys | 总键数
+     * @param totalAccesses the total number of accesses | 总访问数
+     * @param averageAccessPerKey the average accesses per key | 每个键的平均访问数
+     * @param hotKeyCount the number of hot keys | 热键数
+     * @param coldKeyCount the number of cold keys | 冷键数
+     * @param hotKeys the set of hot keys | 热键集合
+     * @param coldKeys the set of cold keys | 冷键集合
+     * @param topK the top-K most accessed keys | 访问最多的前K个键
+     * @param bottomK the bottom-K least accessed keys | 访问最少的后K个键
+     * @param accessDistribution the access count distribution | 访问计数分布
      * @param <K> key type | 键类型
      */
     public record AccessPatternReport<K>(
@@ -475,6 +486,12 @@ public class AccessPatternAnalyzer<K> {
      * @param <K> key type | 键类型
      */
     public static class Builder<K> {
+
+        /**
+         * Creates a new Builder instance | 创建新的构建器实例
+         */
+        public Builder() {}
+
         private long hotKeyThreshold = 100;
         private Duration coldDataAge = Duration.ofHours(1);
         private int topKSize = 10;

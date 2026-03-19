@@ -566,6 +566,10 @@ public class WriteBehindCache<K, V> implements Cache<K, V>, AutoCloseable {
      * Write failure information
      * 写入失败信息
      *
+     * @param failedPuts the failed put operations | 失败的写入操作
+     * @param failedDeletes the failed delete keys | 失败的删除键
+     * @param cause the failure cause | 失败原因
+     * @param attempts the number of retry attempts | 重试次数
      * @param <K> key type | 键类型
      * @param <V> value type | 值类型
      */
@@ -588,6 +592,12 @@ public class WriteBehindCache<K, V> implements Cache<K, V>, AutoCloseable {
     /**
      * Write-behind statistics
      * 写后统计信息
+     *
+     * @param totalWrites total number of writes | 总写入数
+     * @param batchedWrites number of batched writes | 批量写入数
+     * @param failedWrites number of failed writes | 失败写入数
+     * @param coalescedWrites number of coalesced writes | 合并写入数
+     * @param pendingWrites number of pending writes | 待处理写入数
      */
     public record WriteBehindStats(
             long totalWrites,

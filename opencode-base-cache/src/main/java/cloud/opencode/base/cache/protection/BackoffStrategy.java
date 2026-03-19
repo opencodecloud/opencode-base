@@ -47,6 +47,7 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public enum BackoffStrategy {
 
+    /** Fixed delay strategy | 固定延迟策略 */
     FIXED {
         @Override
         public Duration calculateDelay(int attempt, Duration initialDelay, Duration maxDelay, double multiplier) {
@@ -54,6 +55,7 @@ public enum BackoffStrategy {
         }
     },
 
+    /** Linear delay strategy | 线性延迟策略 */
     LINEAR {
         @Override
         public Duration calculateDelay(int attempt, Duration initialDelay, Duration maxDelay, double multiplier) {
@@ -67,6 +69,7 @@ public enum BackoffStrategy {
         }
     },
 
+    /** Exponential delay strategy | 指数延迟策略 */
     EXPONENTIAL {
         @Override
         public Duration calculateDelay(int attempt, Duration initialDelay, Duration maxDelay, double multiplier) {
@@ -79,6 +82,7 @@ public enum BackoffStrategy {
         }
     },
 
+    /** Random delay strategy | 随机延迟策略 */
     RANDOM {
         @Override
         public Duration calculateDelay(int attempt, Duration initialDelay, Duration maxDelay, double multiplier) {
@@ -89,6 +93,7 @@ public enum BackoffStrategy {
         }
     },
 
+    /** Exponential delay with jitter strategy | 带抖动的指数延迟策略 */
     EXPONENTIAL_JITTER {
         @Override
         public Duration calculateDelay(int attempt, Duration initialDelay, Duration maxDelay, double multiplier) {

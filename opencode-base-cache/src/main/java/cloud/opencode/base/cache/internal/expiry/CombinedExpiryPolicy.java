@@ -44,6 +44,11 @@ public final class CombinedExpiryPolicy<K, V> implements ExpiryPolicy<K, V> {
     private final Duration ttl;
     private final Duration tti;
 
+    /**
+     * CombinedExpiryPolicy | CombinedExpiryPolicy
+     * @param ttl the ttl | ttl
+     * @param tti the tti | tti
+     */
     public CombinedExpiryPolicy(Duration ttl, Duration tti) {
         this.ttl = ttl;
         this.tti = tti;

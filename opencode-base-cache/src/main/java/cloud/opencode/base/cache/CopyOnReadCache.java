@@ -320,6 +320,9 @@ public final class CopyOnReadCache<K, V> implements Cache<K, V> {
 
     /**
      * Builder for CopyOnReadCache
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class Builder<K, V> {
         private final Cache<K, V> delegate;
@@ -357,6 +360,7 @@ public final class CopyOnReadCache<K, V> implements Cache<K, V> {
         /**
          * Build the copy-on-read cache
          * 构建读时复制缓存
+          * @return the result | 结果
          */
         public CopyOnReadCache<K, V> build() {
             return new CopyOnReadCache<>(this);

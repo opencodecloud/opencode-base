@@ -408,6 +408,9 @@ public interface DistributedCache<K, V> extends AutoCloseable {
      * Result of a scan operation.
      * 扫描操作的结果。
      *
+     * @param keys the set of keys found | 找到的键集合
+     * @param nextCursor the cursor for the next scan | 下次扫描的游标
+     * @param finished whether the scan is complete | 扫描是否完成
      * @param <K> the key type - 键类型
      */
     record ScanResult<K>(Set<K> keys, String nextCursor, boolean finished) {}
@@ -420,18 +423,22 @@ public interface DistributedCache<K, V> extends AutoCloseable {
         /**
          * Gets the lock key.
          * 获取锁键。
+          * @return the result | 结果
          */
         Object key();
 
         /**
          * Gets the lock token (for verification).
          * 获取锁令牌（用于验证）。
+          * @return the result | 结果
          */
         String token();
 
         /**
          * Extends the lock TTL.
          * 延长锁 TTL。
+          * @param ttl the ttl | ttl
+          * @return the result | 结果
          */
         boolean extend(Duration ttl);
 
@@ -451,12 +458,14 @@ public interface DistributedCache<K, V> extends AutoCloseable {
         /**
          * Gets the channel.
          * 获取频道。
+          * @return the result | 结果
          */
         String channel();
 
         /**
          * Checks if active.
          * 检查是否活跃。
+          * @return the result | 结果
          */
         boolean isActive();
 

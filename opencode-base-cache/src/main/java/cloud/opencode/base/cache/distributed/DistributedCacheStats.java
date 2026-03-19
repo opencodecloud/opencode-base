@@ -170,76 +170,150 @@ public record DistributedCacheStats(
 
         private Builder() {}
 
+        /**
+         * hitCount | hitCount
+         * @param hitCount the hitCount | hitCount
+         * @return the result | 结果
+         */
         public Builder hitCount(long hitCount) {
             this.hitCount = hitCount;
             return this;
         }
 
+        /**
+         * missCount | missCount
+         * @param missCount the missCount | missCount
+         * @return the result | 结果
+         */
         public Builder missCount(long missCount) {
             this.missCount = missCount;
             return this;
         }
 
+        /**
+         * loadCount | loadCount
+         * @param loadCount the loadCount | loadCount
+         * @return the result | 结果
+         */
         public Builder loadCount(long loadCount) {
             this.loadCount = loadCount;
             return this;
         }
 
+        /**
+         * loadSuccessCount | loadSuccessCount
+         * @param loadSuccessCount the loadSuccessCount | loadSuccessCount
+         * @return the result | 结果
+         */
         public Builder loadSuccessCount(long loadSuccessCount) {
             this.loadSuccessCount = loadSuccessCount;
             return this;
         }
 
+        /**
+         * loadFailureCount | loadFailureCount
+         * @param loadFailureCount the loadFailureCount | loadFailureCount
+         * @return the result | 结果
+         */
         public Builder loadFailureCount(long loadFailureCount) {
             this.loadFailureCount = loadFailureCount;
             return this;
         }
 
+        /**
+         * totalLoadTime | totalLoadTime
+         * @param totalLoadTime the totalLoadTime | totalLoadTime
+         * @return the result | 结果
+         */
         public Builder totalLoadTime(Duration totalLoadTime) {
             this.totalLoadTime = totalLoadTime;
             return this;
         }
 
+        /**
+         * evictionCount | evictionCount
+         * @param evictionCount the evictionCount | evictionCount
+         * @return the result | 结果
+         */
         public Builder evictionCount(long evictionCount) {
             this.evictionCount = evictionCount;
             return this;
         }
 
+        /**
+         * requestCount | requestCount
+         * @param requestCount the requestCount | requestCount
+         * @return the result | 结果
+         */
         public Builder requestCount(long requestCount) {
             this.requestCount = requestCount;
             return this;
         }
 
+        /**
+         * connectionCount | connectionCount
+         * @param connectionCount the connectionCount | connectionCount
+         * @return the result | 结果
+         */
         public Builder connectionCount(int connectionCount) {
             this.connectionCount = connectionCount;
             return this;
         }
 
+        /**
+         * memoryUsed | memoryUsed
+         * @param memoryUsed the memoryUsed | memoryUsed
+         * @return the result | 结果
+         */
         public Builder memoryUsed(long memoryUsed) {
             this.memoryUsed = memoryUsed;
             return this;
         }
 
+        /**
+         * keyCount | keyCount
+         * @param keyCount the keyCount | keyCount
+         * @return the result | 结果
+         */
         public Builder keyCount(long keyCount) {
             this.keyCount = keyCount;
             return this;
         }
 
+        /**
+         * avgLatency | avgLatency
+         * @param avgLatency the avgLatency | avgLatency
+         * @return the result | 结果
+         */
         public Builder avgLatency(Duration avgLatency) {
             this.avgLatency = avgLatency;
             return this;
         }
 
+        /**
+         * p99Latency | p99Latency
+         * @param p99Latency the p99Latency | p99Latency
+         * @return the result | 结果
+         */
         public Builder p99Latency(Duration p99Latency) {
             this.p99Latency = p99Latency;
             return this;
         }
 
+        /**
+         * lastResetTime | lastResetTime
+         * @param lastResetTime the lastResetTime | lastResetTime
+         * @return the result | 结果
+         */
         public Builder lastResetTime(Instant lastResetTime) {
             this.lastResetTime = lastResetTime;
             return this;
         }
 
+        /**
+         * build | build
+         * @return the result | 结果
+         */
         public DistributedCacheStats build() {
             return new DistributedCacheStats(
                     hitCount, missCount, loadCount, loadSuccessCount, loadFailureCount,

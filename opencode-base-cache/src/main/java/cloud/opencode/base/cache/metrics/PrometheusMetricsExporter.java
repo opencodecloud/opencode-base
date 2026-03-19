@@ -406,6 +406,9 @@ public final class PrometheusMetricsExporter {
      * PrometheusMetricsExporter 构建器
      */
     public static class Builder {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
         private String namespace = "";
         private final Map<String, String> labels = new ConcurrentHashMap<>();
 

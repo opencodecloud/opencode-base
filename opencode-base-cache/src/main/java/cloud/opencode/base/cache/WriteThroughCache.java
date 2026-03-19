@@ -471,6 +471,11 @@ public class WriteThroughCache<K, V> implements Cache<K, V> {
      * 缓存写穿透失败时抛出的异常
      */
     public static class CacheWriteException extends RuntimeException {
+        /**
+         * CacheWriteException | CacheWriteException
+         * @param message the message | message
+         * @param cause the cause | cause
+         */
         public CacheWriteException(String message, Throwable cause) {
             super(message, cause);
         }

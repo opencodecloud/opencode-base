@@ -141,6 +141,9 @@ public interface ValueCompressor {
      * 无操作压缩器，数据直接通过不变
      */
     class NoOpCompressor implements ValueCompressor {
+
+        /** Creates a new NoOpCompressor instance | 创建新的 NoOpCompressor 实例 */
+        public NoOpCompressor() {}
         @Override
         public byte[] compress(byte[] data) {
             return data;
@@ -247,6 +250,9 @@ public interface ValueCompressor {
      * ValueCompressor 构建器
      */
     class Builder {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
         private CompressionAlgorithm algorithm = CompressionAlgorithm.GZIP;
         private int threshold = 1024;
         private int level = -1; // -1 means use default
@@ -309,10 +315,19 @@ public interface ValueCompressor {
      * 压缩/解压失败时抛出的异常
      */
     class CompressionException extends RuntimeException {
+        /**
+         * CompressionException | CompressionException
+         * @param message the message | message
+         */
         public CompressionException(String message) {
             super(message);
         }
 
+        /**
+         * CompressionException | CompressionException
+         * @param message the message | message
+         * @param cause the cause | cause
+         */
         public CompressionException(String message, Throwable cause) {
             super(message, cause);
         }

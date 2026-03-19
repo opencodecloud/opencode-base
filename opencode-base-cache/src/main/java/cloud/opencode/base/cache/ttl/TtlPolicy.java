@@ -192,6 +192,9 @@ public interface TtlPolicy<K, V> {
      * @param <V> value type | 值类型
      */
     class PatternBuilder<K, V> {
+
+        /** Creates a new PatternBuilder instance | 创建新的 PatternBuilder 实例 */
+        public PatternBuilder() {}
         private final java.util.List<PatternRule> rules = new java.util.ArrayList<>();
         private Duration defaultTtl = Duration.ofMinutes(10);
 

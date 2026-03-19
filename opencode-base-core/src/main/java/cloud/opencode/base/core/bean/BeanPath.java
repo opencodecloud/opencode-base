@@ -61,8 +61,11 @@ public final class BeanPath {
     // ==================== 路径访问 ====================
 
     /**
-     * Gets a property value by path
-     * 通过路径获取属性值
+     * Gets a property value by path | 通过路径获取属性值
+     *
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @return the value at path, or null | 路径上的值，或 null
      */
     public static Object get(Object bean, String path) {
         if (bean == null || path == null || path.isEmpty()) {
@@ -81,8 +84,13 @@ public final class BeanPath {
     }
 
     /**
-     * Gets a property value by path (with type)
-     * 通过路径获取属性值（带类型）
+     * Gets a property value by path with type conversion | 通过路径获取属性值（带类型转换）
+     *
+     * @param <T> the target type | 目标类型
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @param targetType the target class | 目标类
+     * @return the converted value | 转换后的值
      */
     public static <T> T get(Object bean, String path, Class<T> targetType) {
         Object value = get(bean, path);
@@ -90,16 +98,24 @@ public final class BeanPath {
     }
 
     /**
-     * Safely gets the value (returns Optional)
-     * 安全获取（返回 Optional）
+     * Safely gets the value as Optional | 安全获取（返回 Optional）
+     *
+     * @param <T> the target type | 目标类型
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @param targetType the target class | 目标类
+     * @return an Optional containing the value | 包含值的 Optional
      */
     public static <T> Optional<T> getOptional(Object bean, String path, Class<T> targetType) {
         return Optional.ofNullable(get(bean, path, targetType));
     }
 
     /**
-     * Sets a property value by path
-     * 通过路径设置属性值
+     * Sets a property value by path | 通过路径设置属性值
+     *
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @param value the value to set | 要设置的值
      */
     public static void set(Object bean, String path, Object value) {
         if (bean == null || path == null || path.isEmpty()) {
@@ -121,8 +137,11 @@ public final class BeanPath {
     }
 
     /**
-     * Sets a property value by path (auto-creating intermediate objects)
-     * 通过路径设置属性值（自动创建中间对象）
+     * Sets a property value by path, auto-creating intermediate objects | 通过路径设置属性值（自动创建中间对象）
+     *
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @param value the value to set | 要设置的值
      */
     public static void setWithCreate(Object bean, String path, Object value) {
         if (bean == null || path == null || path.isEmpty()) {
@@ -155,8 +174,11 @@ public final class BeanPath {
     // ==================== 路径检查 ====================
 
     /**
-     * Checks
-     * 检查路径是否存在
+     * Checks if the path exists | 检查路径是否存在
+     *
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @return true if the path exists | 路径存在返回 true
      */
     public static boolean exists(Object bean, String path) {
         try {
@@ -168,16 +190,22 @@ public final class BeanPath {
     }
 
     /**
-     * Checks
-     * 检查路径值是否为 null
+     * Checks if the value at path is null | 检查路径值是否为 null
+     *
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @return true if value is null | 值为 null 返回 true
      */
     public static boolean isNull(Object bean, String path) {
         return get(bean, path) == null;
     }
 
     /**
-     * Checks
-     * 检查路径值是否非 null
+     * Checks if the value at path is not null | 检查路径值是否非 null
+     *
+     * @param bean the target bean | 目标 Bean
+     * @param path the property path | 属性路径
+     * @return true if value is not null | 值非 null 返回 true
      */
     public static boolean isNotNull(Object bean, String path) {
         return get(bean, path) != null;
@@ -186,8 +214,10 @@ public final class BeanPath {
     // ==================== 路径解析 ====================
 
     /**
-     * Parses
-     * 解析路径为段列表
+     * Parses a path string into segments | 解析路径为段列表
+     *
+     * @param path the property path | 属性路径
+     * @return the list of path segments | 路径段列表
      */
     public static List<PathSegment> parsePath(String path) {
         List<PathSegment> segments = new ArrayList<>();
@@ -227,8 +257,10 @@ public final class BeanPath {
     }
 
     /**
-     * Gets
-     * 获取路径的父路径
+     * Gets the parent path | 获取路径的父路径
+     *
+     * @param path the property path | 属性路径
+     * @return the parent path | 父路径
      */
     public static String getParentPath(String path) {
         int lastDot = path.lastIndexOf('.');
@@ -238,8 +270,10 @@ public final class BeanPath {
     }
 
     /**
-     * Gets
-     * 获取路径的最后一段
+     * Gets the last segment of the path | 获取路径的最后一段
+     *
+     * @param path the property path | 属性路径
+     * @return the last segment | 最后一段
      */
     public static String getLastSegment(String path) {
         int lastDot = path.lastIndexOf('.');
@@ -247,8 +281,10 @@ public final class BeanPath {
     }
 
     /**
-     * Concatenates paths
-     * 拼接路径
+     * Concatenates path segments | 拼接路径
+     *
+     * @param segments the path segments | 路径段
+     * @return the joined path | 拼接后的路径
      */
     public static String joinPath(String... segments) {
         return String.join(".", segments);
@@ -257,29 +293,39 @@ public final class BeanPath {
     // ==================== 路径段类型 ====================
 
     /**
-     * Path segment interface
-     * 路径段接口
+     * Path segment interface | 路径段接口
      */
     public sealed interface PathSegment permits PropertySegment, IndexSegment, MapKeySegment {
+        /**
+         * Returns the segment value | 返回段值
+         *
+         * @return the segment value | 段值
+         */
         String value();
     }
 
     /**
-     * Property segment
-     * 属性段
+     * Property segment | 属性段
+     *
+     * @param value the property name | 属性名
      */
     public record PropertySegment(String value) implements PathSegment {
     }
 
     /**
-     * Index segment
-     * 索引段
+     * Index segment | 索引段
+     *
+     * @param value the raw segment text | 原始段文本
+     * @param index the array/list index | 数组/列表索引
      */
     public record IndexSegment(String value, int index) implements PathSegment {
     }
 
     /**
-     * Map Key 段
+     * Map key segment | Map 键段
+     *
+     * @param value the raw segment text | 原始段文本
+     * @param key the map key | Map 键
      */
     public record MapKeySegment(String value, String key) implements PathSegment {
     }

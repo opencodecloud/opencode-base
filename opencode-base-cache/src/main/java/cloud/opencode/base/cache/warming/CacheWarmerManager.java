@@ -316,6 +316,11 @@ public final class CacheWarmerManager {
     /**
      * Result for a single cache warming
      * 单个缓存预热结果
+     *
+     * @param cacheName the cache name | 缓存名称
+     * @param entriesLoaded the number of entries loaded | 加载的条目数
+     * @param duration the warming duration | 预热持续时间
+     * @param error the error, if any | 错误（如有）
      */
     public record CacheWarmingResult(
             String cacheName,
@@ -323,6 +328,10 @@ public final class CacheWarmerManager {
             Duration duration,
             Throwable error
     ) {
+        /**
+         * isSuccess | isSuccess
+         * @return the result | 结果
+         */
         public boolean isSuccess() {
             return error == null;
         }
@@ -331,23 +340,42 @@ public final class CacheWarmerManager {
     /**
      * Result for all cache warming
      * 所有缓存预热结果
+     *
+     * @param results the list of individual warming results | 各缓存预热结果列表
+     * @param totalDuration the total warming duration | 总预热持续时间
      */
     public record WarmingResult(
             List<CacheWarmingResult> results,
             Duration totalDuration
     ) {
+        /**
+         * totalEntries | totalEntries
+         * @return the result | 结果
+         */
         public int totalEntries() {
             return results.stream().mapToInt(CacheWarmingResult::entriesLoaded).sum();
         }
 
+        /**
+         * successCount | successCount
+         * @return the result | 结果
+         */
         public int successCount() {
             return (int) results.stream().filter(CacheWarmingResult::isSuccess).count();
         }
 
+        /**
+         * failureCount | failureCount
+         * @return the result | 结果
+         */
         public int failureCount() {
             return (int) results.stream().filter(r -> !r.isSuccess()).count();
         }
 
+        /**
+         * failures | failures
+         * @return the result | 结果
+         */
         public List<CacheWarmingResult> failures() {
             return results.stream().filter(r -> !r.isSuccess()).toList();
         }
@@ -356,6 +384,11 @@ public final class CacheWarmerManager {
     /**
      * Warming metrics
      * 预热指标
+     *
+     * @param registeredCaches the number of registered caches | 注册的缓存数
+     * @param activeWarmings the number of active warmings | 活跃预热数
+     * @param totalEntriesWarmed the total entries warmed | 总预热条目数
+     * @param totalWarmingTimeNanos the total warming time in nanoseconds | 总预热时间（纳秒）
      */
     public record WarmingMetrics(
             int registeredCaches,
@@ -363,6 +396,10 @@ public final class CacheWarmerManager {
             long totalEntriesWarmed,
             long totalWarmingTimeNanos
     ) {
+        /**
+         * totalWarmingTime | totalWarmingTime
+         * @return the result | 结果
+         */
         public Duration totalWarmingTime() {
             return Duration.ofNanos(totalWarmingTimeNanos);
         }
@@ -373,12 +410,27 @@ public final class CacheWarmerManager {
      * 预热生命周期监听器
      */
     public interface WarmingListener {
+        /**
+         * onWarmingStarted | onWarmingStarted
+         * @param cacheName the cacheName | cacheName
+         */
         default void onWarmingStarted(String cacheName) {
         }
 
+        /**
+         * onWarmingCompleted | onWarmingCompleted
+         * @param cacheName the cacheName | cacheName
+         * @param entriesLoaded the entriesLoaded | entriesLoaded
+         * @param duration the duration | duration
+         */
         default void onWarmingCompleted(String cacheName, int entriesLoaded, Duration duration) {
         }
 
+        /**
+         * onWarmingFailed | onWarmingFailed
+         * @param cacheName the cacheName | cacheName
+         * @param error the error | error
+         */
         default void onWarmingFailed(String cacheName, Throwable error) {
         }
     }

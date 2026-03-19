@@ -60,6 +60,9 @@ import java.util.Map;
  */
 public class CacheProperties {
 
+    /** Creates a new CacheProperties with defaults | 使用默认值创建新的缓存属性 */
+    public CacheProperties() {}
+
     /**
      * Property prefix for Spring configuration binding
      */
@@ -91,34 +94,66 @@ public class CacheProperties {
 
     // ==================== Getters and Setters ====================
 
+    /**
+     * Returns whether cache is enabled | 返回缓存是否启用
+     * @return true if enabled | 启用返回 true
+     */
     public boolean isEnabled() {
         return enabled;
     }
 
+    /**
+     * Sets whether cache is enabled | 设置缓存是否启用
+     * @param enabled true to enable | true 为启用
+     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
 
+    /**
+     * Returns whether null values are allowed | 返回是否允许空值
+     * @return true if allowed | 允许返回 true
+     */
     public boolean isAllowNullValues() {
         return allowNullValues;
     }
 
+    /**
+     * Sets whether null values are allowed | 设置是否允许空值
+     * @param allowNullValues true to allow | true 为允许
+     */
     public void setAllowNullValues(boolean allowNullValues) {
         this.allowNullValues = allowNullValues;
     }
 
+    /**
+     * Returns the default cache spec | 返回默认缓存规格
+     * @return default spec | 默认规格
+     */
     public CacheSpec getDefaultSpec() {
         return defaultSpec;
     }
 
+    /**
+     * Sets the default cache spec | 设置默认缓存规格
+     * @param defaultSpec the default spec | 默认规格
+     */
     public void setDefaultSpec(CacheSpec defaultSpec) {
         this.defaultSpec = defaultSpec;
     }
 
+    /**
+     * Returns the named cache configurations | 返回命名缓存配置
+     * @return cache configurations | 缓存配置
+     */
     public Map<String, CacheSpec> getCaches() {
         return caches;
     }
 
+    /**
+     * Sets the named cache configurations | 设置命名缓存配置
+     * @param caches cache configurations | 缓存配置
+     */
     public void setCaches(Map<String, CacheSpec> caches) {
         this.caches = caches != null ? new LinkedHashMap<>(caches) : new LinkedHashMap<>();
     }
@@ -164,6 +199,9 @@ public class CacheProperties {
      * 单个缓存配置的缓存规格
      */
     public static class CacheSpec {
+
+        /** Creates a new CacheSpec with defaults | 使用默认值创建新的缓存规格 */
+        public CacheSpec() {}
 
         /**
          * Maximum number of entries
@@ -235,90 +273,178 @@ public class CacheProperties {
 
         // ==================== Getters and Setters ====================
 
+        /**
+         * Returns the maximum size | 返回最大大小
+         * @return maximum size | 最大大小
+         */
         public long getMaximumSize() {
             return maximumSize;
         }
 
+        /**
+         * Sets the maximum size | 设置最大大小
+         * @param maximumSize maximum size | 最大大小
+         */
         public void setMaximumSize(long maximumSize) {
             this.maximumSize = maximumSize;
         }
 
+        /**
+         * Returns the maximum weight | 返回最大权重
+         * @return maximum weight | 最大权重
+         */
         public long getMaximumWeight() {
             return maximumWeight;
         }
 
+        /**
+         * Sets the maximum weight | 设置最大权重
+         * @param maximumWeight maximum weight | 最大权重
+         */
         public void setMaximumWeight(long maximumWeight) {
             this.maximumWeight = maximumWeight;
         }
 
+        /**
+         * Returns the expire-after-write duration | 返回写入后过期时间
+         * @return expire-after-write | 写入后过期时间
+         */
         public Duration getExpireAfterWrite() {
             return expireAfterWrite;
         }
 
+        /**
+         * Sets the expire-after-write duration | 设置写入后过期时间
+         * @param expireAfterWrite the duration | 过期时间
+         */
         public void setExpireAfterWrite(Duration expireAfterWrite) {
             this.expireAfterWrite = expireAfterWrite;
         }
 
+        /**
+         * Returns the expire-after-access duration | 返回访问后过期时间
+         * @return expire-after-access | 访问后过期时间
+         */
         public Duration getExpireAfterAccess() {
             return expireAfterAccess;
         }
 
+        /**
+         * Sets the expire-after-access duration | 设置访问后过期时间
+         * @param expireAfterAccess the duration | 过期时间
+         */
         public void setExpireAfterAccess(Duration expireAfterAccess) {
             this.expireAfterAccess = expireAfterAccess;
         }
 
+        /**
+         * Returns the refresh-after-write duration | 返回写入后刷新时间
+         * @return refresh-after-write | 写入后刷新时间
+         */
         public Duration getRefreshAfterWrite() {
             return refreshAfterWrite;
         }
 
+        /**
+         * Sets the refresh-after-write duration | 设置写入后刷新时间
+         * @param refreshAfterWrite the duration | 刷新时间
+         */
         public void setRefreshAfterWrite(Duration refreshAfterWrite) {
             this.refreshAfterWrite = refreshAfterWrite;
         }
 
+        /**
+         * Returns the initial capacity | 返回初始容量
+         * @return initial capacity | 初始容量
+         */
         public int getInitialCapacity() {
             return initialCapacity;
         }
 
+        /**
+         * Sets the initial capacity | 设置初始容量
+         * @param initialCapacity initial capacity | 初始容量
+         */
         public void setInitialCapacity(int initialCapacity) {
             this.initialCapacity = initialCapacity;
         }
 
+        /**
+         * Returns the concurrency level | 返回并发级别
+         * @return concurrency level | 并发级别
+         */
         public int getConcurrencyLevel() {
             return concurrencyLevel;
         }
 
+        /**
+         * Sets the concurrency level | 设置并发级别
+         * @param concurrencyLevel concurrency level | 并发级别
+         */
         public void setConcurrencyLevel(int concurrencyLevel) {
             this.concurrencyLevel = concurrencyLevel;
         }
 
+        /**
+         * Returns whether stats recording is enabled | 返回是否启用统计记录
+         * @return true if enabled | 启用返回 true
+         */
         public boolean isRecordStats() {
             return recordStats;
         }
 
+        /**
+         * Sets whether stats recording is enabled | 设置是否启用统计记录
+         * @param recordStats true to enable | true 为启用
+         */
         public void setRecordStats(boolean recordStats) {
             this.recordStats = recordStats;
         }
 
+        /**
+         * Returns whether virtual threads are used | 返回是否使用虚拟线程
+         * @return true if enabled | 启用返回 true
+         */
         public boolean isUseVirtualThreads() {
             return useVirtualThreads;
         }
 
+        /**
+         * Sets whether virtual threads are used | 设置是否使用虚拟线程
+         * @param useVirtualThreads true to enable | true 为启用
+         */
         public void setUseVirtualThreads(boolean useVirtualThreads) {
             this.useVirtualThreads = useVirtualThreads;
         }
 
+        /**
+         * Returns the eviction policy name | 返回淘汰策略名称
+         * @return eviction policy | 淘汰策略
+         */
         public String getEvictionPolicy() {
             return evictionPolicy;
         }
 
+        /**
+         * Sets the eviction policy name | 设置淘汰策略名称
+         * @param evictionPolicy eviction policy | 淘汰策略
+         */
         public void setEvictionPolicy(String evictionPolicy) {
             this.evictionPolicy = evictionPolicy;
         }
 
+        /**
+         * Returns whether metrics export is enabled | 返回是否启用指标导出
+         * @return true if enabled | 启用返回 true
+         */
         public boolean isMetricsEnabled() {
             return metricsEnabled;
         }
 
+        /**
+         * Sets whether metrics export is enabled | 设置是否启用指标导出
+         * @param metricsEnabled true to enable | true 为启用
+         */
         public void setMetricsEnabled(boolean metricsEnabled) {
             this.metricsEnabled = metricsEnabled;
         }

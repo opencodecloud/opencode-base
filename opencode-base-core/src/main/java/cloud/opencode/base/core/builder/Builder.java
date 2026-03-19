@@ -35,8 +35,10 @@ package cloud.opencode.base.core.builder;
 public interface Builder<T> {
 
     /**
-     * Builds the target object
-     * 构建目标对象
+     * Builds the target object.
+     * 构建目标对象。
+     *
+     * @return the built object | 构建的对象
      */
     T build();
 }

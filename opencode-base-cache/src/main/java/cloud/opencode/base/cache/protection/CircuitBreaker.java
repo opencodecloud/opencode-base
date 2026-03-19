@@ -98,36 +98,68 @@ public class CircuitBreaker {
             int halfOpenRequests,
             double failureRateThreshold
     ) {
+        /**
+         * builder | builder
+         * @return the result | 结果
+         */
         public static Builder builder() {
             return new Builder();
         }
 
+        /** public static class Builder */
         public static class Builder {
+
+            /** Creates a new Builder instance | 创建新的 Builder 实例 */
+            public Builder() {}
             private int failureThreshold = 5;
             private Duration openDuration = Duration.ofSeconds(30);
             private int halfOpenRequests = 3;
             private double failureRateThreshold = 0.5;
 
+            /**
+             * failureThreshold | failureThreshold
+             * @param threshold the threshold | threshold
+             * @return the result | 结果
+             */
             public Builder failureThreshold(int threshold) {
                 this.failureThreshold = threshold;
                 return this;
             }
 
+            /**
+             * openDuration | openDuration
+             * @param duration the duration | duration
+             * @return the result | 结果
+             */
             public Builder openDuration(Duration duration) {
                 this.openDuration = duration;
                 return this;
             }
 
+            /**
+             * halfOpenRequests | halfOpenRequests
+             * @param requests the requests | requests
+             * @return the result | 结果
+             */
             public Builder halfOpenRequests(int requests) {
                 this.halfOpenRequests = requests;
                 return this;
             }
 
+            /**
+             * failureRateThreshold | failureRateThreshold
+             * @param threshold the threshold | threshold
+             * @return the result | 结果
+             */
             public Builder failureRateThreshold(double threshold) {
                 this.failureRateThreshold = threshold;
                 return this;
             }
 
+            /**
+             * build | build
+             * @return the result | 结果
+             */
             public Config build() {
                 return new Config(failureThreshold, openDuration, halfOpenRequests, failureRateThreshold);
             }
@@ -333,6 +365,10 @@ public class CircuitBreaker {
      * 熔断器打开时抛出的异常
      */
     public static class CircuitBreakerOpenException extends RuntimeException {
+        /**
+         * CircuitBreakerOpenException | CircuitBreakerOpenException
+         * @param message the message | message
+         */
         public CircuitBreakerOpenException(String message) {
             super(message);
         }

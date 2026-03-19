@@ -85,10 +85,10 @@ public record FuzzyMatch<T>(T item, String key, double score) {
     }
 
     /**
-     * Checks if this is a weak match (score < 0.6).
-     * 检查是否为弱匹配（分数 < 0.6）。
+     * Checks if this is a weak match ({@code score < 0.6}).
+     * 检查是否为弱匹配（{@code 分数 < 0.6}）。
      *
-     * @return true if score < 0.6 | 如果分数 < 0.6则返回true
+     * @return true if {@code score < 0.6} | 如果分数小于 0.6 则返回 true
      */
     public boolean isWeakMatch() {
         return score < 0.6;

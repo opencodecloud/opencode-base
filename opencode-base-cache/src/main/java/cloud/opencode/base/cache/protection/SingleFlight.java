@@ -50,6 +50,9 @@ import java.util.function.Function;
  */
 public class SingleFlight<K, V> {
 
+    /** Creates a new SingleFlight instance | 创建新的 SingleFlight 实例 */
+    public SingleFlight() {}
+
     private final ConcurrentHashMap<K, CompletableFuture<V>> flights = new ConcurrentHashMap<>();
 
     /**
@@ -179,6 +182,10 @@ public class SingleFlight<K, V> {
      * SingleFlight 操作的超时异常
      */
     public static class TimeoutException extends Exception {
+        /**
+         * TimeoutException | TimeoutException
+         * @param message the message | message
+         */
         public TimeoutException(String message) {
             super(message);
         }

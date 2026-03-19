@@ -471,6 +471,11 @@ public class ReadThroughCache<K, V> implements Cache<K, V> {
      * 缓存加载失败时抛出的异常
      */
     public static class CacheLoadException extends RuntimeException {
+        /**
+         * CacheLoadException | CacheLoadException
+         * @param message the message | message
+         * @param cause the cause | cause
+         */
         public CacheLoadException(String message, Throwable cause) {
             super(message, cause);
         }

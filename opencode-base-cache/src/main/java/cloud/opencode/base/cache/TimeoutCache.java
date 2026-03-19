@@ -400,6 +400,9 @@ public final class TimeoutCache<K, V> implements Cache<K, V> {
 
     /**
      * Builder for TimeoutCache
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class Builder<K, V> {
         private final Cache<K, V> delegate;
@@ -452,6 +455,11 @@ public final class TimeoutCache<K, V> implements Cache<K, V> {
      * 缓存操作超时时抛出的异常
      */
     public static class CacheTimeoutException extends OpenCacheException {
+        /**
+         * CacheTimeoutException | CacheTimeoutException
+         * @param message the message | message
+         * @param cause the cause | cause
+         */
         public CacheTimeoutException(String message, Throwable cause) {
             super(message, cause);
         }

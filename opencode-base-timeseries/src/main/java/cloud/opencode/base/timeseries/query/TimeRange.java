@@ -113,8 +113,8 @@ public record TimeRange(Instant from, Instant to) {
     }
 
     /**
-     * Check if range is valid (from <= to)
-     * 检查范围是否有效（from <= to）
+     * Check if range is valid ({@code from <= to}).
+     * 检查范围是否有效（{@code from <= to}）。
      *
      * @return true if valid | 如果有效返回true
      */

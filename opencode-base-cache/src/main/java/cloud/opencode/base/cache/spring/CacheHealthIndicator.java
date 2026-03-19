@@ -271,6 +271,13 @@ public class CacheHealthIndicator {
     /**
      * Overall health result
      * 整体健康结果
+     *
+     * @param status the health status | 健康状态
+     * @param cacheCount the number of caches | 缓存数
+     * @param totalEntries the total number of entries | 总条目数
+     * @param overallHitRate the overall hit rate | 总体命中率
+     * @param caches per-cache health details | 各缓存健康详情
+     * @param error the error message, if any | 错误消息（如有）
      */
     public record HealthResult(
             Status status,
@@ -280,6 +287,15 @@ public class CacheHealthIndicator {
             Map<String, CacheHealth> caches,
             String error
     ) {
+        /**
+         * Creates a HealthResult without error | 创建无错误的健康结果
+         *
+         * @param status the health status | 健康状态
+         * @param cacheCount the number of caches | 缓存数
+         * @param totalEntries the total entries | 总条目数
+         * @param overallHitRate the overall hit rate | 总体命中率
+         * @param caches per-cache health details | 各缓存健康详情
+         */
         public HealthResult(Status status, int cacheCount, long totalEntries,
                            double overallHitRate, Map<String, CacheHealth> caches) {
             this(status, cacheCount, totalEntries, overallHitRate, caches, null);
@@ -325,6 +341,15 @@ public class CacheHealthIndicator {
     /**
      * Individual cache health
      * 单个缓存健康
+     *
+     * @param status the health status | 健康状态
+     * @param size the cache size | 缓存大小
+     * @param hitCount the hit count | 命中次数
+     * @param missCount the miss count | 未命中次数
+     * @param evictionCount the eviction count | 淘汰次数
+     * @param hitRate the hit rate | 命中率
+     * @param missRate the miss rate | 未命中率
+     * @param warning the warning message, if any | 警告消息（如有）
      */
     public record CacheHealth(
             Status status,

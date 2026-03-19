@@ -65,6 +65,22 @@ import java.util.Objects;
  *   <li>Null-safe: Yes - 空值安全: 是</li>
  * </ul>
  *
+ * @param name the cache name | 缓存名称
+ * @param keyPrefix the key prefix for namespacing | 键前缀（用于命名空间）
+ * @param defaultTtl the default time-to-live | 默认过期时间
+ * @param connectionTimeout the connection timeout | 连接超时时间
+ * @param operationTimeout the operation timeout | 操作超时时间
+ * @param maxRetries the maximum number of retries | 最大重试次数
+ * @param retryBackoff the backoff duration between retries | 重试间隔
+ * @param enableCompression whether to enable value compression | 是否启用值压缩
+ * @param compressionThreshold the compression threshold in bytes | 压缩阈值（字节）
+ * @param enableStats whether to enable statistics | 是否启用统计
+ * @param enableLocalCache whether to enable local cache | 是否启用本地缓存
+ * @param localCacheSize the local cache size | 本地缓存大小
+ * @param localCacheTtl the local cache TTL | 本地缓存过期时间
+ * @param keySerializer the key serializer | 键序列化器
+ * @param valueSerializer the value serializer | 值序列化器
+ * @param invalidationChannel the cache invalidation channel name | 缓存失效通道名称
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
@@ -137,6 +153,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the cache name.
          * 设置缓存名称。
+          * @param name the name | name
+          * @return the result | 结果
          */
         public Builder name(String name) {
             this.name = Objects.requireNonNull(name, "name must not be null");
@@ -146,6 +164,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the key prefix for all keys.
          * 设置所有键的前缀。
+          * @param keyPrefix the keyPrefix | keyPrefix
+          * @return the result | 结果
          */
         public Builder keyPrefix(String keyPrefix) {
             this.keyPrefix = keyPrefix != null ? keyPrefix : "";
@@ -155,6 +175,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the default TTL for entries.
          * 设置条目的默认 TTL。
+          * @param defaultTtl the defaultTtl | defaultTtl
+          * @return the result | 结果
          */
         public Builder defaultTtl(Duration defaultTtl) {
             this.defaultTtl = Objects.requireNonNull(defaultTtl, "defaultTtl must not be null");
@@ -164,6 +186,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the connection timeout.
          * 设置连接超时。
+          * @param connectionTimeout the connectionTimeout | connectionTimeout
+          * @return the result | 结果
          */
         public Builder connectionTimeout(Duration connectionTimeout) {
             this.connectionTimeout = Objects.requireNonNull(connectionTimeout);
@@ -173,6 +197,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the operation timeout.
          * 设置操作超时。
+          * @param operationTimeout the operationTimeout | operationTimeout
+          * @return the result | 结果
          */
         public Builder operationTimeout(Duration operationTimeout) {
             this.operationTimeout = Objects.requireNonNull(operationTimeout);
@@ -182,6 +208,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the maximum retry count.
          * 设置最大重试次数。
+          * @param maxRetries the maxRetries | maxRetries
+          * @return the result | 结果
          */
         public Builder maxRetries(int maxRetries) {
             this.maxRetries = Math.max(0, maxRetries);
@@ -191,6 +219,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the retry backoff duration.
          * 设置重试退避时间。
+          * @param retryBackoff the retryBackoff | retryBackoff
+          * @return the result | 结果
          */
         public Builder retryBackoff(Duration retryBackoff) {
             this.retryBackoff = Objects.requireNonNull(retryBackoff);
@@ -200,6 +230,8 @@ public record DistributedCacheConfig(
         /**
          * Enables value compression.
          * 启用值压缩。
+          * @param enable the enable | enable
+          * @return the result | 结果
          */
         public Builder enableCompression(boolean enable) {
             this.enableCompression = enable;
@@ -209,6 +241,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the compression threshold (bytes).
          * 设置压缩阈值（字节）。
+          * @param threshold the threshold | threshold
+          * @return the result | 结果
          */
         public Builder compressionThreshold(int threshold) {
             this.compressionThreshold = Math.max(0, threshold);
@@ -218,6 +252,8 @@ public record DistributedCacheConfig(
         /**
          * Enables statistics collection.
          * 启用统计收集。
+          * @param enable the enable | enable
+          * @return the result | 结果
          */
         public Builder enableStats(boolean enable) {
             this.enableStats = enable;
@@ -227,6 +263,8 @@ public record DistributedCacheConfig(
         /**
          * Enables local (L1) caching.
          * 启用本地（L1）缓存。
+          * @param enable the enable | enable
+          * @return the result | 结果
          */
         public Builder enableLocalCache(boolean enable) {
             this.enableLocalCache = enable;
@@ -236,6 +274,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the local cache size.
          * 设置本地缓存大小。
+          * @param size the size | size
+          * @return the result | 结果
          */
         public Builder localCacheSize(int size) {
             this.localCacheSize = Math.max(0, size);
@@ -245,6 +285,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the local cache TTL.
          * 设置本地缓存 TTL。
+          * @param ttl the ttl | ttl
+          * @return the result | 结果
          */
         public Builder localCacheTtl(Duration ttl) {
             this.localCacheTtl = Objects.requireNonNull(ttl);
@@ -254,6 +296,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the key serializer.
          * 设置键序列化器。
+          * @param serializer the serializer | serializer
+          * @return the result | 结果
          */
         public Builder keySerializer(CacheSerializer<?> serializer) {
             this.keySerializer = serializer;
@@ -263,6 +307,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the value serializer.
          * 设置值序列化器。
+          * @param serializer the serializer | serializer
+          * @return the result | 结果
          */
         public Builder valueSerializer(CacheSerializer<?> serializer) {
             this.valueSerializer = serializer;
@@ -272,6 +318,8 @@ public record DistributedCacheConfig(
         /**
          * Sets the invalidation channel for pub/sub.
          * 设置发布/订阅的失效频道。
+          * @param channel the channel | channel
+          * @return the result | 结果
          */
         public Builder invalidationChannel(String channel) {
             this.invalidationChannel = channel;
@@ -281,6 +329,7 @@ public record DistributedCacheConfig(
         /**
          * Builds the config.
          * 构建配置。
+          * @return the result | 结果
          */
         public DistributedCacheConfig build() {
             return new DistributedCacheConfig(

@@ -197,6 +197,10 @@ public final class ExpirationScheduler {
     /**
      * Scheduler metrics
      * 调度器指标
+     *
+     * @param registeredCaches the number of registered caches | 注册的缓存数
+     * @param totalCleanupRuns the total number of cleanup runs | 总清理运行次数
+     * @param totalEntriesCleaned the total entries cleaned | 总清理条目数
      */
     public record Metrics(
             int registeredCaches,

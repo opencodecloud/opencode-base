@@ -386,6 +386,9 @@ public final class MicrometerMetricsExporter {
      * Builder for MicrometerMetricsExporter
      */
     public static class Builder {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
         private MeterRegistry registry;
         private String prefix = "cache";
         private final Map<String, String> tags = new ConcurrentHashMap<>();

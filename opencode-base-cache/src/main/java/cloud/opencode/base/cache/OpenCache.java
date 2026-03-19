@@ -611,43 +611,86 @@ public final class OpenCache {
      * @param <V> value type | 值类型
      */
     public static final class CacheBuilder<K, V> {
+
+        /** Creates a new CacheBuilder instance | 创建新的 CacheBuilder 实例 */
+        public CacheBuilder() {}
         private final CacheConfig.Builder<K, V> configBuilder = CacheConfig.builder();
 
+        /**
+         * maximumSize | maximumSize
+         * @param size the size | size
+         * @return the result | 结果
+         */
         public CacheBuilder<K, V> maximumSize(long size) {
             configBuilder.maximumSize(size);
             return this;
         }
 
+        /**
+         * maximumWeight | maximumWeight
+         * @param weight the weight | weight
+         * @return the result | 结果
+         */
         public CacheBuilder<K, V> maximumWeight(long weight) {
             configBuilder.maximumWeight(weight);
             return this;
         }
 
+        /**
+         * expireAfterWrite | expireAfterWrite
+         * @param duration the duration | duration
+         * @return the result | 结果
+         */
         public CacheBuilder<K, V> expireAfterWrite(Duration duration) {
             configBuilder.expireAfterWrite(duration);
             return this;
         }
 
+        /**
+         * expireAfterAccess | expireAfterAccess
+         * @param duration the duration | duration
+         * @return the result | 结果
+         */
         public CacheBuilder<K, V> expireAfterAccess(Duration duration) {
             configBuilder.expireAfterAccess(duration);
             return this;
         }
 
+        /**
+         * Sets the eviction policy | 设置淘汰策略
+         *
+         * @param policy the eviction policy | 淘汰策略
+         * @return this builder | 此构建器
+         */
         public CacheBuilder<K, V> evictionPolicy(EvictionPolicy<K, V> policy) {
             configBuilder.evictionPolicy(policy);
             return this;
         }
 
+        /**
+         * Sets the expiry policy | 设置过期策略
+         *
+         * @param policy the expiry policy | 过期策略
+         * @return this builder | 此构建器
+         */
         public CacheBuilder<K, V> expiryPolicy(ExpiryPolicy<K, V> policy) {
             configBuilder.expiryPolicy(policy);
             return this;
         }
 
+        /**
+         * recordStats | recordStats
+         * @return the result | 结果
+         */
         public CacheBuilder<K, V> recordStats() {
             configBuilder.recordStats();
             return this;
         }
 
+        /**
+         * useVirtualThreads | useVirtualThreads
+         * @return the result | 结果
+         */
         public CacheBuilder<K, V> useVirtualThreads() {
             configBuilder.useVirtualThreads();
             return this;

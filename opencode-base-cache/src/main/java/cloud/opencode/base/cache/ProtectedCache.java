@@ -489,6 +489,10 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
 
     /**
      * Protection statistics
+     *
+     * @param bloomFilterEntries the number of bloom filter entries | 布隆过滤器条目数
+     * @param negativeCacheEntries the number of negative cache entries | 负缓存条目数
+     * @param inFlightLoads the number of in-flight loads | 进行中的加载数
      */
     public record ProtectionStats(
             long bloomFilterEntries,
@@ -501,6 +505,9 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
 
     /**
      * Builder for ProtectedCache
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class Builder<K, V> {
         private final Cache<K, V> delegate;
@@ -517,6 +524,8 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
         /**
          * Enable/disable bloom filter
          * 启用/禁用布隆过滤器
+          * @param enable the enable | enable
+          * @return the result | 结果
          */
         public Builder<K, V> bloomFilter(boolean enable) {
             this.useBloomFilter = enable;
@@ -529,6 +538,7 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
          *
          * @param expectedInsertions expected number of insertions | 预期插入数
          * @param falsePositiveRate  false positive rate (0-1) | 误报率
+          * @return the result | 结果
          */
         public Builder<K, V> bloomFilter(long expectedInsertions, double falsePositiveRate) {
             this.useBloomFilter = true;
@@ -540,6 +550,8 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
         /**
          * Enable/disable single flight
          * 启用/禁用单次加载
+          * @param enable the enable | enable
+          * @return the result | 结果
          */
         public Builder<K, V> singleFlight(boolean enable) {
             this.useSingleFlight = enable;
@@ -551,6 +563,7 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
          * 设置负缓存时长
          *
          * @param duration how long to cache negative lookups | 负查找缓存时长
+          * @return the result | 结果
          */
         public Builder<K, V> negativeCache(Duration duration) {
             this.negativeCacheDuration = duration;
@@ -560,6 +573,7 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
         /**
          * Build the protected cache
          * 构建保护缓存
+          * @return the result | 结果
          */
         public ProtectedCache<K, V> build() {
             return new ProtectedCache<>(this);

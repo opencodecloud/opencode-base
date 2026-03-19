@@ -62,7 +62,7 @@ public class BloomFilter<T> {
      * 使用预期插入数和误判率创建布隆过滤器
      *
      * @param expectedInsertions expected number of insertions | 预期插入数
-     * @param fpp                false positive probability (0 < fpp < 1) | 误判率
+     * @param fpp                false positive probability (0 &lt; fpp &lt; 1) | 误判率
      */
     public BloomFilter(long expectedInsertions, double fpp) {
         if (expectedInsertions <= 0) {

@@ -102,6 +102,12 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         }
     }
 
+    /**
+     * DefaultCache | DefaultCache
+     * @param name the name | name
+     * @param CacheConfig<K the CacheConfig<K | CacheConfig<K
+     * @param config the config | config
+     */
     public DefaultCache(String name, CacheConfig<K, V> config) {
         this.name = name;
         this.config = config;

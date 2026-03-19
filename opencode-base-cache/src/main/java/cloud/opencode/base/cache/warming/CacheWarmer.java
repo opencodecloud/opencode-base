@@ -406,8 +406,20 @@ public class CacheWarmer<K, V> implements AutoCloseable {
     /**
      * Key with priority for priority-based warming
      * 用于基于优先级预热的带优先级的键
+     *
+     * @param key the cache key | 缓存键
+     * @param priority the warming priority | 预热优先级
+     * @param <K> the key type | 键类型
      */
     public record PriorityKey<K>(K key, int priority) {
+        /**
+         * Creates a PriorityKey | 创建优先级键
+         *
+         * @param key the key | 键
+         * @param priority the priority | 优先级
+         * @param <K> the key type | 键类型
+         * @return the priority key | 优先级键
+         */
         public static <K> PriorityKey<K> of(K key, int priority) {
             return new PriorityKey<>(key, priority);
         }
@@ -416,40 +428,76 @@ public class CacheWarmer<K, V> implements AutoCloseable {
     /**
      * Warming options
      * 预热选项
+     *
+     * @param forceRefresh whether to force refresh existing entries | 是否强制刷新现有条目
+     * @param stopOnError whether to stop on first error | 是否在首个错误时停止
+     * @param timeout the warming timeout | 预热超时时间
      */
     public record WarmingOptions(
             boolean forceRefresh,
             boolean stopOnError,
             Duration timeout
     ) {
+        /**
+         * Returns default warming options | 返回默认预热选项
+         * @return default options | 默认选项
+         */
         public static WarmingOptions defaults() {
             return new WarmingOptions(false, false, Duration.ofMinutes(30));
         }
 
+        /**
+         * Creates a new Builder | 创建新的构建器
+         * @return builder | 构建器
+         */
         public static Builder builder() {
             return new Builder();
         }
 
+        /** Builder for WarmingOptions | WarmingOptions 构建器 */
         public static class Builder {
+
+            /** Creates a new Builder instance | 创建新的构建器实例 */
+            public Builder() {}
+
             private boolean forceRefresh = false;
             private boolean stopOnError = false;
             private Duration timeout = Duration.ofMinutes(30);
 
+            /**
+             * Sets force refresh | 设置强制刷新
+             * @param force true to force | true 为强制
+             * @return this builder | 此构建器
+             */
             public Builder forceRefresh(boolean force) {
                 this.forceRefresh = force;
                 return this;
             }
 
+            /**
+             * Sets stop on error | 设置出错停止
+             * @param stop true to stop | true 为停止
+             * @return this builder | 此构建器
+             */
             public Builder stopOnError(boolean stop) {
                 this.stopOnError = stop;
                 return this;
             }
 
+            /**
+             * Sets the timeout | 设置超时时间
+             * @param timeout the timeout | 超时时间
+             * @return this builder | 此构建器
+             */
             public Builder timeout(Duration timeout) {
                 this.timeout = timeout;
                 return this;
             }
 
+            /**
+             * Builds the WarmingOptions | 构建预热选项
+             * @return warming options | 预热选项
+             */
             public WarmingOptions build() {
                 return new WarmingOptions(forceRefresh, stopOnError, timeout);
             }
@@ -459,6 +507,14 @@ public class CacheWarmer<K, V> implements AutoCloseable {
     /**
      * Warming result
      * 预热结果
+     *
+     * @param totalKeys the total number of keys | 总键数
+     * @param warmedCount the number of successfully warmed keys | 成功预热的键数
+     * @param failedCount the number of failed keys | 失败的键数
+     * @param skippedCount the number of skipped keys | 跳过的键数
+     * @param failedKeys the set of failed keys | 失败的键集合
+     * @param duration the warming duration | 预热持续时间
+     * @param <K> the key type | 键类型
      */
     public record WarmingResult<K>(
             int totalKeys,
@@ -468,15 +524,27 @@ public class CacheWarmer<K, V> implements AutoCloseable {
             Set<K> failedKeys,
             Duration duration
     ) {
+        /**
+         * Returns the success rate | 返回成功率
+         * @return success rate (0.0 to 1.0) | 成功率
+         */
         public double successRate() {
             int attempted = warmedCount + failedCount;
             return attempted > 0 ? (double) warmedCount / attempted : 1.0;
         }
 
+        /**
+         * Returns whether warming is complete | 返回预热是否完成
+         * @return true if complete | 完成返回 true
+         */
         public boolean isComplete() {
             return failedCount == 0;
         }
 
+        /**
+         * Returns the completion percentage | 返回完成百分比
+         * @return percent complete | 完成百分比
+         */
         public double percentComplete() {
             return totalKeys > 0 ? (double) (warmedCount + skippedCount) / totalKeys * 100 : 100;
         }
@@ -546,6 +614,13 @@ public class CacheWarmer<K, V> implements AutoCloseable {
     /**
      * Progress snapshot for callbacks
      * 用于回调的进度快照
+     *
+     * @param totalKeys the total number of keys | 总键数
+     * @param warmedCount the number of warmed keys | 已预热的键数
+     * @param failedCount the number of failed keys | 失败的键数
+     * @param skippedCount the number of skipped keys | 跳过的键数
+     * @param elapsed the elapsed time | 已用时间
+     * @param <K> the key type | 键类型
      */
     public record ProgressSnapshot<K>(
             int totalKeys,
@@ -554,10 +629,18 @@ public class CacheWarmer<K, V> implements AutoCloseable {
             int skippedCount,
             Duration elapsed
     ) {
+        /**
+         * Returns the completion percentage | 返回完成百分比
+         * @return percent complete | 完成百分比
+         */
         public double percentComplete() {
             return totalKeys > 0 ? (double) (warmedCount + skippedCount) / totalKeys * 100 : 100;
         }
 
+        /**
+         * Returns the remaining count | 返回剩余数
+         * @return remaining keys | 剩余键数
+         */
         public int remaining() {
             return totalKeys - warmedCount - failedCount - skippedCount;
         }
@@ -566,25 +649,43 @@ public class CacheWarmer<K, V> implements AutoCloseable {
     /**
      * Progress callback interface
      * 进度回调接口
+     *
+     * @param <K> the key type | 键类型
      */
     @FunctionalInterface
     public interface ProgressCallback<K> {
+        /**
+         * Called on warming progress update | 预热进度更新时调用
+         * @param progress the progress snapshot | 进度快照
+         */
         void onProgress(ProgressSnapshot<K> progress);
     }
 
     /**
      * Warming statistics
      * 预热统计
+     *
+     * @param totalWarmed total number of warmed entries | 总预热条目数
+     * @param totalFailed total number of failed entries | 总失败条目数
+     * @param totalSkipped total number of skipped entries | 总跳过条目数
      */
     public record WarmingStats(
             long totalWarmed,
             long totalFailed,
             long totalSkipped
     ) {
+        /**
+         * Returns the total count | 返回总数
+         * @return total count | 总数
+         */
         public long total() {
             return totalWarmed + totalFailed + totalSkipped;
         }
 
+        /**
+         * Returns the success rate | 返回成功率
+         * @return success rate (0.0 to 1.0) | 成功率
+         */
         public double successRate() {
             long attempted = totalWarmed + totalFailed;
             return attempted > 0 ? (double) totalWarmed / attempted : 1.0;
@@ -594,19 +695,58 @@ public class CacheWarmer<K, V> implements AutoCloseable {
     /**
      * Warming event handler
      * 预热事件处理器
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public interface WarmingEventHandler<K, V> {
+        /**
+         * Called when warming starts | 预热开始时调用
+         * @param totalKeys total keys to warm | 要预热的总键数
+         */
         default void onStart(int totalKeys) {}
+        /**
+         * Called when a key is warmed | 键预热完成时调用
+         * @param key the key | 键
+         * @param value the loaded value | 加载的值
+         */
         default void onKeyWarmed(K key, V value) {}
+        /**
+         * Called when a key fails to warm | 键预热失败时调用
+         * @param key the key | 键
+         * @param error the error | 错误
+         */
         default void onKeyFailed(K key, Exception error) {}
+        /**
+         * Called when warming completes | 预热完成时调用
+         * @param result the warming result | 预热结果
+         */
         default void onComplete(WarmingResult<K> result) {}
 
+        /**
+         * Returns a no-op event handler | 返回空操作事件处理器
+         *
+         * @param <K> the key type | 键类型
+         * @param <V> the value type | 值类型
+         * @return no-op handler | 空操作处理器
+         */
         static <K, V> WarmingEventHandler<K, V> noOp() { return new WarmingEventHandler<>() {}; }
     }
 
     // ==================== Builder | 构建器 ====================
 
+    /**
+     * Builder for CacheWarmer
+     * CacheWarmer 构建器
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
+     */
     public static class Builder<K, V> {
+
+        /** Creates a new Builder instance | 创建新的构建器实例 */
+        public Builder() {}
+
         private Cache<K, V> cache;
         private Function<K, V> loader;
         private Function<Set<K>, Map<K, V>> batchLoader;
@@ -614,36 +754,70 @@ public class CacheWarmer<K, V> implements AutoCloseable {
         private int parallelism = 4;
         private WarmingEventHandler<K, V> eventHandler = WarmingEventHandler.noOp();
 
+        /**
+         * Sets the cache | 设置缓存
+         * @param cache the cache | 缓存
+         * @return this builder | 此构建器
+         */
         public Builder<K, V> cache(Cache<K, V> cache) {
             this.cache = cache;
             return this;
         }
 
+        /**
+         * Sets the loader function | 设置加载函数
+         * @param loader the loader | 加载器
+         * @return this builder | 此构建器
+         */
         public Builder<K, V> loader(Function<K, V> loader) {
             this.loader = loader;
             return this;
         }
 
+        /**
+         * Sets the batch loader function | 设置批量加载函数
+         * @param batchLoader the batch loader | 批量加载器
+         * @return this builder | 此构建器
+         */
         public Builder<K, V> batchLoader(Function<Set<K>, Map<K, V>> batchLoader) {
             this.batchLoader = batchLoader;
             return this;
         }
 
+        /**
+         * Sets the batch size | 设置批量大小
+         * @param size the batch size | 批量大小
+         * @return this builder | 此构建器
+         */
         public Builder<K, V> batchSize(int size) {
             this.batchSize = size;
             return this;
         }
 
+        /**
+         * Sets the parallelism level | 设置并行度
+         * @param parallelism the parallelism | 并行度
+         * @return this builder | 此构建器
+         */
         public Builder<K, V> parallelism(int parallelism) {
             this.parallelism = parallelism;
             return this;
         }
 
+        /**
+         * Sets the event handler | 设置事件处理器
+         * @param handler the handler | 处理器
+         * @return this builder | 此构建器
+         */
         public Builder<K, V> eventHandler(WarmingEventHandler<K, V> handler) {
             this.eventHandler = handler;
             return this;
         }
 
+        /**
+         * Builds the CacheWarmer | 构建缓存预热器
+         * @return the cache warmer | 缓存预热器
+         */
         public CacheWarmer<K, V> build() {
             Objects.requireNonNull(cache, "cache cannot be null");
             Objects.requireNonNull(loader, "loader cannot be null");

@@ -262,8 +262,8 @@ public final class Preconditions {
     }
 
     /**
-     * Checks if the position range is valid [start, end] and end <= size
-     * 检查位置范围是否有效 [start, end] 且 end <= size
+     * Checks if the position range is valid {@code [start, end]} and {@code end <= size}.
+     * 检查位置范围是否有效 {@code [start, end]} 且 {@code end <= size}。
      *
      * @param start the start index | 起始索引
      * @param end the end index | 结束索引

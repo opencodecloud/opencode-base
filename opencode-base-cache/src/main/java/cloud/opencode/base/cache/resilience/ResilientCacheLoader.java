@@ -258,8 +258,14 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
 
     /**
      * Builder for ResilientCacheLoader
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class Builder<K, V> {
+
+        /** Creates a new Builder instance | 创建新的 Builder 实例 */
+        public Builder() {}
         private Function<K, V> loader;
         private RetryPolicy retryPolicy;
         private CircuitBreaker circuitBreaker;
@@ -386,8 +392,14 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
 
     /**
      * Builder for batch resilient loader
+     *
+     * @param <K> the key type | 键类型
+     * @param <V> the value type | 值类型
      */
     public static class BatchBuilder<K, V> {
+
+        /** Creates a new BatchBuilder instance | 创建新的 BatchBuilder 实例 */
+        public BatchBuilder() {}
         private Function<Set<? extends K>, Map<K, V>> loader;
         private RetryPolicy retryPolicy;
         private CircuitBreaker circuitBreaker;
@@ -409,6 +421,8 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
         /**
          * Set retry policy
          * 设置重试策略
+          * @param retryPolicy the retryPolicy | retryPolicy
+          * @return the result | 结果
          */
         public BatchBuilder<K, V> retry(RetryPolicy retryPolicy) {
             this.retryPolicy = retryPolicy;
@@ -418,6 +432,8 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
         /**
          * Set circuit breaker
          * 设置熔断器
+          * @param circuitBreaker the circuitBreaker | circuitBreaker
+          * @return the result | 结果
          */
         public BatchBuilder<K, V> circuitBreaker(CircuitBreaker circuitBreaker) {
             this.circuitBreaker = circuitBreaker;
@@ -427,6 +443,8 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
         /**
          * Set bulkhead
          * 设置舱壁
+          * @param bulkhead the bulkhead | bulkhead
+          * @return the result | 结果
          */
         public BatchBuilder<K, V> bulkhead(Bulkhead bulkhead) {
             this.bulkhead = bulkhead;
@@ -436,6 +454,8 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
         /**
          * Set operation timeout
          * 设置操作超时
+          * @param timeout the timeout | timeout
+          * @return the result | 结果
          */
         public BatchBuilder<K, V> timeout(Duration timeout) {
             this.timeout = timeout;
@@ -551,6 +571,11 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
      * Base exception for loader failures
      */
     public static class LoaderException extends OpenCacheException {
+        /**
+         * LoaderException | LoaderException
+         * @param message the message | message
+         * @param cause the cause | cause
+         */
         public LoaderException(String message, Throwable cause) {
             super(message, cause);
         }
@@ -560,6 +585,10 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
      * Exception when circuit breaker is open
      */
     public static class CircuitBreakerOpenException extends LoaderException {
+        /**
+         * CircuitBreakerOpenException | CircuitBreakerOpenException
+         * @param message the message | message
+         */
         public CircuitBreakerOpenException(String message) {
             super(message, null);
         }
@@ -569,6 +598,10 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
      * Exception when bulkhead rejects the request
      */
     public static class BulkheadRejectedException extends LoaderException {
+        /**
+         * BulkheadRejectedException | BulkheadRejectedException
+         * @param message the message | message
+         */
         public BulkheadRejectedException(String message) {
             super(message, null);
         }
@@ -578,6 +611,11 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
      * Exception when load times out
      */
     public static class LoaderTimeoutException extends LoaderException {
+        /**
+         * LoaderTimeoutException | LoaderTimeoutException
+         * @param message the message | message
+         * @param cause the cause | cause
+         */
         public LoaderTimeoutException(String message, Throwable cause) {
             super(message, cause);
         }
@@ -587,6 +625,11 @@ public final class ResilientCacheLoader<K, V> implements Function<K, V> {
      * Exception when load is interrupted
      */
     public static class LoaderInterruptedException extends LoaderException {
+        /**
+         * LoaderInterruptedException | LoaderInterruptedException
+         * @param message the message | message
+         * @param cause the cause | cause
+         */
         public LoaderInterruptedException(String message, Throwable cause) {
             super(message, cause);
         }

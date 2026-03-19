@@ -187,10 +187,21 @@ public interface EvictionPolicy<K, V> {
      * Weighted policy wrapper
      * 加权策略包装器
      *
+     * @param policy the eviction policy | 淘汰策略
+     * @param weight the weight for this policy | 此策略的权重
      * @param <K> key type | 键类型
      * @param <V> value type | 值类型
      */
     record WeightedPolicy<K, V>(EvictionPolicy<K, V> policy, double weight) {
+        /**
+         * Creates a weighted policy | 创建加权策略
+         *
+         * @param <K> the key type | 键类型
+         * @param <V> the value type | 值类型
+         * @param policy the eviction policy | 淘汰策略
+         * @param weight the weight | 权重
+         * @return the weighted policy | 加权策略
+         */
         public static <K, V> WeightedPolicy<K, V> of(EvictionPolicy<K, V> policy, double weight) {
             return new WeightedPolicy<>(policy, weight);
         }
