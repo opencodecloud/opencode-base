@@ -222,6 +222,10 @@ public class SecureGeoFenceService {
                         String.format("Impossible travel speed detected: %.2f km/h (max: %.2f km/h)",
                             speedKmh, maxSpeedKmh));
                 }
+            } else if (distanceKm > 0.001) {
+                // Zero or negative time with non-trivial distance: teleportation
+                throw new GeoSecurityException(
+                    String.format("Impossible teleportation detected: %.4f km in zero time", distanceKm));
             }
         }
 
@@ -304,6 +308,7 @@ public class SecureGeoFenceService {
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
             + Math.cos(lat1) * Math.cos(lat2)
             * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        a = Math.max(0.0, Math.min(a, 1.0));
 
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 

@@ -514,10 +514,10 @@ public final class BCryptHash implements PasswordHash {
         EksBlowfish(byte[] password, byte[] salt, int cost) {
             // Initialize P-array and S-boxes from PI
             // 从 PI 初始化 P 数组和 S 盒
-            P = Arrays.copyOf(BLOWFISH_P, BLOWFISH_P.length);
+            P = Arrays.copyOf(BlowfishConstants.P_ORIG, BlowfishConstants.P_ORIG.length);
             S = new int[4][256];
             for (int i = 0; i < 4; i++) {
-                S[i] = Arrays.copyOf(BLOWFISH_S[i], 256);
+                S[i] = Arrays.copyOf(BlowfishConstants.S_ORIG[i], 256);
             }
 
             // Expensive key schedule (EKS)
@@ -678,9 +678,19 @@ public final class BCryptHash implements PasswordHash {
                     S[2][(x >> 8) & 0xff]) + S[3][x & 0xff];
         }
 
+    }
+
+    /**
+     * Blowfish constant arrays derived from PI digits per the Blowfish specification.
+     * Blowfish 常量数组，来自 Blowfish 规范中的 PI 数字。
+     *
+     * <p>Separated into an inner class to reduce visual clutter in the algorithm logic.
+     */
+    private static final class BlowfishConstants {
+
         // Blowfish P-array initial values (from PI)
         // Blowfish P 数组初始值（来自 PI）
-        private static final int[] BLOWFISH_P = {
+        static final int[] P_ORIG = {
             0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344,
             0xa4093822, 0x299f31d0, 0x082efa98, 0xec4e6c89,
             0x452821e6, 0x38d01377, 0xbe5466cf, 0x34e90c6c,
@@ -690,7 +700,7 @@ public final class BCryptHash implements PasswordHash {
 
         // Blowfish S-box initial values (from PI digits per the Blowfish specification)
         // Blowfish S 盒初始值（来自 Blowfish 规范中的 PI 数字）
-        private static final int[][] BLOWFISH_S = {
+        static final int[][] S_ORIG = {
             // S-box 0
             {
                 0xd1310ba6, 0x98dfb5ac, 0x2ffd72db, 0xd01adfb7,
@@ -960,5 +970,7 @@ public final class BCryptHash implements PasswordHash {
                 0xb74e6132, 0xce77e25b, 0x578fdfe3, 0x3ac372e6
             }
         };
+
+        private BlowfishConstants() {}
     }
 }

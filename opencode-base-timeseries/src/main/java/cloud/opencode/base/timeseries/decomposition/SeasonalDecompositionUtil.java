@@ -276,7 +276,10 @@ public final class SeasonalDecompositionUtil {
             } else {
                 residualValues[i] = switch (model) {
                     case ADDITIVE -> values[i] - trendValues[i] - seasonalValues[i];
-                    case MULTIPLICATIVE -> values[i] / (trendValues[i] * seasonalValues[i]);
+                    case MULTIPLICATIVE -> {
+                        double divisor = trendValues[i] * seasonalValues[i];
+                        yield divisor == 0.0 ? Double.NaN : values[i] / divisor;
+                    }
                 };
             }
         }

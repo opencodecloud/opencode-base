@@ -165,8 +165,13 @@ public class Tokenizer {
             } else if ((c == 'e' || c == 'E') && pos + 1 < length) {
                 isDouble = true;
                 pos++;
-                if (expression.charAt(pos) == '+' || expression.charAt(pos) == '-') {
+                if (pos < length && (expression.charAt(pos) == '+' || expression.charAt(pos) == '-')) {
                     pos++;
+                }
+                // Verify at least one digit follows 'e'/'E' and optional sign
+                if (pos >= length || !Character.isDigit(expression.charAt(pos))) {
+                    throw OpenExpressionException.parseError(
+                        "Invalid scientific notation: expected digit after exponent", start);
                 }
             } else if (c == 'L' || c == 'l') {
                 pos++;

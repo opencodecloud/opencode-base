@@ -185,9 +185,7 @@ public class TemplateFormatter implements MessageFormatter {
             return format;
         });
 
-        synchronized (df) {
-            return df.format(number);
-        }
+        return ((java.text.DecimalFormat) df.clone()).format(number);
     }
 
     private String formatDate(Object value, String pattern, Locale locale) {

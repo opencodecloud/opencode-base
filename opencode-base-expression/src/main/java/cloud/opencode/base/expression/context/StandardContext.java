@@ -121,13 +121,16 @@ public class StandardContext implements EvaluationContext {
         if (value == null && parent != null && !variables.containsKey(name)) {
             return parent.getVariable(name);
         }
-        return value;
+        return value == NULL_SENTINEL ? null : value;
     }
+
+    /** Sentinel for null values in ConcurrentHashMap (which does not allow null values). */
+    private static final Object NULL_SENTINEL = new Object();
 
     @Override
     public void setVariable(String name, Object value) {
         if (name != null) {
-            variables.put(name, value);
+            variables.put(name, value != null ? value : NULL_SENTINEL);
         }
     }
 
@@ -148,7 +151,7 @@ public class StandardContext implements EvaluationContext {
         if (parent != null) {
             allVars.putAll(parent.getVariables());
         }
-        allVars.putAll(variables);
+        variables.forEach((k, v) -> allVars.put(k, v == NULL_SENTINEL ? null : v));
         return Collections.unmodifiableMap(allVars);
     }
 

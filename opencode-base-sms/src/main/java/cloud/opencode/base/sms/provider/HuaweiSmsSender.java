@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
 /**
  * Huawei Cloud SMS Sender
@@ -386,7 +387,12 @@ public class HuaweiSmsSender implements SmsProvider {
      * @param region the region code | 区域代码
      * @return the endpoint URL | 端点URL
      */
+    private static final Pattern REGION_PATTERN = Pattern.compile("^[a-zA-Z0-9-]+$");
+
     private String buildEndpoint(String region) {
+        if (region == null || !REGION_PATTERN.matcher(region).matches()) {
+            throw new IllegalArgumentException("Invalid region: must match [a-zA-Z0-9-]+ | 无效区域: 必须匹配 [a-zA-Z0-9-]+");
+        }
         return "https://smsapi." + region + ".myhuaweicloud.com:443" + API_PATH;
     }
 

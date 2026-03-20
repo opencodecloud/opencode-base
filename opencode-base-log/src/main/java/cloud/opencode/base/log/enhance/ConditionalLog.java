@@ -277,6 +277,9 @@ public final class ConditionalLog {
         }
 
         private boolean shouldLog() {
+            if (LOGGED_ONCE.size() > 10000) {
+                LOGGED_ONCE.clear();
+            }
             StackTraceElement caller = Thread.currentThread().getStackTrace()[3];
             String callSite = caller.getClassName() + ":" + caller.getMethodName() + ":" + caller.getLineNumber();
             return LOGGED_ONCE.add(callSite);
@@ -345,6 +348,9 @@ public final class ConditionalLog {
         }
 
         private boolean shouldLog() {
+            if (LAST_LOG_TIMES.size() > 10000) {
+                LAST_LOG_TIMES.clear();
+            }
             StackTraceElement caller = Thread.currentThread().getStackTrace()[3];
             String callSite = caller.getClassName() + ":" + caller.getMethodName() + ":" + caller.getLineNumber();
 

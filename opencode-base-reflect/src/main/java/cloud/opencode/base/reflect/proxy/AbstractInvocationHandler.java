@@ -108,16 +108,9 @@ public abstract class AbstractInvocationHandler implements InvocationHandler {
      * @throws Throwable if an error occurs | 如果发生错误
      */
     protected Object handleDefaultMethod(Object proxy, Method method, Object[] args) throws Throwable {
-        // Use MethodHandle to invoke default method
-        return java.lang.invoke.MethodHandles.lookup()
-                .findSpecial(
-                        method.getDeclaringClass(),
-                        method.getName(),
-                        java.lang.invoke.MethodType.methodType(method.getReturnType(), method.getParameterTypes()),
-                        method.getDeclaringClass()
-                )
-                .bindTo(proxy)
-                .invokeWithArguments(args);
+        // Use InvocationHandler.invokeDefault (available since JDK 16) which correctly
+        // handles default methods on interfaces without requiring special access
+        return InvocationHandler.invokeDefault(proxy, method, args);
     }
 
     /**

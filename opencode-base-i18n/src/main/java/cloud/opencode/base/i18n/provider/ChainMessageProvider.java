@@ -3,6 +3,7 @@ package cloud.opencode.base.i18n.provider;
 import cloud.opencode.base.i18n.spi.MessageProvider;
 
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Chain message provider that combines multiple providers
@@ -47,7 +48,7 @@ public class ChainMessageProvider implements MessageProvider {
      * @param providers the providers | 提供者列表
      */
     public ChainMessageProvider(List<MessageProvider> providers) {
-        this.providers = new ArrayList<>(providers);
+        this.providers = new CopyOnWriteArrayList<>(providers);
     }
 
     /**
@@ -57,7 +58,7 @@ public class ChainMessageProvider implements MessageProvider {
      * @param providers the providers | 提供者数组
      */
     public ChainMessageProvider(MessageProvider... providers) {
-        this.providers = new ArrayList<>(Arrays.asList(providers));
+        this.providers = new CopyOnWriteArrayList<>(providers);
     }
 
     @Override

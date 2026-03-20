@@ -9,6 +9,7 @@ import java.net.JarURLConnection;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Stream;
@@ -283,17 +284,25 @@ public class ClassScanner {
     // ==================== Private Methods | 私有方法 ====================
 
     private Set<Class<?>> scanPackage(String basePackage, ScanFilter filter) {
-        Set<Class<?>> result = new HashSet<>();
         List<String> classNames = findClassNames(basePackage);
 
-        Stream<String> stream = parallel ? classNames.parallelStream() : classNames.stream();
-
-        stream.map(this::loadClass)
-                .filter(Objects::nonNull)
-                .filter(filter::test)
-                .forEach(result::add);
-
-        return result;
+        if (parallel) {
+            Set<Class<?>> result = ConcurrentHashMap.newKeySet();
+            classNames.parallelStream()
+                    .map(this::loadClass)
+                    .filter(Objects::nonNull)
+                    .filter(filter::test)
+                    .forEach(result::add);
+            return result;
+        } else {
+            Set<Class<?>> result = new HashSet<>();
+            classNames.stream()
+                    .map(this::loadClass)
+                    .filter(Objects::nonNull)
+                    .filter(filter::test)
+                    .forEach(result::add);
+            return result;
+        }
     }
 
     private List<String> findClassNames(String basePackage) {

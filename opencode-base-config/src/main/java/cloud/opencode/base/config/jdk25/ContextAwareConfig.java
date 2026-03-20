@@ -2,6 +2,7 @@ package cloud.opencode.base.config.jdk25;
 
 import cloud.opencode.base.config.Config;
 import cloud.opencode.base.config.ConfigListener;
+import cloud.opencode.base.config.converter.impl.DurationConverter;
 
 import java.time.Duration;
 import java.util.*;
@@ -61,6 +62,7 @@ import java.util.*;
  */
 public class ContextAwareConfig implements Config {
 
+    private static final DurationConverter DURATION_CONVERTER = new DurationConverter();
     private final Config delegate;
 
     public ContextAwareConfig(Config delegate) {
@@ -93,22 +95,34 @@ public class ContextAwareConfig implements Config {
         }
     }
 
-    // Delegate all other methods
-    @Override public int getInt(String key) { return delegate.getInt(key); }
-    @Override public int getInt(String key, int defaultValue) { return delegate.getInt(key, defaultValue); }
-    @Override public long getLong(String key) { return delegate.getLong(key); }
-    @Override public long getLong(String key, long defaultValue) { return delegate.getLong(key, defaultValue); }
-    @Override public double getDouble(String key) { return delegate.getDouble(key); }
-    @Override public double getDouble(String key, double defaultValue) { return delegate.getDouble(key, defaultValue); }
-    @Override public boolean getBoolean(String key) { return delegate.getBoolean(key); }
-    @Override public boolean getBoolean(String key, boolean defaultValue) { return delegate.getBoolean(key, defaultValue); }
-    @Override public Duration getDuration(String key) { return delegate.getDuration(key); }
-    @Override public Duration getDuration(String key, Duration defaultValue) { return delegate.getDuration(key, defaultValue); }
+    // Typed getters resolve through getString() first (which applies context), then parse
+    @Override public int getInt(String key) { return Integer.parseInt(getString(key)); }
+    @Override public int getInt(String key, int defaultValue) {
+        try { return Integer.parseInt(getString(key)); } catch (Exception e) { return defaultValue; }
+    }
+    @Override public long getLong(String key) { return Long.parseLong(getString(key)); }
+    @Override public long getLong(String key, long defaultValue) {
+        try { return Long.parseLong(getString(key)); } catch (Exception e) { return defaultValue; }
+    }
+    @Override public double getDouble(String key) { return Double.parseDouble(getString(key)); }
+    @Override public double getDouble(String key, double defaultValue) {
+        try { return Double.parseDouble(getString(key)); } catch (Exception e) { return defaultValue; }
+    }
+    @Override public boolean getBoolean(String key) { return Boolean.parseBoolean(getString(key)); }
+    @Override public boolean getBoolean(String key, boolean defaultValue) {
+        try { return Boolean.parseBoolean(getString(key)); } catch (Exception e) { return defaultValue; }
+    }
+    @Override public Duration getDuration(String key) { return DURATION_CONVERTER.convert(getString(key)); }
+    @Override public Duration getDuration(String key, Duration defaultValue) {
+        try { return DURATION_CONVERTER.convert(getString(key)); } catch (Exception e) { return defaultValue; }
+    }
     @Override public <T> T get(String key, Class<T> type) { return delegate.get(key, type); }
     @Override public <T> T get(String key, Class<T> type, T defaultValue) { return delegate.get(key, type, defaultValue); }
     @Override public <T> List<T> getList(String key, Class<T> elementType) { return delegate.getList(key, elementType); }
     @Override public <K, V> Map<K, V> getMap(String key, Class<K> keyType, Class<V> valueType) { return delegate.getMap(key, keyType, valueType); }
-    @Override public Optional<String> getOptional(String key) { return delegate.getOptional(key); }
+    @Override public Optional<String> getOptional(String key) {
+        try { return Optional.ofNullable(getString(key)); } catch (Exception e) { return Optional.empty(); }
+    }
     @Override public <T> Optional<T> getOptional(String key, Class<T> type) { return delegate.getOptional(key, type); }
     @Override public Config getSubConfig(String prefix) { return delegate.getSubConfig(prefix); }
     @Override public Map<String, String> getByPrefix(String prefix) { return delegate.getByPrefix(prefix); }

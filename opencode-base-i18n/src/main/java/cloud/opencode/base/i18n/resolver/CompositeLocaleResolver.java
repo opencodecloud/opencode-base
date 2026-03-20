@@ -5,6 +5,7 @@ import cloud.opencode.base.i18n.spi.LocaleResolver;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Composite locale resolver that combines multiple resolvers
@@ -63,7 +64,7 @@ public class CompositeLocaleResolver implements LocaleResolver {
      * @param defaultLocale the default locale | 默认地区
      */
     public CompositeLocaleResolver(List<LocaleResolver> resolvers, Locale defaultLocale) {
-        this.resolvers = new ArrayList<>(resolvers);
+        this.resolvers = new CopyOnWriteArrayList<>(resolvers);
         this.defaultLocale = defaultLocale != null ? defaultLocale : Locale.getDefault();
     }
 

@@ -159,7 +159,7 @@ public enum Zodiac {
      * @return the zodiac | 生肖
      */
     public static Zodiac of(int year) {
-        return values()[(year - 4) % 12];
+        return values()[Math.floorMod(year - 4, 12)];
     }
 
     /**

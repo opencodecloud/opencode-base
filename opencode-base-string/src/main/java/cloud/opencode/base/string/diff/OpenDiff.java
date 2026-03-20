@@ -151,16 +151,6 @@ public final class OpenDiff {
     }
 
     public static String applyPatch(String original, String patch) {
-        // Simplified patch application
-        String[] lines = patch.split("\n");
-        StringBuilder result = new StringBuilder(original);
-        
-        for (String line : lines) {
-            if (line.startsWith("+ ")) {
-                result.append(line.substring(2)).append("\n");
-            }
-        }
-        
-        return result.toString();
+        throw new UnsupportedOperationException("applyPatch is not yet fully implemented - use a dedicated diff/patch library");
     }
 }

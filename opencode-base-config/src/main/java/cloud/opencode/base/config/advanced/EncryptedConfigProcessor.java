@@ -4,6 +4,8 @@ import cloud.opencode.base.config.Config;
 import cloud.opencode.base.config.ConfigListener;
 import cloud.opencode.base.config.OpenConfigException;
 
+import cloud.opencode.base.config.converter.impl.DurationConverter;
+
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -100,6 +102,7 @@ public class EncryptedConfigProcessor {
     }
 
     private static class EncryptedConfig implements Config {
+        private static final DurationConverter DURATION_CONVERTER = new DurationConverter();
         private final Config delegate;
         private final SecretKey key;
 
@@ -163,18 +166,40 @@ public class EncryptedConfigProcessor {
         }
         @Override public boolean getBoolean(String key) { return Boolean.parseBoolean(getString(key)); }
         @Override public boolean getBoolean(String key, boolean defaultValue) {
-            try { return Boolean.parseBoolean(getString(key)); } catch (Exception e) { return defaultValue; }
+            if (!hasKey(key)) return defaultValue;
+            return Boolean.parseBoolean(getString(key));
         }
-        @Override public Duration getDuration(String key) { return Duration.parse(getString(key)); }
+        @Override public Duration getDuration(String key) { return DURATION_CONVERTER.convert(getString(key)); }
         @Override public Duration getDuration(String key, Duration defaultValue) {
-            try { return Duration.parse(getString(key)); } catch (Exception e) { return defaultValue; }
+            try { return DURATION_CONVERTER.convert(getString(key)); } catch (Exception e) { return defaultValue; }
         }
-        @Override public <T> T get(String key, Class<T> type) { return delegate.get(key, type); }
-        @Override public <T> T get(String key, Class<T> type, T defaultValue) { return delegate.get(key, type, defaultValue); }
+        @Override @SuppressWarnings("unchecked")
+        public <T> T get(String key, Class<T> type) {
+            // Resolve through getString() first to decrypt, then convert
+            if (type == String.class) {
+                return (T) getString(key);
+            }
+            return delegate.get(key, type);
+        }
+        @Override @SuppressWarnings("unchecked")
+        public <T> T get(String key, Class<T> type, T defaultValue) {
+            try {
+                if (type == String.class) {
+                    return (T) getString(key);
+                }
+                return delegate.get(key, type, defaultValue);
+            } catch (Exception e) { return defaultValue; }
+        }
         @Override public <T> List<T> getList(String key, Class<T> elementType) { return delegate.getList(key, elementType); }
         @Override public <K, V> Map<K, V> getMap(String key, Class<K> keyType, Class<V> valueType) { return delegate.getMap(key, keyType, valueType); }
-        @Override public Optional<String> getOptional(String key) { return delegate.getOptional(key); }
-        @Override public <T> Optional<T> getOptional(String key, Class<T> type) { return delegate.getOptional(key, type); }
+        @Override public Optional<String> getOptional(String key) {
+            try { return Optional.ofNullable(getString(key)); } catch (Exception e) { return Optional.empty(); }
+        }
+        @Override public <T> Optional<T> getOptional(String key, Class<T> type) {
+            try {
+                return Optional.ofNullable(get(key, type));
+            } catch (Exception e) { return Optional.empty(); }
+        }
         @Override public Config getSubConfig(String prefix) { return delegate.getSubConfig(prefix); }
         @Override public Map<String, String> getByPrefix(String prefix) { return delegate.getByPrefix(prefix); }
         @Override public boolean hasKey(String key) { return delegate.hasKey(key); }

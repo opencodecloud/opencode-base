@@ -1,5 +1,6 @@
 package cloud.opencode.base.captcha.security;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -81,8 +82,8 @@ public final class CaptchaSecurity {
     public static String hashAnswer(String answer, String salt) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update(salt.getBytes());
-            byte[] hash = md.digest(answer.toLowerCase().getBytes());
+            md.update(salt.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = md.digest(answer.toLowerCase().getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 not available", e);

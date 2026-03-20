@@ -113,25 +113,27 @@ public class LockGroup implements AutoCloseable {
      * @throws OpenLockAcquireException if lock acquisition fails | 如果锁获取失败则抛出异常
      */
     public LockGroupGuard lockAll() {
-        // Clear any leftover state from a previous acquisition attempt
-        acquiredLocks.clear();
+        List<Lock<?>> localAcquired = new ArrayList<>();
         for (Lock<?> lock : locks) {
             try {
                 if (lock.tryLock(timeout)) {
-                    acquiredLocks.add(lock);
+                    localAcquired.add(lock);
                 } else {
                     // Rollback acquired locks
-                    releaseAll();
+                    releaseInReverse(localAcquired);
                     throw new OpenLockTimeoutException(
                             "Failed to acquire all locks within " + timeout, timeout);
                 }
             } catch (OpenLockTimeoutException e) {
                 throw e;
             } catch (Exception e) {
-                releaseAll();
+                releaseInReverse(localAcquired);
                 throw new OpenLockAcquireException("Failed to acquire lock", e);
             }
         }
+        // Publish to field for acquiredCount()/releaseAll() compatibility
+        acquiredLocks.clear();
+        acquiredLocks.addAll(localAcquired);
         return new LockGroupGuard(this);
     }
 
@@ -142,16 +144,18 @@ public class LockGroup implements AutoCloseable {
      * @return true if all locks acquired | true表示成功获取所有锁
      */
     public boolean tryLockAll() {
-        // Clear any leftover state from a previous acquisition attempt
-        acquiredLocks.clear();
+        List<Lock<?>> localAcquired = new ArrayList<>();
         for (Lock<?> lock : locks) {
             if (lock.tryLock()) {
-                acquiredLocks.add(lock);
+                localAcquired.add(lock);
             } else {
-                releaseAll();
+                releaseInReverse(localAcquired);
                 return false;
             }
         }
+        // Publish to field for acquiredCount()/releaseAll() compatibility
+        acquiredLocks.clear();
+        acquiredLocks.addAll(localAcquired);
         return true;
     }
 
@@ -163,8 +167,7 @@ public class LockGroup implements AutoCloseable {
      * @return true if all locks acquired within timeout | true表示在超时内成功获取所有锁
      */
     public boolean tryLockAll(Duration timeout) {
-        // Clear any leftover state from a previous acquisition attempt
-        acquiredLocks.clear();
+        List<Lock<?>> localAcquired = new ArrayList<>();
         long now = System.nanoTime();
         long timeoutNanos = timeout.toNanos();
         // Guard against deadline overflow: clamp to Long.MAX_VALUE
@@ -177,12 +180,30 @@ public class LockGroup implements AutoCloseable {
         for (Lock<?> lock : locks) {
             long remaining = deadline - System.nanoTime();
             if (remaining <= 0 || !lock.tryLock(Duration.ofNanos(remaining))) {
-                releaseAll();
+                releaseInReverse(localAcquired);
                 return false;
             }
-            acquiredLocks.add(lock);
+            localAcquired.add(lock);
         }
+        // Publish to field for acquiredCount()/releaseAll() compatibility
+        acquiredLocks.clear();
+        acquiredLocks.addAll(localAcquired);
         return true;
+    }
+
+    /**
+     * Releases locks in reverse order from a list
+     * 从列表中按相反顺序释放锁
+     */
+    private static void releaseInReverse(List<Lock<?>> locks) {
+        for (int i = locks.size() - 1; i >= 0; i--) {
+            try {
+                locks.get(i).unlock();
+            } catch (Exception e) {
+                // Log and continue
+            }
+        }
+        locks.clear();
     }
 
     /**
@@ -190,14 +211,7 @@ public class LockGroup implements AutoCloseable {
      * 按相反顺序释放所有已获取的锁
      */
     public void releaseAll() {
-        // Release in reverse order
-        for (int i = acquiredLocks.size() - 1; i >= 0; i--) {
-            try {
-                acquiredLocks.get(i).unlock();
-            } catch (Exception e) {
-                // Log and continue
-            }
-        }
+        releaseInReverse(new ArrayList<>(acquiredLocks));
         acquiredLocks.clear();
     }
 

@@ -43,8 +43,8 @@ public final class QueryLimiter {
     private static final int DEFAULT_MAX_RANGE_DAYS = 365;
     private static final int DEFAULT_MAX_RESULT_SIZE = 100_000;
 
-    private static int maxRangeDays = DEFAULT_MAX_RANGE_DAYS;
-    private static int maxResultSize = DEFAULT_MAX_RESULT_SIZE;
+    private static volatile int maxRangeDays = DEFAULT_MAX_RANGE_DAYS;
+    private static volatile int maxResultSize = DEFAULT_MAX_RESULT_SIZE;
 
     private QueryLimiter() {
         // Utility class

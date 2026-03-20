@@ -239,6 +239,9 @@ public final class OpenArray {
         if (array == null) {
             return values;
         }
+        if (index < 0 || index > array.length) {
+            throw new IndexOutOfBoundsException("Index: " + index + ", Length: " + array.length);
+        }
         if (values == null || values.length == 0) {
             return array.clone();
         }
@@ -268,6 +271,9 @@ public final class OpenArray {
     public static int[] insert(int index, int[] array, int... values) {
         if (array == null) {
             return values;
+        }
+        if (index < 0 || index > array.length) {
+            throw new IndexOutOfBoundsException("Index: " + index + ", Length: " + array.length);
         }
         if (values == null || values.length == 0) {
             return array.clone();

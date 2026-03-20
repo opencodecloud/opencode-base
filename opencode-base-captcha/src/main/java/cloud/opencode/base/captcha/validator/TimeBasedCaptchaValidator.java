@@ -1,6 +1,7 @@
 package cloud.opencode.base.captcha.validator;
 
 import cloud.opencode.base.captcha.ValidationResult;
+import cloud.opencode.base.captcha.security.CaptchaSecurity;
 import cloud.opencode.base.captcha.store.CaptchaStore;
 
 import java.time.Duration;
@@ -101,8 +102,8 @@ public final class TimeBasedCaptchaValidator implements CaptchaValidator {
 
         String stored = storedAnswer.get();
         boolean matches = caseSensitive
-            ? stored.equals(answer)
-            : stored.equalsIgnoreCase(answer);
+            ? CaptchaSecurity.constantTimeEquals(stored, answer)
+            : CaptchaSecurity.constantTimeEquals(stored.toLowerCase(), answer.toLowerCase());
 
         return matches ? ValidationResult.ok() : ValidationResult.mismatch();
     }

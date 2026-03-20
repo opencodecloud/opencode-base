@@ -4,6 +4,7 @@ import cloud.opencode.base.xml.exception.XmlValidationException;
 import org.xml.sax.*;
 import org.xml.sax.helpers.DefaultHandler;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import java.io.*;
@@ -162,6 +163,8 @@ public final class DtdValidator {
                 try {
                     factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
                     factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+                    factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+                    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
                 } catch (Exception ignored) {
                     // Some parsers may not support these features
                 }

@@ -213,7 +213,8 @@ public final class AesGcmCipher implements AeadCipher {
 
     @Override
     public OutputStream encryptStream(OutputStream output) {
-        throw new UnsupportedOperationException("Stream encryption not yet implemented for AES-GCM");
+        throw new UnsupportedOperationException(
+                "Streaming AEAD encryption is not supported for AES-GCM - use byte array methods (encrypt/encryptBase64/encryptHex) instead");
     }
 
     @Override
@@ -281,7 +282,8 @@ public final class AesGcmCipher implements AeadCipher {
 
     @Override
     public InputStream decryptStream(InputStream input) {
-        throw new UnsupportedOperationException("Stream decryption not yet implemented for AES-GCM");
+        throw new UnsupportedOperationException(
+                "Streaming AEAD decryption is not supported for AES-GCM - use byte array methods (decrypt/decryptBase64/decryptHex) instead");
     }
 
     @Override

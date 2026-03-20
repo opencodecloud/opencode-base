@@ -21,6 +21,7 @@ import cloud.opencode.base.graph.node.Edge;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BiFunction;
 
 /**
  * Layout Util - Graph Layout Algorithms for Visualization
@@ -132,92 +133,36 @@ public final class LayoutUtil {
             return Collections.emptyMap();
         }
 
-        // Initialize with random positions
-        Map<V, Point2D> positions = random(graph, width, height);
-        Map<V, double[]> displacements = new HashMap<>();
-
         int n = graph.vertexCount();
         double area = width * height;
         double k = Math.sqrt(area / n); // Optimal distance
-        double temperature = width / 10.0;
-        double cooling = DEFAULT_COOLING;
 
-        for (int iter = 0; iter < iterations; iter++) {
-            // Initialize displacements
-            for (V v : graph.vertices()) {
-                displacements.put(v, new double[]{0, 0});
-            }
+        // Repulsive force: k^2 / dist, applied from u toward v (positive direction = v - u)
+        BiFunction<double[], Double, double[]> repulsion = (delta, dist) -> {
+            double force = k * k / dist;
+            return new double[]{(delta[0] / dist) * force, (delta[1] / dist) * force};
+        };
 
-            // Calculate repulsive forces (all pairs)
-            List<V> vertices = new ArrayList<>(graph.vertices());
-            for (int i = 0; i < vertices.size(); i++) {
-                V v = vertices.get(i);
-                Point2D pv = positions.get(v);
-                double[] dv = displacements.get(v);
+        // Attractive force: dist^2 / k, applied from v toward u (subtracted from v, added to u)
+        BiFunction<double[], Double, double[]> attraction = (delta, dist) -> {
+            double force = dist * dist / k;
+            return new double[]{(delta[0] / dist) * force, (delta[1] / dist) * force};
+        };
 
-                for (int j = i + 1; j < vertices.size(); j++) {
-                    V u = vertices.get(j);
-                    Point2D pu = positions.get(u);
-                    double[] du = displacements.get(u);
+        return forceSimulation(graph, iterations, width, height, 0.01, repulsion, attraction,
+                (positions, forces, iter) -> {
+                    double temperature = width / 10.0 * Math.pow(DEFAULT_COOLING, iter);
+                    for (V v : graph.vertices()) {
+                        double[] d = forces.get(v);
+                        double dist = Math.max(0.01, Math.sqrt(d[0] * d[0] + d[1] * d[1]));
+                        double factor = Math.min(dist, temperature) / dist;
 
-                    double dx = pv.x() - pu.x();
-                    double dy = pv.y() - pu.y();
-                    double dist = Math.max(0.01, Math.sqrt(dx * dx + dy * dy));
-
-                    // Repulsive force
-                    double force = k * k / dist;
-                    double fx = (dx / dist) * force;
-                    double fy = (dy / dist) * force;
-
-                    dv[0] += fx;
-                    dv[1] += fy;
-                    du[0] -= fx;
-                    du[1] -= fy;
-                }
-            }
-
-            // Calculate attractive forces (edges)
-            for (Edge<V> edge : graph.edges()) {
-                V v = edge.from();
-                V u = edge.to();
-                Point2D pv = positions.get(v);
-                Point2D pu = positions.get(u);
-                double[] dv = displacements.get(v);
-                double[] du = displacements.get(u);
-
-                double dx = pv.x() - pu.x();
-                double dy = pv.y() - pu.y();
-                double dist = Math.max(0.01, Math.sqrt(dx * dx + dy * dy));
-
-                // Attractive force
-                double force = dist * dist / k;
-                double fx = (dx / dist) * force;
-                double fy = (dy / dist) * force;
-
-                dv[0] -= fx;
-                dv[1] -= fy;
-                du[0] += fx;
-                du[1] += fy;
-            }
-
-            // Apply displacements with temperature limiting
-            for (V v : graph.vertices()) {
-                double[] d = displacements.get(v);
-                double dist = Math.max(0.01, Math.sqrt(d[0] * d[0] + d[1] * d[1]));
-                double factor = Math.min(dist, temperature) / dist;
-
-                Point2D p = positions.get(v);
-                double newX = Math.max(0, Math.min(width, p.x() + d[0] * factor));
-                double newY = Math.max(0, Math.min(height, p.y() + d[1] * factor));
-
-                positions.put(v, new Point2D(newX, newY));
-            }
-
-            // Cool down
-            temperature *= cooling;
-        }
-
-        return positions;
+                        Point2D p = positions.get(v);
+                        double newX = Math.max(0, Math.min(width, p.x() + d[0] * factor));
+                        double newY = Math.max(0, Math.min(height, p.y() + d[1] * factor));
+                        positions.put(v, new Point2D(newX, newY));
+                    }
+                });
     }
 
     // ==================== Spring Layout | 弹簧布局 ====================
@@ -256,82 +201,156 @@ public final class LayoutUtil {
             return Collections.emptyMap();
         }
 
-        Map<V, Point2D> positions = random(graph, width, height);
         double springConstant = 0.1;
         double repulsionConstant = 10000.0;
         double damping = 0.85;
 
+        // Repulsive force: repulsionConstant / dist^2, applied from u toward v
+        BiFunction<double[], Double, double[]> repulsion = (delta, dist) -> {
+            double force = repulsionConstant / (dist * dist);
+            return new double[]{(delta[0] / dist) * force, (delta[1] / dist) * force};
+        };
+
+        // Attractive (spring) force: springConstant * (dist - springLength)
+        // The simulation subtracts the returned force from v and adds it to u,
+        // so returning (delta/dist)*force pulls v toward u as expected.
+        BiFunction<double[], Double, double[]> attraction = (delta, dist) -> {
+            double displacement = dist - springLength;
+            double force = springConstant * displacement;
+            double safeDist = Math.max(1, dist);
+            return new double[]{(delta[0] / safeDist) * force, (delta[1] / safeDist) * force};
+        };
+
+        // Velocity state persists across iterations
         Map<V, double[]> velocities = new HashMap<>();
         for (V v : graph.vertices()) {
             velocities.put(v, new double[]{0, 0});
         }
 
+        return forceSimulation(graph, iterations, width, height, 1.0, repulsion, attraction,
+                (positions, forces, iter) -> {
+                    for (V v : graph.vertices()) {
+                        double[] vel = velocities.get(v);
+                        double[] force = forces.get(v);
+
+                        vel[0] = (vel[0] + force[0]) * damping;
+                        vel[1] = (vel[1] + force[1]) * damping;
+
+                        Point2D p = positions.get(v);
+                        double newX = Math.max(0, Math.min(width, p.x() + vel[0]));
+                        double newY = Math.max(0, Math.min(height, p.y() + vel[1]));
+                        positions.put(v, new Point2D(newX, newY));
+                    }
+                });
+    }
+
+    // ==================== Common Force Simulation | 通用力模拟 ====================
+
+    /**
+     * Callback for applying accumulated forces to update vertex positions.
+     * 用于将累积力应用于更新顶点位置的回调。
+     *
+     * @param <V> the vertex type | 顶点类型
+     */
+    @FunctionalInterface
+    private interface PositionUpdater<V> {
+        /**
+         * Update positions using accumulated forces for the current iteration.
+         * 使用当前迭代的累积力更新位置。
+         *
+         * @param positions mutable map of vertex positions | 可变的顶点位置映射
+         * @param forces accumulated force vectors per vertex | 每个顶点的累积力向量
+         * @param iteration current iteration index (0-based) | 当前迭代索引（从0开始）
+         */
+        void apply(Map<V, Point2D> positions, Map<V, double[]> forces, int iteration);
+    }
+
+    /**
+     * Common force-directed simulation skeleton shared by forceDirected() and spring().
+     * forceDirected() 和 spring() 共享的通用力导向模拟骨架。
+     *
+     * <p>Runs the standard force simulation loop: random initialization, then for each iteration
+     * compute repulsive forces between all vertex pairs, attractive forces along edges,
+     * and apply forces to update positions via the supplied updater.</p>
+     *
+     * @param <V> the vertex type | 顶点类型
+     * @param graph the graph | 图
+     * @param iterations number of iterations | 迭代次数
+     * @param width layout width | 布局宽度
+     * @param height layout height | 布局高度
+     * @param minDist minimum distance to avoid division by zero | 最小距离以避免除零
+     * @param repulsionForce computes repulsive force given (delta[dx,dy], dist) returning [fx,fy] |
+     *                       根据 (delta[dx,dy], dist) 计算排斥力返回 [fx,fy]
+     * @param attractionForce computes attractive force given (delta[dx,dy], dist) returning [fx,fy],
+     *                        where the returned force is subtracted from the source vertex and added
+     *                        to the target vertex | 根据 (delta[dx,dy], dist) 计算引力返回 [fx,fy]，
+     *                        返回的力从源顶点减去并加到目标顶点
+     * @param updater callback to apply forces and update positions each iteration |
+     *                每次迭代应用力并更新位置的回调
+     * @return map of vertex to position | 顶点到位置的映射
+     */
+    private static <V> Map<V, Point2D> forceSimulation(
+            Graph<V> graph, int iterations, double width, double height,
+            double minDist,
+            BiFunction<double[], Double, double[]> repulsionForce,
+            BiFunction<double[], Double, double[]> attractionForce,
+            PositionUpdater<V> updater) {
+
+        Map<V, Point2D> positions = random(graph, width, height);
+
         for (int iter = 0; iter < iterations; iter++) {
+            // Initialize force accumulators
             Map<V, double[]> forces = new HashMap<>();
             for (V v : graph.vertices()) {
                 forces.put(v, new double[]{0, 0});
             }
 
-            // Repulsion between all pairs
+            // Calculate repulsive forces (all pairs)
             List<V> vertices = new ArrayList<>(graph.vertices());
             for (int i = 0; i < vertices.size(); i++) {
+                V v = vertices.get(i);
+                Point2D pv = positions.get(v);
+                double[] dv = forces.get(v);
+
                 for (int j = i + 1; j < vertices.size(); j++) {
-                    V v = vertices.get(i);
                     V u = vertices.get(j);
-                    Point2D pv = positions.get(v);
                     Point2D pu = positions.get(u);
+                    double[] du = forces.get(u);
 
                     double dx = pv.x() - pu.x();
                     double dy = pv.y() - pu.y();
-                    double dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+                    double dist = Math.max(minDist, Math.sqrt(dx * dx + dy * dy));
 
-                    double force = repulsionConstant / (dist * dist);
-                    double fx = (dx / dist) * force;
-                    double fy = (dy / dist) * force;
-
-                    forces.get(v)[0] += fx;
-                    forces.get(v)[1] += fy;
-                    forces.get(u)[0] -= fx;
-                    forces.get(u)[1] -= fy;
+                    double[] f = repulsionForce.apply(new double[]{dx, dy}, dist);
+                    dv[0] += f[0];
+                    dv[1] += f[1];
+                    du[0] -= f[0];
+                    du[1] -= f[1];
                 }
             }
 
-            // Spring forces for edges
+            // Calculate attractive forces (edges)
             for (Edge<V> edge : graph.edges()) {
                 V v = edge.from();
                 V u = edge.to();
                 Point2D pv = positions.get(v);
                 Point2D pu = positions.get(u);
+                double[] dv = forces.get(v);
+                double[] du = forces.get(u);
 
-                double dx = pu.x() - pv.x();
-                double dy = pu.y() - pv.y();
-                double dist = Math.sqrt(dx * dx + dy * dy);
-                double displacement = dist - springLength;
+                double dx = pv.x() - pu.x();
+                double dy = pv.y() - pu.y();
+                double dist = Math.max(minDist, Math.sqrt(dx * dx + dy * dy));
 
-                double force = springConstant * displacement;
-                double fx = (dx / Math.max(1, dist)) * force;
-                double fy = (dy / Math.max(1, dist)) * force;
-
-                forces.get(v)[0] += fx;
-                forces.get(v)[1] += fy;
-                forces.get(u)[0] -= fx;
-                forces.get(u)[1] -= fy;
+                double[] f = attractionForce.apply(new double[]{dx, dy}, dist);
+                dv[0] -= f[0];
+                dv[1] -= f[1];
+                du[0] += f[0];
+                du[1] += f[1];
             }
 
-            // Update velocities and positions
-            for (V v : graph.vertices()) {
-                double[] vel = velocities.get(v);
-                double[] force = forces.get(v);
-
-                vel[0] = (vel[0] + force[0]) * damping;
-                vel[1] = (vel[1] + force[1]) * damping;
-
-                Point2D p = positions.get(v);
-                double newX = Math.max(0, Math.min(width, p.x() + vel[0]));
-                double newY = Math.max(0, Math.min(height, p.y() + vel[1]));
-
-                positions.put(v, new Point2D(newX, newY));
-            }
+            // Apply forces to update positions
+            updater.apply(positions, forces, iter);
         }
 
         return positions;
@@ -570,7 +589,7 @@ public final class LayoutUtil {
 
         // Find bounding box
         double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-        double maxX = Double.MIN_VALUE, maxY = Double.MIN_VALUE;
+        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
 
         for (Point2D p : positions.values()) {
             minX = Math.min(minX, p.x());
@@ -614,7 +633,7 @@ public final class LayoutUtil {
 
         // Find bounding box
         double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-        double maxX = Double.MIN_VALUE, maxY = Double.MIN_VALUE;
+        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
 
         for (Point2D p : positions.values()) {
             minX = Math.min(minX, p.x());

@@ -132,6 +132,7 @@ public final class WTinyLfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> 
                     if (getFrequency(windowVictim) > getFrequency(probationVictim)) {
                         // Window victim is hotter, admit to probation
                         window.remove(windowVictim);
+                        probation.remove(probationVictim);
                         probation.add(windowVictim);
                         return Optional.of(probationVictim);
                     }

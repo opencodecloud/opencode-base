@@ -64,7 +64,7 @@ public class FileAuditLogger implements AuditLogger {
      * @param event the audit event | 审计事件
      */
     @Override
-    public void log(FeatureAuditEvent event) {
+    public synchronized void log(FeatureAuditEvent event) {
         try {
             if (logFile.getParent() != null) {
                 Files.createDirectories(logFile.getParent());

@@ -84,13 +84,17 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
      * Expiration info holder for atomic operations
      * 过期信息持有者，用于原子操作
      */
-    private record ExpirationInfo(long expirationTime, long customTtlMs) {
+    private record ExpirationInfo(long expirationTime, long customTtlMs, long creationTime) {
         static ExpirationInfo of(long expirationTime) {
-            return new ExpirationInfo(expirationTime, -1);
+            return new ExpirationInfo(expirationTime, -1, System.currentTimeMillis());
+        }
+
+        static ExpirationInfo ofWithCreation(long expirationTime, long creationTime) {
+            return new ExpirationInfo(expirationTime, -1, creationTime);
         }
 
         static ExpirationInfo ofCustomTtl(long expirationTime, long customTtlMs) {
-            return new ExpirationInfo(expirationTime, customTtlMs);
+            return new ExpirationInfo(expirationTime, customTtlMs, System.currentTimeMillis());
         }
 
         boolean isExpired() {
@@ -383,13 +387,8 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
 
         store.compute(key, (k, holder) -> {
             if (holder == null || isExpired(k, holder)) {
-                // Expired entry - clean up expiration info
                 if (holder != null) {
-                    expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                    }
+                    handleExpiredEntry(k, holder);
                 }
                 result[0] = null;
                 return null;
@@ -399,12 +398,7 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
             V newValue = remappingFunction.apply(k, oldValue);
 
             if (newValue == null) {
-                // Remove entry
-                expirationInfo.remove(k);
-                evictionPolicy.onRemoval(k);
-                if (config.removalListener() != null) {
-                    notifyRemovalListenerSafely(k, oldValue, RemovalCause.EXPLICIT);
-                }
+                handleRemovedEntry(k, oldValue, RemovalCause.EXPLICIT);
                 result[0] = null;
                 return null;
             }
@@ -437,23 +431,14 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
             if (holder != null && !isExpired(k, holder)) {
                 oldValue = holder.value;
             } else if (holder != null) {
-                // Expired - clean up
-                expirationInfo.remove(k);
-                evictionPolicy.onRemoval(k);
-                if (config.removalListener() != null) {
-                    notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                }
+                handleExpiredEntry(k, holder);
             }
 
             V newValue = remappingFunction.apply(k, oldValue);
 
             if (newValue == null) {
                 if (oldValue != null) {
-                    expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, oldValue, RemovalCause.EXPLICIT);
-                    }
+                    handleRemovedEntry(k, oldValue, RemovalCause.EXPLICIT);
                 }
                 result[0] = null;
                 return null;
@@ -511,12 +496,7 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         store.compute(key, (k, holder) -> {
             if (holder == null || isExpired(k, holder)) {
                 if (holder != null) {
-                    // Expired - clean up
-                    expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                    }
+                    handleExpiredEntry(k, holder);
                 }
                 result[0] = null;
                 return null;
@@ -547,12 +527,7 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         store.compute(key, (k, holder) -> {
             if (holder == null || isExpired(k, holder)) {
                 if (holder != null) {
-                    // Expired - clean up
-                    expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                    }
+                    handleExpiredEntry(k, holder);
                 }
                 replaced[0] = false;
                 return null;
@@ -699,6 +674,39 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
 
     // ==================== Private Helper Methods ====================
 
+    /**
+     * Handle an expired entry found during a compute/replace operation.
+     * Cleans up expiration info, notifies eviction policy, and notifies listeners.
+     * 处理在 compute/replace 操作中发现的过期条目。清理过期信息、通知淘汰策略并通知监听器。
+     *
+     * @param key the key of the expired entry | 过期条目的键
+     * @param holder the value holder of the expired entry | 过期条目的值持有者
+     */
+    private void handleExpiredEntry(K key, ValueHolder<V> holder) {
+        expirationInfo.remove(key);
+        evictionPolicy.onRemoval(key);
+        if (config.removalListener() != null) {
+            notifyRemovalListenerSafely(key, holder.value, RemovalCause.EXPIRED);
+        }
+    }
+
+    /**
+     * Handle a removed entry during a compute/replace operation.
+     * Cleans up expiration info, notifies eviction policy, and notifies listeners.
+     * 处理在 compute/replace 操作中移除的条目。清理过期信息、通知淘汰策略并通知监听器。
+     *
+     * @param key the key of the removed entry | 移除条目的键
+     * @param oldValue the old value of the removed entry | 移除条目的旧值
+     * @param cause the removal cause | 移除原因
+     */
+    private void handleRemovedEntry(K key, V oldValue, RemovalCause cause) {
+        expirationInfo.remove(key);
+        evictionPolicy.onRemoval(key);
+        if (config.removalListener() != null) {
+            notifyRemovalListenerSafely(key, oldValue, cause);
+        }
+    }
+
     private void remove(K key, RemovalCause cause) {
         ValueHolder<V> removed = store.remove(key);
         expirationInfo.remove(key);
@@ -789,9 +797,9 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
                 holder.accessCount.get(), 1);
         evictionPolicy.recordAccess(entry);
 
-        // Update TTI expiration if configured
+        // Update TTI expiration if configured (access-only, not a write)
         if (config.expireAfterAccess() != null) {
-            updateExpiration(key);
+            updateExpiration(key, false);
         }
     }
 
@@ -800,7 +808,20 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         evictionPolicy.recordWrite(entry);
     }
 
+    /**
+     * Update expiration for a new write (put/replace/compute).
+     * Resets creation time to now.
+     */
     private void updateExpiration(K key) {
+        updateExpiration(key, true);
+    }
+
+    /**
+     * Update expiration, optionally resetting creation time.
+     * @param key the cache key
+     * @param isWrite true if this is a write (put/replace), false if access-only (get)
+     */
+    private void updateExpiration(K key, boolean isWrite) {
         Duration ttl = config.expireAfterWrite();
         Duration tti = config.expireAfterAccess();
 
@@ -809,16 +830,31 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         }
 
         long now = System.currentTimeMillis();
-        long expirationTime;
-        if (ttl != null && tti != null) {
-            expirationTime = now + Math.min(ttl.toMillis(), tti.toMillis());
-        } else if (ttl != null) {
-            expirationTime = now + ttl.toMillis();
-        } else {
-            expirationTime = now + tti.toMillis();
-        }
 
-        expirationInfo.put(key, ExpirationInfo.of(expirationTime));
+        if (ttl != null && tti != null) {
+            // When both TTL and TTI are configured:
+            // - TTL is absolute from creation time (not reset on access)
+            // - TTI is relative to current access time
+            // Take the minimum of the two absolute expiration times.
+            long creationTime;
+            if (isWrite) {
+                creationTime = now;
+            } else {
+                ExpirationInfo existing = expirationInfo.get(key);
+                creationTime = (existing != null) ? existing.creationTime() : now;
+            }
+            long ttlExpiration = creationTime + ttl.toMillis();
+            long ttiExpiration = now + tti.toMillis();
+            long expirationTime = Math.min(ttlExpiration, ttiExpiration);
+            expirationInfo.put(key, ExpirationInfo.ofWithCreation(expirationTime, creationTime));
+        } else if (ttl != null) {
+            // TTL only: set from now on writes (this path is only reached on writes
+            // since recordAccess only calls updateExpiration when TTI is configured)
+            expirationInfo.put(key, ExpirationInfo.of(now + ttl.toMillis()));
+        } else {
+            // TTI only: always relative to current access time
+            expirationInfo.put(key, ExpirationInfo.of(now + tti.toMillis()));
+        }
     }
 
     private boolean isExpired(K key, ValueHolder<V> holder) {

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -159,6 +160,8 @@ public final class BatchSender {
 
         List<SmsResult> results = new ArrayList<>(total);
 
+        Semaphore semaphore = new Semaphore(concurrency);
+
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             List<CompletableFuture<SmsResult>> futures = new ArrayList<>(total);
 
@@ -169,7 +172,19 @@ public final class BatchSender {
 
                 for (SmsMessage message : batch) {
                     CompletableFuture<SmsResult> future = CompletableFuture
-                        .supplyAsync(() -> provider.send(message), executor)
+                        .supplyAsync(() -> {
+                            try {
+                                semaphore.acquire();
+                                try {
+                                    return provider.send(message);
+                                } finally {
+                                    semaphore.release();
+                                }
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return SmsResult.failure(message.phoneNumber(), "INTERRUPTED", e.getMessage());
+                            }
+                        }, executor)
                         .orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS)
                         .handle((result, ex) -> {
                             if (ex != null) {

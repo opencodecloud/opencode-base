@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 
 /**
  * Rate Limited Executor - Token Bucket Rate Limiting Executor
@@ -169,14 +170,7 @@ public final class RateLimitedExecutor implements AutoCloseable {
     public CompletableFuture<Void> submit(Runnable task) {
         acquire();
         submittedCount.incrementAndGet();
-        return CompletableFuture.runAsync(task, delegate)
-                .whenComplete((_, ex) -> {
-                    if (ex != null) {
-                        failedCount.incrementAndGet();
-                    } else {
-                        completedCount.incrementAndGet();
-                    }
-                });
+        return trackCompletion(CompletableFuture.runAsync(task, delegate));
     }
 
     /**
@@ -190,19 +184,7 @@ public final class RateLimitedExecutor implements AutoCloseable {
     public <T> CompletableFuture<T> submit(Callable<T> task) {
         acquire();
         submittedCount.incrementAndGet();
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return task.call();
-            } catch (Exception e) {
-                throw new OpenParallelException("Task execution failed", e);
-            }
-        }, delegate).whenComplete((_, ex) -> {
-            if (ex != null) {
-                failedCount.incrementAndGet();
-            } else {
-                completedCount.incrementAndGet();
-            }
-        });
+        return trackCompletion(CompletableFuture.supplyAsync(wrapCallable(task), delegate));
     }
 
     /**
@@ -219,14 +201,7 @@ public final class RateLimitedExecutor implements AutoCloseable {
             throw new OpenParallelException("Timeout waiting for rate limit permit after " + timeout.toMillis() + "ms");
         }
         submittedCount.incrementAndGet();
-        return CompletableFuture.runAsync(task, delegate)
-                .whenComplete((_, ex) -> {
-                    if (ex != null) {
-                        failedCount.incrementAndGet();
-                    } else {
-                        completedCount.incrementAndGet();
-                    }
-                });
+        return trackCompletion(CompletableFuture.runAsync(task, delegate));
     }
 
     /**
@@ -244,19 +219,7 @@ public final class RateLimitedExecutor implements AutoCloseable {
             throw new OpenParallelException("Timeout waiting for rate limit permit after " + timeout.toMillis() + "ms");
         }
         submittedCount.incrementAndGet();
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return task.call();
-            } catch (Exception e) {
-                throw new OpenParallelException("Task execution failed", e);
-            }
-        }, delegate).whenComplete((_, ex) -> {
-            if (ex != null) {
-                failedCount.incrementAndGet();
-            } else {
-                completedCount.incrementAndGet();
-            }
-        });
+        return trackCompletion(CompletableFuture.supplyAsync(wrapCallable(task), delegate));
     }
 
     /**
@@ -272,14 +235,7 @@ public final class RateLimitedExecutor implements AutoCloseable {
             return java.util.Optional.empty();
         }
         submittedCount.incrementAndGet();
-        return java.util.Optional.of(CompletableFuture.runAsync(task, delegate)
-                .whenComplete((_, ex) -> {
-                    if (ex != null) {
-                        failedCount.incrementAndGet();
-                    } else {
-                        completedCount.incrementAndGet();
-                    }
-                }));
+        return java.util.Optional.of(trackCompletion(CompletableFuture.runAsync(task, delegate)));
     }
 
     /**
@@ -296,20 +252,40 @@ public final class RateLimitedExecutor implements AutoCloseable {
             return java.util.Optional.empty();
         }
         submittedCount.incrementAndGet();
-        return java.util.Optional.of(CompletableFuture.supplyAsync(() -> {
-            try {
-                return task.call();
-            } catch (Exception e) {
-                throw new OpenParallelException("Task execution failed", e);
-            }
-        }, delegate).whenComplete((_, ex) -> {
+        return java.util.Optional.of(trackCompletion(CompletableFuture.supplyAsync(wrapCallable(task), delegate)));
+    }
+
+    // ==================== Internal Helpers ====================
+
+    /**
+     * Attaches completion tracking to a future.
+     * 为 Future 附加完成跟踪。
+     */
+    private <T> CompletableFuture<T> trackCompletion(CompletableFuture<T> future) {
+        return future.whenComplete((_, ex) -> {
             if (ex != null) {
                 failedCount.incrementAndGet();
             } else {
                 completedCount.incrementAndGet();
             }
-        }));
+        });
     }
+
+    /**
+     * Wraps a Callable into a Supplier with proper exception handling.
+     * 将 Callable 包装为带异常处理的 Supplier。
+     */
+    private <T> Supplier<T> wrapCallable(Callable<T> task) {
+        return () -> {
+            try {
+                return task.call();
+            } catch (Exception e) {
+                throw new OpenParallelException("Task execution failed", e);
+            }
+        };
+    }
+
+    // ==================== Batch Methods ====================
 
     /**
      * Submits multiple tasks and waits for all.

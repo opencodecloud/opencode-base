@@ -127,9 +127,9 @@ public record BinaryOpNode(String operator, Node left, Node right) implements No
                 return l.doubleValue() + r.doubleValue();
             }
             if (l instanceof Long || r instanceof Long) {
-                return l.longValue() + r.longValue();
+                return Math.addExact(l.longValue(), r.longValue());
             }
-            return l.intValue() + r.intValue();
+            return Math.addExact(l.intValue(), r.intValue());
         }
 
         throw OpenExpressionException.typeError("number or string", left);
@@ -141,9 +141,9 @@ public record BinaryOpNode(String operator, Node left, Node right) implements No
                 return l.doubleValue() - r.doubleValue();
             }
             if (l instanceof Long || r instanceof Long) {
-                return l.longValue() - r.longValue();
+                return Math.subtractExact(l.longValue(), r.longValue());
             }
-            return l.intValue() - r.intValue();
+            return Math.subtractExact(l.intValue(), r.intValue());
         }
         throw OpenExpressionException.typeError("number", left);
     }
@@ -154,9 +154,9 @@ public record BinaryOpNode(String operator, Node left, Node right) implements No
                 return l.doubleValue() * r.doubleValue();
             }
             if (l instanceof Long || r instanceof Long) {
-                return l.longValue() * r.longValue();
+                return Math.multiplyExact(l.longValue(), r.longValue());
             }
-            return l.intValue() * r.intValue();
+            return Math.multiplyExact(l.intValue(), r.intValue());
         }
         throw OpenExpressionException.typeError("number", left);
     }

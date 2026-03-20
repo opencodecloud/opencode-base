@@ -56,8 +56,8 @@ public record GanZhi(Gan gan, Zhi zhi) {
      * @return the GanZhi | 干支
      */
     public static GanZhi ofYear(int year) {
-        int ganIndex = (year - 4) % 10;
-        int zhiIndex = (year - 4) % 12;
+        int ganIndex = Math.floorMod(year - 4, 10);
+        int zhiIndex = Math.floorMod(year - 4, 12);
         return new GanZhi(Gan.values()[ganIndex], Zhi.values()[zhiIndex]);
     }
 

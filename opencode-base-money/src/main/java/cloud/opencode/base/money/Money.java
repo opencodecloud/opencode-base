@@ -248,6 +248,9 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * @return the quotient | 商
      */
     public Money divide(BigDecimal divisor) {
+        if (divisor.compareTo(BigDecimal.ZERO) == 0) {
+            throw new ArithmeticException("Division by zero");
+        }
         return new Money(amount.divide(divisor, currency.getScale(), RoundingMode.HALF_UP), currency);
     }
 

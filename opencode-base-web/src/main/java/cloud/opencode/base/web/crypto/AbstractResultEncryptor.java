@@ -189,12 +189,12 @@ public abstract class AbstractResultEncryptor implements ResultEncryptor {
      * @return the unescaped string | 反转义后的字符串
      */
     private String unescapeJson(String s) {
-        return s.replace("\\\"", "\"")
+        return s.replace("\\\\", "\\")
+                .replace("\\\"", "\"")
                 .replace("\\b", "\b")
                 .replace("\\f", "\f")
                 .replace("\\n", "\n")
                 .replace("\\r", "\r")
-                .replace("\\t", "\t")
-                .replace("\\\\", "\\");
+                .replace("\\t", "\t");
     }
 }

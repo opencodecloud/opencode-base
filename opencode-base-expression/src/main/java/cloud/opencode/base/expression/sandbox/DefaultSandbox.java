@@ -154,7 +154,7 @@ public class DefaultSandbox implements Sandbox {
 
         // Check denied packages
         for (String pkg : deniedPackages) {
-            if (className.startsWith(pkg)) {
+            if (className.startsWith(pkg + ".")) {
                 return false;
             }
         }
@@ -166,7 +166,7 @@ public class DefaultSandbox implements Sandbox {
 
         // Check allowed packages
         for (String pkg : allowedPackages) {
-            if (className.startsWith(pkg)) {
+            if (className.startsWith(pkg + ".")) {
                 return true;
             }
         }

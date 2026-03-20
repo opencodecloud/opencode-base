@@ -134,7 +134,6 @@ public final class ImageSelectCaptchaGenerator implements CaptchaGenerator {
             metadata.put("gap", GAP);
             metadata.put("targetCategory", targetCategory);
             metadata.put("targetCount", targetCount);
-            metadata.put("targetIndices", targetIndices);
             metadata.put("prompt", "Select all " + targetCategory + " shapes");
 
             byte[] imageData = toBytes(image);

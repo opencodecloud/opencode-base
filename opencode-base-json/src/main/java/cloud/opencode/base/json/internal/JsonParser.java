@@ -189,8 +189,30 @@ final class JsonParser {
                             throw error("unterminated unicode escape");
                         }
                         String hex = input.substring(pos, pos + 4);
-                        sb.append((char) Integer.parseInt(hex, 16));
+                        int codeUnit = Integer.parseInt(hex, 16);
                         pos += 4;
+                        // Handle surrogate pairs: high surrogate followed by a \\uXXXX low surrogate
+                        if (Character.isHighSurrogate((char) codeUnit)) {
+                            if (pos + 6 <= input.length()
+                                    && input.charAt(pos) == '\\'
+                                    && input.charAt(pos + 1) == 'u') {
+                                String hex2 = input.substring(pos + 2, pos + 6);
+                                int lowSurrogate = Integer.parseInt(hex2, 16);
+                                if (Character.isLowSurrogate((char) lowSurrogate)) {
+                                    int codePoint = Character.toCodePoint((char) codeUnit, (char) lowSurrogate);
+                                    sb.append(Character.toChars(codePoint));
+                                    pos += 6;
+                                } else {
+                                    // Not a valid low surrogate, emit the high surrogate as-is
+                                    sb.append((char) codeUnit);
+                                }
+                            } else {
+                                // No following \\u escape, emit the high surrogate as-is
+                                sb.append((char) codeUnit);
+                            }
+                        } else {
+                            sb.append((char) codeUnit);
+                        }
                     }
                     default -> throw error("invalid escape: \\" + escaped);
                 }

@@ -92,9 +92,8 @@ public final class CorrelationUtil {
      * @return correlation coefficient (-1 to 1) | 相关系数 (-1 到 1)
      */
     public static double pearson(TimeSeries series1, TimeSeries series2) {
-        double[] x = extractAlignedValues(series1, series2)[0];
-        double[] y = extractAlignedValues(series1, series2)[1];
-        return pearson(x, y);
+        double[][] aligned = extractAlignedValues(series1, series2);
+        return pearson(aligned[0], aligned[1]);
     }
 
     /**

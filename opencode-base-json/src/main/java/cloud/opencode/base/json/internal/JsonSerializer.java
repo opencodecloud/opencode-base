@@ -86,7 +86,7 @@ final class JsonSerializer {
             case String s -> writeString(s);
             case Boolean b -> sb.append(b);
             case Number n -> writeNumber(n);
-            case Map<?, ?> map -> writeMap((Map<String, Object>) map);
+            case Map<?, ?> map -> writeMap(map);
             case Collection<?> coll -> writeCollection(coll);
             case Object[] arr -> writeArray(arr);
             case int[] arr -> writePrimitiveArray(arr);
@@ -144,14 +144,14 @@ final class JsonSerializer {
         }
     }
 
-    private void writeMap(Map<String, Object> map) {
+    private void writeMap(Map<?, ?> map) {
         sb.append('{');
         pushDepth();
         boolean first = true;
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
             if (!first) sb.append(',');
             newline();
-            writeString(entry.getKey());
+            writeString(String.valueOf(entry.getKey()));
             sb.append(':');
             if (prettyPrint) sb.append(' ');
             writeValue(entry.getValue());

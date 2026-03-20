@@ -87,7 +87,12 @@ public final class CsvUtil {
             char c = line.charAt(i);
             
             if (c == '"') {
-                inQuotes = !inQuotes;
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    field.append('"');
+                    i++; // skip next quote
+                } else {
+                    inQuotes = !inQuotes;
+                }
             } else if (c == ',' && !inQuotes) {
                 fields.add(field.toString().trim());
                 field = new StringBuilder();

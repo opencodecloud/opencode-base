@@ -48,6 +48,19 @@ import java.util.List;
 public record LunarDate(int year, int month, int day, boolean isLeapMonth) {
 
     /**
+     * Compact constructor validation
+     * 紧凑构造函数验证
+     */
+    public LunarDate {
+        if (month < 1 || month > 12) {
+            throw new IllegalArgumentException("Lunar month must be between 1 and 12, got: " + month);
+        }
+        if (day < 1 || day > 30) {
+            throw new IllegalArgumentException("Lunar day must be between 1 and 30, got: " + day);
+        }
+    }
+
+    /**
      * Month names | 月份名
      */
     private static final String[] MONTH_NAMES = {

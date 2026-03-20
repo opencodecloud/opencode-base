@@ -130,6 +130,12 @@ public class KryoSerializer implements Serializer {
     private final Set<Class<?>> registeredClasses = new CopyOnWriteArraySet<>();
 
     /**
+     * Registered classes with specific IDs
+     * 带特定 ID 的注册类
+     */
+    private final java.util.concurrent.ConcurrentHashMap<Class<?>, Integer> registeredClassIds = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
      * Creates a new KryoSerializer with default configuration (non-secure mode).
      * 创建带默认配置的新 KryoSerializer（非安全模式）。
      */
@@ -197,7 +203,12 @@ public class KryoSerializer implements Serializer {
         }
         // Apply stored registrations
         for (Class<?> clazz : registeredClasses) {
-            kryo.register(clazz);
+            Integer id = registeredClassIds.get(clazz);
+            if (id != null) {
+                kryo.register(clazz, id);
+            } else {
+                kryo.register(clazz);
+            }
         }
         return kryo;
     }
@@ -353,6 +364,7 @@ public class KryoSerializer implements Serializer {
      */
     public KryoSerializer register(Class<?> clazz, int id) {
         registeredClasses.add(clazz);
+        registeredClassIds.put(clazz, id);
         return this;
     }
 

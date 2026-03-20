@@ -101,7 +101,7 @@ public final class ReflectCache {
         Field[] fields = FIELD_CACHE.get(clazz);
         if (fields != null) {
             hits.increment();
-            return Optional.of(fields);
+            return Optional.of(fields.clone());
         }
         misses.increment();
         return Optional.empty();
@@ -133,7 +133,7 @@ public final class ReflectCache {
         Method[] methods = METHOD_CACHE.get(clazz);
         if (methods != null) {
             hits.increment();
-            return Optional.of(methods);
+            return Optional.of(methods.clone());
         }
         misses.increment();
         return Optional.empty();
@@ -165,7 +165,7 @@ public final class ReflectCache {
         Constructor<?>[] constructors = CONSTRUCTOR_CACHE.get(clazz);
         if (constructors != null) {
             hits.increment();
-            return Optional.of(constructors);
+            return Optional.of(constructors.clone());
         }
         misses.increment();
         return Optional.empty();

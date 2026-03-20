@@ -146,22 +146,32 @@ public class AstEvaluator implements Evaluator {
     }
 
     /**
-     * Evaluate with timeout
-     * 带超时求值
+     * Evaluate with timeout (post-hoc detection)
+     * 带超时求值（事后检测）
+     *
+     * <p><strong>Important:</strong> This method uses post-hoc timeout detection, meaning
+     * the evaluation runs to completion and the elapsed time is checked afterward. It does
+     * NOT interrupt a long-running evaluation mid-execution. For expressions that may run
+     * indefinitely (e.g., deeply nested or recursive), this method will not prevent them
+     * from consuming CPU time beyond the specified timeout. Consider using an external
+     * mechanism (e.g., a virtual thread with interrupt-based timeout) for strict enforcement.</p>
+     * <p><strong>重要：</strong>此方法使用事后超时检测，即求值运行完成后才检查耗时。
+     * 它不会在执行过程中中断长时间运行的求值。对于可能无限运行的表达式，
+     * 此方法不会阻止它们在超时之后继续消耗 CPU 时间。</p>
      *
      * @param node the node | 节点
      * @param context the context | 上下文
      * @param timeoutMs the timeout in milliseconds | 超时毫秒数
      * @return the result | 结果
-     * @throws OpenExpressionException if timeout | 如果超时
+     * @throws OpenExpressionException if evaluation exceeded timeout (detected post-hoc) | 如果求值超过超时（事后检测）
      */
     public Object evaluateWithTimeout(Node node, EvaluationContext context, long timeoutMs) {
         if (timeoutMs <= 0) {
             return evaluate(node, context);
         }
 
-        // Use a simple approach: check time before and after
-        // For complex expressions, the nodes should check timeout themselves
+        // Post-hoc timeout detection: the evaluation runs to completion and elapsed
+        // time is checked afterward. This does NOT interrupt a running evaluation.
         long startTime = System.currentTimeMillis();
         Object result = evaluate(node, context);
         long elapsed = System.currentTimeMillis() - startTime;

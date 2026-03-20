@@ -116,7 +116,7 @@ public final class ChaChaCipher implements AeadCipher {
 
     @Override
     public ChaChaCipher setAad(byte[] aad) {
-        this.aad = aad;
+        this.aad = aad != null ? aad.clone() : null;
         return this;
     }
 
@@ -191,7 +191,8 @@ public final class ChaChaCipher implements AeadCipher {
 
     @Override
     public OutputStream encryptStream(OutputStream output) {
-        throw new UnsupportedOperationException("Stream encryption not yet implemented for ChaCha20-Poly1305");
+        throw new UnsupportedOperationException(
+                "Streaming AEAD encryption is not supported for ChaCha20-Poly1305 - use byte array methods (encrypt/encryptBase64/encryptHex) instead");
     }
 
     @Override
@@ -259,7 +260,8 @@ public final class ChaChaCipher implements AeadCipher {
 
     @Override
     public InputStream decryptStream(InputStream input) {
-        throw new UnsupportedOperationException("Stream decryption not yet implemented for ChaCha20-Poly1305");
+        throw new UnsupportedOperationException(
+                "Streaming AEAD decryption is not supported for ChaCha20-Poly1305 - use byte array methods (decrypt/decryptBase64/decryptHex) instead");
     }
 
     @Override

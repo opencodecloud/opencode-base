@@ -6,9 +6,7 @@ import java.io.Serializable;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Lambda Utility Class
@@ -48,23 +46,25 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class LambdaUtil {
 
-    private static final Map<Class<?>, java.lang.invoke.SerializedLambda> LAMBDA_CACHE = new ConcurrentHashMap<>();
-
     private LambdaUtil() {
     }
 
     // ==================== SerializedLambda Extraction | SerializedLambda提取 ====================
 
     /**
-     * Gets SerializedLambda from a serializable lambda (cached)
-     * 从可序列化lambda获取SerializedLambda（缓存）
+     * Gets SerializedLambda from a serializable lambda
+     * 从可序列化lambda获取SerializedLambda
+     *
+     * <p>Note: No caching is used because different lambda instances of the same
+     * class may capture different values, making class-based caching incorrect.</p>
+     * <p>注意：不使用缓存，因为同一类的不同lambda实例可能捕获不同的值，
+     * 基于类的缓存是不正确的。</p>
      *
      * @param lambda the lambda | lambda
      * @return the SerializedLambda | SerializedLambda
      */
     public static java.lang.invoke.SerializedLambda getSerializedLambda(Serializable lambda) {
-        Class<?> lambdaClass = lambda.getClass();
-        return LAMBDA_CACHE.computeIfAbsent(lambdaClass, clazz -> extractSerializedLambda(lambda));
+        return extractSerializedLambda(lambda);
     }
 
     private static java.lang.invoke.SerializedLambda extractSerializedLambda(Serializable lambda) {
@@ -375,20 +375,21 @@ public final class LambdaUtil {
     // ==================== Cache Management | 缓存管理 ====================
 
     /**
-     * Clears lambda cache
-     * 清除lambda缓存
+     * Clears lambda cache (no-op, caching removed)
+     * 清除lambda缓存（空操作，缓存已移除）
      */
     public static void clearCache() {
-        LAMBDA_CACHE.clear();
+        // No-op: caching removed because class-based caching was incorrect
+        // for different lambda instances capturing different values
     }
 
     /**
-     * Gets cache size
-     * 获取缓存大小
+     * Gets cache size (always returns 0, caching removed)
+     * 获取缓存大小（始终返回0，缓存已移除）
      *
-     * @return the cache size | 缓存大小
+     * @return always 0 | 始终为0
      */
     public static int getCacheSize() {
-        return LAMBDA_CACHE.size();
+        return 0;
     }
 }

@@ -100,28 +100,30 @@ public final class SmsRateLimiter implements AutoCloseable {
             phone, k -> new ConcurrentSkipListMap<>()
         );
 
-        // Clean up old records (older than 24 hours)
-        records.headMap(now - 24 * 60 * 60 * 1000).clear();
+        synchronized (records) {
+            // Clean up old records (older than 24 hours)
+            records.headMap(now - 24 * 60 * 60 * 1000).clear();
 
-        // Check limits
-        int countMinute = countInWindow(records, now, 60 * 1000);
-        if (countMinute >= limitPerMinute) {
-            return false;
+            // Check limits
+            int countMinute = countInWindow(records, now, 60 * 1000);
+            if (countMinute >= limitPerMinute) {
+                return false;
+            }
+
+            int countHour = countInWindow(records, now, 60 * 60 * 1000);
+            if (countHour >= limitPerHour) {
+                return false;
+            }
+
+            int countDay = countInWindow(records, now, 24 * 60 * 60 * 1000);
+            if (countDay >= limitPerDay) {
+                return false;
+            }
+
+            // Record this send
+            records.computeIfAbsent(now, k -> new AtomicInteger(0)).incrementAndGet();
+            return true;
         }
-
-        int countHour = countInWindow(records, now, 60 * 60 * 1000);
-        if (countHour >= limitPerHour) {
-            return false;
-        }
-
-        int countDay = countInWindow(records, now, 24 * 60 * 60 * 1000);
-        if (countDay >= limitPerDay) {
-            return false;
-        }
-
-        // Record this send
-        records.computeIfAbsent(now, k -> new AtomicInteger(0)).incrementAndGet();
-        return true;
     }
 
     /**

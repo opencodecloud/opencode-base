@@ -86,10 +86,13 @@ public class XmlSerializer implements Serializer {
     private final ConcurrentMap<Class<?>, JAXBContext> contextCache = new ConcurrentHashMap<>();
 
     /**
-     * Secure XMLInputFactory with XXE protection disabled
-     * 禁用XXE保护的安全XMLInputFactory
+     * Thread-local secure XMLInputFactory with XXE protection disabled.
+     * XMLInputFactory is not thread-safe, so each thread gets its own instance.
+     * 线程本地的安全XMLInputFactory，禁用XXE保护。
+     * XMLInputFactory不是线程安全的，因此每个线程获取自己的实例。
      */
-    private static final XMLInputFactory SECURE_XML_INPUT_FACTORY = createSecureXmlInputFactory();
+    private static final ThreadLocal<XMLInputFactory> SECURE_XML_INPUT_FACTORY =
+        ThreadLocal.withInitial(XmlSerializer::createSecureXmlInputFactory);
 
     /**
      * Creates a secure XMLInputFactory with XXE protection.
@@ -140,7 +143,7 @@ public class XmlSerializer implements Serializer {
 
             // Use secure XMLStreamReader with XXE protection
             ByteArrayInputStream bis = new ByteArrayInputStream(data);
-            XMLStreamReader xmlReader = SECURE_XML_INPUT_FACTORY.createXMLStreamReader(bis);
+            XMLStreamReader xmlReader = SECURE_XML_INPUT_FACTORY.get().createXMLStreamReader(bis);
             try {
                 Object result = unmarshaller.unmarshal(xmlReader);
                 return type.cast(result);
@@ -230,7 +233,7 @@ public class XmlSerializer implements Serializer {
             Unmarshaller unmarshaller = context.createUnmarshaller();
 
             // Use secure XMLStreamReader with XXE protection
-            XMLStreamReader xmlReader = SECURE_XML_INPUT_FACTORY.createXMLStreamReader(new StringReader(xml));
+            XMLStreamReader xmlReader = SECURE_XML_INPUT_FACTORY.get().createXMLStreamReader(new StringReader(xml));
             try {
                 Object result = unmarshaller.unmarshal(xmlReader);
                 return type.cast(result);

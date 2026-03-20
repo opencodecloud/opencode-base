@@ -212,7 +212,7 @@ public class YamlConfigSource implements ConfigSource {
 
             // Flatten nested map to dot notation
             Map<String, String> flattened = new HashMap<>();
-            flatten("", yamlData, flattened);
+            flatten("", yamlData, flattened, 0);
             this.properties = Map.copyOf(flattened);
 
         } catch (Exception e) {
@@ -249,6 +249,8 @@ public class YamlConfigSource implements ConfigSource {
         return (Map<String, Object>) AS_MAP_METHOD.invoke(doc);
     }
 
+    private static final int MAX_FLATTEN_DEPTH = 64;
+
     /**
      * Flatten nested map to dot notation
      * 将嵌套Map扁平化为点号记法
@@ -256,11 +258,16 @@ public class YamlConfigSource implements ConfigSource {
      * @param prefix current key prefix | 当前键前缀
      * @param source source map | 源Map
      * @param target target flattened map | 目标扁平化Map
+     * @param depth  current recursion depth | 当前递归深度
      */
     @SuppressWarnings("unchecked")
-    private void flatten(String prefix, Map<String, Object> source, Map<String, String> target) {
+    private void flatten(String prefix, Map<String, Object> source, Map<String, String> target, int depth) {
         if (source == null) {
             return;
+        }
+        if (depth > MAX_FLATTEN_DEPTH) {
+            throw new OpenConfigException("YAML nesting depth exceeds maximum of " + MAX_FLATTEN_DEPTH
+                    + " at prefix: " + prefix);
         }
 
         for (Map.Entry<String, Object> entry : source.entrySet()) {
@@ -269,14 +276,14 @@ public class YamlConfigSource implements ConfigSource {
 
             if (value instanceof Map) {
                 // Nested map - recurse
-                flatten(key, (Map<String, Object>) value, target);
+                flatten(key, (Map<String, Object>) value, target, depth + 1);
             } else if (value instanceof List<?> list) {
                 // List - flatten with index notation
                 for (int i = 0; i < list.size(); i++) {
                     Object item = list.get(i);
                     String indexedKey = key + "[" + i + "]";
                     if (item instanceof Map) {
-                        flatten(indexedKey, (Map<String, Object>) item, target);
+                        flatten(indexedKey, (Map<String, Object>) item, target, depth + 1);
                     } else if (item != null) {
                         target.put(indexedKey, item.toString());
                     }

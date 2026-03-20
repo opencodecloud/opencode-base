@@ -2,6 +2,7 @@ package cloud.opencode.base.classloader.resource;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
@@ -49,8 +50,8 @@ public abstract class AbstractResource implements Resource {
 
     @Override
     public boolean exists() {
-        try {
-            return getInputStream() != null;
+        try (InputStream is = getInputStream()) {
+            return is != null;
         } catch (IOException e) {
             return false;
         }

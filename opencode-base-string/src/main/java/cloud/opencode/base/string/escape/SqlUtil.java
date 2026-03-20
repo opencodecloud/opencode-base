@@ -38,6 +38,6 @@ public final class SqlUtil {
 
     public static String escape(String str) {
         if (str == null) return null;
-        return str.replace("'", "''");
+        return str.replace("\\", "\\\\").replace("'", "''");
     }
 }

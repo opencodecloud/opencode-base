@@ -274,12 +274,13 @@ class LambdaUtilTest {
     class CacheManagementTests {
 
         @Test
-        @DisplayName("获取缓存大小")
+        @DisplayName("获取缓存大小 - 缓存已移除，始终返回0")
         void testGetCacheSize() {
             LambdaUtil.clearCache();
             SerializableFunction<String, Integer> lambda = String::length;
             LambdaUtil.getSerializedLambda(lambda);
-            assertThat(LambdaUtil.getCacheSize()).isGreaterThan(0);
+            // Cache was removed in DH-05 fix (class-based caching was incorrect for different lambda instances)
+            assertThat(LambdaUtil.getCacheSize()).isEqualTo(0);
         }
 
         @Test

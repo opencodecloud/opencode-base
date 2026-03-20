@@ -70,6 +70,9 @@ public final class BuiltinJsonWriter implements JsonWriter {
     /** True when the next value needs a property name first. */
     private boolean expectName;
 
+    /** Deferred property name, used to support serializeNulls=false in object scope. */
+    private String deferredName;
+
     /**
      * Creates a new writer that writes to the given output.
      * 创建写入给定输出的新写入器。
@@ -140,17 +143,29 @@ public final class BuiltinJsonWriter implements JsonWriter {
         if (!isObjectScope(scope)) {
             throw new IllegalStateException("not in an object");
         }
-        if (scope == Scope.NONEMPTY_OBJECT) {
-            write(',');
-        }
-        stack.pop();
-        stack.push(Scope.NONEMPTY_OBJECT);
-        newline();
-        writeString(name);
-        write(':');
-        if (!indent.isEmpty()) write(' ');
+        deferredName = name;
         expectName = false;
         return this;
+    }
+
+    /**
+     * Writes the deferred property name if one is pending.
+     * 如果有待写入的属性名则写入。
+     */
+    private void writeDeferredName() {
+        if (deferredName != null) {
+            Scope scope = stack.peek();
+            if (scope == Scope.NONEMPTY_OBJECT) {
+                write(',');
+            }
+            stack.pop();
+            stack.push(Scope.NONEMPTY_OBJECT);
+            newline();
+            writeString(deferredName);
+            write(':');
+            if (!indent.isEmpty()) write(' ');
+            deferredName = null;
+        }
     }
 
     // ==================== Value Writing ====================
@@ -218,10 +233,11 @@ public final class BuiltinJsonWriter implements JsonWriter {
 
     @Override
     public JsonWriter nullValue() {
-        if (!serializeNulls && isObjectScope(stack.peek())) {
-            // skip null in object when serializeNulls is false;
-            // the name was already written, so we need to handle this.
-            // For simplicity, always write null if name was written.
+        if (!serializeNulls && deferredName != null) {
+            // Skip the null value and discard the deferred property name
+            deferredName = null;
+            expectName = true;
+            return this;
         }
         beforeValue();
         write("null");
@@ -306,6 +322,7 @@ public final class BuiltinJsonWriter implements JsonWriter {
      * 在数组上下文中写入值之前调用以处理逗号。
      */
     private void beforeValue() {
+        writeDeferredName();
         Scope scope = stack.peek();
         if (scope == Scope.NONEMPTY_ARRAY) {
             write(',');
@@ -315,7 +332,7 @@ public final class BuiltinJsonWriter implements JsonWriter {
             stack.push(Scope.NONEMPTY_ARRAY);
             newline();
         }
-        // For object scopes, comma is handled in name()
+        // For object scopes, comma is handled in writeDeferredName()
     }
 
     /**

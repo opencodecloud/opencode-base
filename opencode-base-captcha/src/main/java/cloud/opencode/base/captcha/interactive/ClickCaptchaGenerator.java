@@ -88,16 +88,6 @@ public final class ClickCaptchaGenerator implements CaptchaGenerator {
             metadata.put("targetCount", CLICK_TARGETS);
             metadata.put("targetSize", TARGET_SIZE);
 
-            // Store target positions for validation
-            List<Map<String, Integer>> targetPositions = new ArrayList<>();
-            for (int i = 0; i < CLICK_TARGETS; i++) {
-                Map<String, Integer> pos = new LinkedHashMap<>();
-                pos.put("x", positions.get(i)[0]);
-                pos.put("y", positions.get(i)[1]);
-                targetPositions.add(pos);
-            }
-            metadata.put("targetPositions", targetPositions);
-
             byte[] imageData = toBytes(image);
 
             Instant now = Instant.now();

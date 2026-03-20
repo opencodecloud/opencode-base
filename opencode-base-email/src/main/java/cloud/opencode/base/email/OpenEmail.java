@@ -343,15 +343,21 @@ public final class OpenEmail {
             );
         }
 
-        // Check per-recipient rate limit (for first recipient)
-        if (email.to() != null && !email.to().isEmpty()) {
-            String firstRecipient = email.to().getFirst();
-            if (!rateLimiter.allowSend(firstRecipient)) {
-                throw new EmailSendException(
-                        "Rate limit exceeded for recipient: " + firstRecipient,
-                        email,
-                        EmailErrorCode.RATE_LIMITED
-                );
+        // Check per-recipient rate limit for all recipients (to, cc, bcc)
+        List<List<String>> recipientLists = List.of(
+                email.to() != null ? email.to() : List.of(),
+                email.cc() != null ? email.cc() : List.of(),
+                email.bcc() != null ? email.bcc() : List.of()
+        );
+        for (List<String> recipients : recipientLists) {
+            for (String recipient : recipients) {
+                if (!rateLimiter.allowSend(recipient)) {
+                    throw new EmailSendException(
+                            "Rate limit exceeded for recipient: " + recipient,
+                            email,
+                            EmailErrorCode.RATE_LIMITED
+                    );
+                }
             }
         }
     }
@@ -863,6 +869,20 @@ public final class OpenEmail {
 
     // ==================== Internal Methods ====================
 
+    /**
+     * Close a resource quietly, ignoring exceptions
+     * 安静地关闭资源，忽略异常
+     */
+    private static void closeQuietly(AutoCloseable resource) {
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (Exception ignored) {
+                // intentionally ignored
+            }
+        }
+    }
+
     private static EmailSender getSender() {
         checkConfigured();
         return defaultSender;
@@ -910,27 +930,8 @@ public final class OpenEmail {
     public static void shutdown() {
         LOCK.lock();
         try {
-            // Shutdown sender resources
-            if (asyncSender != null) {
-                asyncSender.close();
-                asyncSender = null;
-            }
-            if (defaultSender != null) {
-                defaultSender.close();
-                defaultSender = null;
-            }
-            defaultConfig = null;
-
-            // Shutdown receiver resources
-            if (asyncReceiver != null) {
-                asyncReceiver.close();
-                asyncReceiver = null;
-            }
-            if (defaultReceiver != null) {
-                defaultReceiver.close();
-                defaultReceiver = null;
-            }
-            defaultReceiveConfig = null;
+            closeSenderResources();
+            closeReceiverResources();
         } finally {
             LOCK.unlock();
         }
@@ -943,15 +944,7 @@ public final class OpenEmail {
     public static void shutdownSender() {
         LOCK.lock();
         try {
-            if (asyncSender != null) {
-                asyncSender.close();
-                asyncSender = null;
-            }
-            if (defaultSender != null) {
-                defaultSender.close();
-                defaultSender = null;
-            }
-            defaultConfig = null;
+            closeSenderResources();
         } finally {
             LOCK.unlock();
         }
@@ -964,17 +957,27 @@ public final class OpenEmail {
     public static void shutdownReceiver() {
         LOCK.lock();
         try {
-            if (asyncReceiver != null) {
-                asyncReceiver.close();
-                asyncReceiver = null;
-            }
-            if (defaultReceiver != null) {
-                defaultReceiver.close();
-                defaultReceiver = null;
-            }
-            defaultReceiveConfig = null;
+            closeReceiverResources();
         } finally {
             LOCK.unlock();
         }
+    }
+
+    private static void closeSenderResources() {
+        closeQuietly(asyncSender);
+        asyncSender = null;
+        if (defaultSender != null) {
+            closeQuietly(defaultSender::close);
+        }
+        defaultSender = null;
+        defaultConfig = null;
+    }
+
+    private static void closeReceiverResources() {
+        closeQuietly(asyncReceiver);
+        asyncReceiver = null;
+        closeQuietly(defaultReceiver);
+        defaultReceiver = null;
+        defaultReceiveConfig = null;
     }
 }

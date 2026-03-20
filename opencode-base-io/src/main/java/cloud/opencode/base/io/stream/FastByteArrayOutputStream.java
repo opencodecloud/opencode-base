@@ -85,6 +85,9 @@ public class FastByteArrayOutputStream extends OutputStream {
         if (len == 0) {
             return;
         }
+        if (count + len < 0) {
+            throw new OutOfMemoryError("Required array length too large");
+        }
         ensureCapacity(count + len);
         System.arraycopy(b, off, buffer, count, len);
         count += len;

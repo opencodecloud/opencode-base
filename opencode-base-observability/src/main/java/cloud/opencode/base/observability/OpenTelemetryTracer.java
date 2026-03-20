@@ -178,7 +178,8 @@ public final class OpenTelemetryTracer implements Tracer {
     }
 
     private Method cachedMethod(Class<?> clazz, String name, Class<?>... params) throws NoSuchMethodException {
-        String cacheKey = clazz.getName() + "#" + name + "#" + params.length;
+        String cacheKey = clazz.getName() + "#" + name + "#" + java.util.Arrays.toString(
+                java.util.Arrays.stream(params).map(Class::getName).toArray(String[]::new));
         return methodCache.computeIfAbsent(cacheKey, _ -> {
             try {
                 return clazz.getMethod(name, params);

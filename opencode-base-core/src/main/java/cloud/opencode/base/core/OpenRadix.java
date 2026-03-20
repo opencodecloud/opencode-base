@@ -190,7 +190,7 @@ public final class OpenRadix {
             if (digit >= radix) {
                 throw new NumberFormatException("Invalid digit for radix " + radix + ": " + c);
             }
-            result = result * radix + digit;
+            result = Math.addExact(Math.multiplyExact(result, radix), digit);
         }
 
         return negative ? -result : result;

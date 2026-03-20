@@ -417,16 +417,36 @@ public final class MethodUtil {
      */
     public static String getPropertyName(Method method) {
         String name = method.getName();
+        String suffix;
         if (name.startsWith("get") && name.length() > 3) {
-            return Character.toLowerCase(name.charAt(3)) + name.substring(4);
+            suffix = name.substring(3);
+        } else if (name.startsWith("is") && name.length() > 2) {
+            suffix = name.substring(2);
+        } else if (name.startsWith("set") && name.length() > 3) {
+            suffix = name.substring(3);
+        } else {
+            return null;
         }
-        if (name.startsWith("is") && name.length() > 2) {
-            return Character.toLowerCase(name.charAt(2)) + name.substring(3);
+        return decapitalize(suffix);
+    }
+
+    /**
+     * Decapitalizes a string following JavaBeans conventions.
+     * If the first two characters are both uppercase, the string is returned as-is
+     * (e.g., "URL" stays "URL", not "uRL").
+     * JavaBeans规范的首字母小写。如果前两个字符都是大写，则原样返回。
+     *
+     * @param str the string | 字符串
+     * @return the decapitalized string | 首字母小写的字符串
+     */
+    private static String decapitalize(String str) {
+        if (str == null || str.isEmpty()) {
+            return str;
         }
-        if (name.startsWith("set") && name.length() > 3) {
-            return Character.toLowerCase(name.charAt(3)) + name.substring(4);
+        if (str.length() > 1 && Character.isUpperCase(str.charAt(0)) && Character.isUpperCase(str.charAt(1))) {
+            return str;
         }
-        return null;
+        return Character.toLowerCase(str.charAt(0)) + str.substring(1);
     }
 
     /**

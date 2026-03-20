@@ -66,11 +66,19 @@ public final class SafePathUtil {
     );
 
     /**
-     * Dangerous filename patterns
-     * 危险的文件名模式
+     * Dangerous path traversal patterns (checked via substring containment)
+     * 危险的路径遍历模式（通过子串包含检查）
      */
-    private static final Set<String> DANGEROUS_PATTERNS = Set.of(
-        "..", "..\\", "../", "~", "con", "prn", "aux", "nul",
+    private static final Set<String> PATH_TRAVERSAL_PATTERNS = Set.of(
+        "..", "..\\", "../", "~"
+    );
+
+    /**
+     * Reserved/dangerous file stem names (checked via exact match on stem)
+     * 保留/危险的文件名（通过文件主名精确匹配检查）
+     */
+    private static final Set<String> RESERVED_NAMES = Set.of(
+        "con", "prn", "aux", "nul",
         "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
         "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"
     );
@@ -93,12 +101,18 @@ public final class SafePathUtil {
 
         String fileName = path.getFileName().toString();
 
-        // Check for dangerous patterns
+        // Check for path traversal patterns via substring containment
         String lowerName = fileName.toLowerCase();
-        for (String pattern : DANGEROUS_PATTERNS) {
+        for (String pattern : PATH_TRAVERSAL_PATTERNS) {
             if (lowerName.contains(pattern)) {
                 throw new ImageValidationException("Invalid path: contains dangerous pattern");
             }
+        }
+
+        // Check reserved names via exact match on file stem (name without extension)
+        String stem = lowerName.contains(".") ? lowerName.substring(0, lowerName.lastIndexOf('.')) : lowerName;
+        if (RESERVED_NAMES.contains(stem)) {
+            throw new ImageValidationException("Invalid path: contains dangerous pattern");
         }
 
         // Check extension
@@ -236,9 +250,16 @@ public final class SafePathUtil {
     public static Path generateOutputPath(Path inputPath, String suffix) {
         String filename = inputPath.getFileName().toString();
         String extension = getExtension(filename);
-        String basename = filename.substring(0, filename.length() - extension.length() - 1);
+        String basename;
+        if (extension.isEmpty()) {
+            basename = filename;
+        } else {
+            basename = filename.substring(0, filename.length() - extension.length() - 1);
+        }
 
-        String newFilename = sanitizeFilename(basename + suffix + "." + extension);
+        String newFilename = extension.isEmpty()
+                ? sanitizeFilename(basename + suffix)
+                : sanitizeFilename(basename + suffix + "." + extension);
         Path parent = inputPath.getParent();
         return parent != null ? parent.resolve(newFilename) : Path.of(newFilename);
     }
@@ -254,7 +275,12 @@ public final class SafePathUtil {
     public static Path generateOutputPath(Path inputPath, ImageFormat format) {
         String filename = inputPath.getFileName().toString();
         String extension = getExtension(filename);
-        String basename = filename.substring(0, filename.length() - extension.length() - 1);
+        String basename;
+        if (extension.isEmpty()) {
+            basename = filename;
+        } else {
+            basename = filename.substring(0, filename.length() - extension.length() - 1);
+        }
 
         String newFilename = sanitizeFilename(basename + "." + format.getExtension());
         Path parent = inputPath.getParent();

@@ -166,6 +166,11 @@ public final class ChineseUtil {
         String numStr = String.valueOf(num);
         int len = numStr.length();
 
+        if (len > CN_UPPER_UNITS.length) {
+            throw new IllegalArgumentException(
+                    "Number has too many digits (" + len + ") for Chinese conversion, max supported: " + CN_UPPER_UNITS.length);
+        }
+
         boolean lastZero = false;
 
         for (int i = 0; i < len; i++) {
