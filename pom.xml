@@ -44,6 +44,7 @@
     <properties>
         <!-- 基础设施 / Infrastructure -->
         <java.version>25</java.version>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.outputTimestamp>2026-03-15T00:00:00Z</project.build.outputTimestamp>
