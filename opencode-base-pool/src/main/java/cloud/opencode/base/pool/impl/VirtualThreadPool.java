@@ -29,7 +29,7 @@ import java.util.function.Function;
  *   <li>Virtual Thread optimized - 虚拟线程优化</li>
  *   <li>ScopedValue context propagation - ScopedValue 上下文传播</li>
  *   <li>Async borrow operations - 异步借用操作</li>
- *   <li>StructuredTaskScope integration - StructuredTaskScope 集成</li>
+ *   <li>Auto-closeable lifecycle management - 自动关闭生命周期管理</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>

@@ -5,8 +5,6 @@ import cloud.opencode.base.parallel.exception.OpenParallelException;
 import cloud.opencode.base.parallel.executor.RateLimitedExecutor;
 import cloud.opencode.base.parallel.pipeline.AsyncPipeline;
 import cloud.opencode.base.parallel.pipeline.TriFunction;
-import cloud.opencode.base.parallel.structured.ScheduledScope;
-
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -552,83 +550,4 @@ public final class OpenParallel {
         }
     }
 
-    // ==================== Scheduled Structured Concurrency ====================
-
-    /**
-     * Creates a new scheduled scope for structured concurrency with scheduling.
-     * 创建新的定时作用域用于带调度的结构化并发。
-     *
-     * <p><strong>Example | 示例:</strong></p>
-     * <pre>{@code
-     * try (var scope = OpenParallel.<String>scheduledScope()) {
-     *     scope.fork(() -> fetchA());
-     *     scope.forkDelayed(Duration.ofSeconds(1), () -> fetchB());
-     *     List<String> results = scope.joinAll();
-     * }
-     * }</pre>
-     *
-     * @param <T> the result type - 结果类型
-     * @return the scheduled scope - 定时作用域
-     */
-    public static <T> ScheduledScope<T> scheduledScope() {
-        return ScheduledScope.create();
-    }
-
-    /**
-     * Creates a scheduled scope with timeout.
-     * 创建带超时的定时作用域。
-     *
-     * @param timeout the timeout - 超时
-     * @param <T>     the result type - 结果类型
-     * @return the scheduled scope - 定时作用域
-     */
-    public static <T> ScheduledScope<T> scheduledScope(Duration timeout) {
-        return ScheduledScope.withTimeout(timeout);
-    }
-
-    /**
-     * Creates a scheduled scope with deadline.
-     * 创建带截止时间的定时作用域。
-     *
-     * @param deadline the deadline - 截止时间
-     * @param <T>      the result type - 结果类型
-     * @return the scheduled scope - 定时作用域
-     */
-    public static <T> ScheduledScope<T> scheduledScope(java.time.Instant deadline) {
-        return ScheduledScope.withDeadline(deadline);
-    }
-
-    /**
-     * Executes a delayed task.
-     * 执行延迟任务。
-     *
-     * @param delay    the delay before execution - 执行前的延迟
-     * @param task     the task - 任务
-     * @param <T>      the result type - 结果类型
-     * @return the result - 结果
-     */
-    public static <T> T invokeDelayed(Duration delay, Supplier<T> task) {
-        try (ScheduledScope<T> scope = ScheduledScope.create()) {
-            scope.forkDelayed(delay, task::get);
-            List<T> results = scope.joinAll();
-            return results.isEmpty() ? null : results.getFirst();
-        }
-    }
-
-    /**
-     * Executes tasks at scheduled times and collects results.
-     * 在预定时间执行任务并收集结果。
-     *
-     * @param interval the interval between tasks - 任务间隔
-     * @param count    the number of executions - 执行次数
-     * @param task     the task - 任务
-     * @param <T>      the result type - 结果类型
-     * @return the results - 结果
-     */
-    public static <T> List<T> invokePeriodic(Duration interval, int count, Supplier<T> task) {
-        try (ScheduledScope<T> scope = ScheduledScope.create()) {
-            scope.forkPeriodic(interval, count, task::get);
-            return scope.joinAll();
-        }
-    }
 }

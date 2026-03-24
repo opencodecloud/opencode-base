@@ -353,7 +353,7 @@ class TemporalAdjustersTest {
         @Test
         @DisplayName("compose() null抛出异常")
         void testComposeNull() {
-            assertThatThrownBy(() -> TemporalAdjusters.compose(null))
+            assertThatThrownBy(() -> TemporalAdjusters.compose((TemporalAdjuster[]) null))
                     .isInstanceOf(NullPointerException.class);
         }
 

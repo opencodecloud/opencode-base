@@ -369,9 +369,6 @@
                     <configuration>
                         <release>${java.version}</release>
                         <parameters>true</parameters>
-                        <compilerArgs>
-                            <arg>--enable-preview</arg>
-                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <!-- 测试执行 / Test runner -->
@@ -380,7 +377,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
-                        <argLine>@{argLine} --enable-preview</argLine>
+                        <argLine>@{argLine} --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+EnableDynamicAgentLoading</argLine>
                     </configuration>
                 </plugin>
                 <!-- JAR 打包 / JAR packaging -->
@@ -408,7 +405,6 @@
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
                         <release>${java.version}</release>
-                        <additionalOptions>--enable-preview</additionalOptions>
                         <doclint>html,syntax,reference</doclint>
                     </configuration>
                     <executions>

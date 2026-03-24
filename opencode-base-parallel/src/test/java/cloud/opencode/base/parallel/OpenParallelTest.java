@@ -3,11 +3,9 @@ package cloud.opencode.base.parallel;
 import cloud.opencode.base.parallel.exception.OpenParallelException;
 import cloud.opencode.base.parallel.executor.RateLimitedExecutor;
 import cloud.opencode.base.parallel.pipeline.AsyncPipeline;
-import cloud.opencode.base.parallel.structured.ScheduledScope;
 import org.junit.jupiter.api.*;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -403,67 +401,4 @@ class OpenParallelTest {
         }
     }
 
-    @Nested
-    @DisplayName("scheduledScope方法测试")
-    class ScheduledScopeTests {
-
-        @Test
-        @DisplayName("创建定时作用域")
-        void testScheduledScope() {
-            try (ScheduledScope<String> scope = OpenParallel.scheduledScope()) {
-                assertThat(scope).isNotNull();
-            }
-        }
-
-        @Test
-        @DisplayName("创建带超时的定时作用域")
-        void testScheduledScopeWithTimeout() {
-            try (ScheduledScope<String> scope = OpenParallel.scheduledScope(Duration.ofSeconds(30))) {
-                assertThat(scope).isNotNull();
-            }
-        }
-
-        @Test
-        @DisplayName("创建带截止时间的定时作用域")
-        void testScheduledScopeWithDeadline() {
-            try (ScheduledScope<String> scope = OpenParallel.scheduledScope(
-                    Instant.now().plusSeconds(30))) {
-                assertThat(scope).isNotNull();
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("invokeDelayed方法测试")
-    class InvokeDelayedTests {
-
-        @Test
-        @DisplayName("延迟执行任务创建ScheduledScope")
-        void testInvokeDelayed() {
-            // invokeDelayed uses ScheduledScope internally
-            // Just verify it doesn't throw and returns a result or null
-            String result = OpenParallel.invokeDelayed(Duration.ofMillis(10), () -> "delayed");
-            // Result may be null depending on ScheduledScope implementation
-            assertThat(result == null || result.equals("delayed")).isTrue();
-        }
-    }
-
-    @Nested
-    @DisplayName("invokePeriodic方法测试")
-    class InvokePeriodicTests {
-
-        @Test
-        @DisplayName("周期执行任务创建ScheduledScope")
-        void testInvokePeriodic() {
-            AtomicInteger counter = new AtomicInteger(0);
-
-            // invokePeriodic uses ScheduledScope internally
-            // Just verify it doesn't throw
-            List<Integer> results = OpenParallel.invokePeriodic(
-                    Duration.ofMillis(10), 3, counter::incrementAndGet);
-
-            // Results may vary depending on ScheduledScope implementation
-            assertThat(results).isNotNull();
-        }
-    }
 }
