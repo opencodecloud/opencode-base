@@ -7,7 +7,7 @@
     <parent>
         <groupId>cloud.opencode.base</groupId>
         <artifactId>opencode-base-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.1</version>
     </parent>
 
     <artifactId>opencode-base-oauth2</artifactId>
@@ -43,6 +43,16 @@
 
     <build>
         <plugins>
+            <!-- 抑制模块名末尾数字警告 / Suppress module name terminal digit warning -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <arg>-Xlint:-module</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
             <!-- 覆盖率阈值临时降低，后续逐步提升至 80% / Coverage threshold temporarily lowered -->
             <plugin>
                 <groupId>org.jacoco</groupId>

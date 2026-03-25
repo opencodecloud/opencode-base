@@ -4,7 +4,9 @@ import cloud.opencode.base.deepclone.CloneContext;
 import cloud.opencode.base.deepclone.exception.OpenDeepCloneException;
 import cloud.opencode.base.deepclone.strategy.FieldCloneStrategy;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -57,9 +59,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class UnsafeCloner extends AbstractCloner {
 
     /**
-     * Unsafe instance
+     * MethodHandle for Unsafe.allocateInstance(Class)
      */
-    private static final sun.misc.Unsafe UNSAFE;
+    private static final MethodHandle ALLOCATE_INSTANCE;
 
     /**
      * Whether Unsafe is available
@@ -97,17 +99,22 @@ public final class UnsafeCloner extends AbstractCloner {
             });
 
     static {
-        sun.misc.Unsafe unsafe = null;
+        MethodHandle mh = null;
         boolean available = false;
         try {
-            Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            Field field = unsafeClass.getDeclaredField("theUnsafe");
             field.setAccessible(true);
-            unsafe = (sun.misc.Unsafe) field.get(null);
+            Object unsafe = field.get(null);
+            mh = MethodHandles.lookup()
+                    .findVirtual(unsafeClass, "allocateInstance",
+                            MethodType.methodType(Object.class, Class.class))
+                    .bindTo(unsafe);
             available = true;
         } catch (Exception e) {
             // Unsafe not available
         }
-        UNSAFE = unsafe;
+        ALLOCATE_INSTANCE = mh;
         AVAILABLE = available;
     }
 
@@ -154,8 +161,8 @@ public final class UnsafeCloner extends AbstractCloner {
             throw new OpenDeepCloneException("Unsafe is not available");
         }
         try {
-            return (T) UNSAFE.allocateInstance(type);
-        } catch (InstantiationException e) {
+            return (T) ALLOCATE_INSTANCE.invoke(type);
+        } catch (Throwable e) {
             throw OpenDeepCloneException.instantiationFailed(type, e);
         }
     }
@@ -210,16 +217,6 @@ public final class UnsafeCloner extends AbstractCloner {
         }
 
         return clone;
-    }
-
-    /**
-     * Gets the Unsafe instance
-     * 获取Unsafe实例
-     *
-     * @return the Unsafe instance | Unsafe实例
-     */
-    protected sun.misc.Unsafe getUnsafe() {
-        return UNSAFE;
     }
 
     /**
