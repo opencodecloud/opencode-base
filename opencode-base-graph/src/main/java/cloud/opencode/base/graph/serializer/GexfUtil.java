@@ -124,6 +124,12 @@ public final class GexfUtil {
             "<viz:color\\s+r=\"([^\"]+)\"\\s+g=\"([^\"]+)\"\\s+b=\"([^\"]+)\"(?:\\s+a=\"([^\"]*)\")?",
             Pattern.MULTILINE);
 
+    /**
+     * Maximum GEXF input size for parsing (10 MB).
+     * GEXF解析输入的最大大小（10 MB）。
+     */
+    private static final int MAX_INPUT_LENGTH = 10 * 1024 * 1024;
+
     private GexfUtil() {
         // Utility class
     }
@@ -363,6 +369,10 @@ public final class GexfUtil {
         if (gexf == null || gexf.isBlank()) {
             return new DirectedGraph<>();
         }
+        if (gexf.length() > MAX_INPUT_LENGTH) {
+            throw new IllegalArgumentException(
+                    "GEXF input exceeds maximum size of " + MAX_INPUT_LENGTH + " characters");
+        }
 
         // Determine if directed
         boolean directed = true;
@@ -469,6 +479,10 @@ public final class GexfUtil {
     public static Graph<String> readFromFile(Path path,
                                               Map<String, Map<String, String>> vertexAttributes,
                                               Map<String, VisualData> visualData) throws IOException {
+        if (Files.size(path) > MAX_INPUT_LENGTH) {
+            throw new IllegalArgumentException(
+                    "GEXF file exceeds maximum size of " + MAX_INPUT_LENGTH + " bytes");
+        }
         String gexf = Files.readString(path, StandardCharsets.UTF_8);
         return fromGexf(gexf, vertexAttributes, visualData);
     }

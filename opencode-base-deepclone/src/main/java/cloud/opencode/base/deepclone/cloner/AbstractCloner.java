@@ -4,6 +4,7 @@ import cloud.opencode.base.deepclone.*;
 import cloud.opencode.base.deepclone.contract.DeepCloneable;
 import cloud.opencode.base.deepclone.exception.OpenDeepCloneException;
 import cloud.opencode.base.deepclone.handler.*;
+import cloud.opencode.base.deepclone.internal.ImmutableDetector;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -100,18 +101,38 @@ public abstract sealed class AbstractCloner implements Cloner
     protected final CollectionHandler collectionHandler = new CollectionHandler();
     protected final MapHandler mapHandler = new MapHandler();
     protected final RecordHandler recordHandler = new RecordHandler();
+    protected final EnumHandler enumHandler = new EnumHandler();
+    protected final OptionalHandler optionalHandler = new OptionalHandler();
 
     /**
      * Max clone depth
      * 最大克隆深度
      */
-    protected int maxDepth = 100;
+    protected volatile int maxDepth = 100;
 
     /**
      * Whether to clone transient fields
      * 是否克隆transient字段
      */
-    protected boolean cloneTransient = false;
+    protected volatile boolean cloneTransient = false;
+
+    /**
+     * Clone policy
+     * 克隆策略
+     */
+    protected volatile ClonePolicy policy = ClonePolicy.STANDARD;
+
+    /**
+     * Field filter
+     * 字段过滤器
+     */
+    protected volatile FieldFilter fieldFilter;
+
+    /**
+     * Clone listener
+     * 克隆监听器
+     */
+    protected volatile CloneListener listener;
 
     // ==================== Cloner Interface | 克隆器接口 ====================
 
@@ -120,10 +141,11 @@ public abstract sealed class AbstractCloner implements Cloner
         if (original == null) {
             return null;
         }
-        return clone(original, CloneContext.create(maxDepth));
+        return clone(original, CloneContext.create(maxDepth, policy));
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> T clone(T original, CloneContext context) {
         if (original == null) {
             return null;
@@ -131,13 +153,23 @@ public abstract sealed class AbstractCloner implements Cloner
 
         // Check max depth
         if (context.isMaxDepthExceeded()) {
+            if (context.isLenient()) {
+                context.addWarning("Max depth exceeded at: " + context.getPathString());
+                return original;
+            }
             throw OpenDeepCloneException.maxDepthExceeded(context.getDepth(), context.getPathString());
         }
 
         Class<?> type = original.getClass();
 
-        // Check for immutable types
+        // Check for immutable types (includes enums, primitives, built-in immutables)
         if (isImmutable(type)) {
+            context.incrementSkipped();
+            return original;
+        }
+
+        // Check for JDK immutable collections
+        if (ImmutableDetector.isImmutableCollection(original)) {
             context.incrementSkipped();
             return original;
         }
@@ -147,17 +179,56 @@ public abstract sealed class AbstractCloner implements Cloner
             return context.getCloned(original);
         }
 
-        // Check for DeepCloneable
+        // Handle Optional
+        if (original instanceof java.util.Optional<?>) {
+            return (T) optionalHandler.clone((java.util.Optional) original, this, context);
+        }
+
+        // Check for DeepCloneable — call the no-arg deepClone() to avoid
+        // infinite recursion if the default deepClone(Cloner) delegates back to clone()
         if (original instanceof DeepCloneable<?> cloneable) {
-            @SuppressWarnings("unchecked")
-            T cloned = (T) cloneable.deepClone(this);
+            T cloned = (T) cloneable.deepClone();
             context.registerCloned(original, cloned);
             return cloned;
         }
 
+        // Notify listener before clone
+        if (listener != null) {
+            try {
+                listener.beforeClone(original, context);
+            } catch (Exception e) {
+                // Listener exceptions must not affect clone flow
+            }
+        }
+
         context.incrementDepth();
         try {
-            return doClone(original, context);
+            T cloned = doClone(original, context);
+
+            // Notify listener after clone
+            if (listener != null) {
+                try {
+                    listener.afterClone(original, cloned, context);
+                } catch (Exception e) {
+                    // Listener exceptions must not affect clone flow
+                }
+            }
+
+            return cloned;
+        } catch (Exception e) {
+            // Notify listener on error
+            if (listener != null) {
+                try {
+                    listener.onError(original, e, context);
+                } catch (Exception listenerEx) {
+                    // Listener exceptions must not affect clone flow
+                }
+            }
+            if (context.isLenient()) {
+                context.addWarning("Clone failed for " + type.getName() + ": " + e.getMessage());
+                return original;
+            }
+            throw e;
         } finally {
             context.decrementDepth();
         }
@@ -319,5 +390,45 @@ public abstract sealed class AbstractCloner implements Cloner
      */
     public void setCloneTransient(boolean cloneTransient) {
         this.cloneTransient = cloneTransient;
+    }
+
+    /**
+     * Sets the clone policy
+     * 设置克隆策略
+     *
+     * @param policy the policy | 策略
+     */
+    public void setPolicy(ClonePolicy policy) {
+        this.policy = policy != null ? policy : ClonePolicy.STANDARD;
+    }
+
+    /**
+     * Sets the field filter
+     * 设置字段过滤器
+     *
+     * @param fieldFilter the filter | 过滤器
+     */
+    public void setFieldFilter(FieldFilter fieldFilter) {
+        this.fieldFilter = fieldFilter;
+    }
+
+    /**
+     * Gets the field filter
+     * 获取字段过滤器
+     *
+     * @return the field filter, may be null | 字段过滤器，可能为null
+     */
+    public FieldFilter getFieldFilter() {
+        return fieldFilter;
+    }
+
+    /**
+     * Sets the clone listener
+     * 设置克隆监听器
+     *
+     * @param listener the listener | 监听器
+     */
+    public void setListener(CloneListener listener) {
+        this.listener = listener;
     }
 }

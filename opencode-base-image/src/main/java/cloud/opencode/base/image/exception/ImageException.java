@@ -1,17 +1,23 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.io.Serial;
+
 /**
- * Image Exception
- * 图片异常基类
+ * Image Exception - Base exception for all image processing exceptions
+ * 图片异常基类 - 所有图片处理异常的基类
  *
- * <p>Base exception class for all image processing exceptions.</p>
- * <p>所有图片处理异常的基类。</p>
+ * <p>Base exception class for all image processing exceptions.
+ * Extends {@link OpenException} to integrate with the unified OpenCode exception hierarchy.</p>
+ * <p>所有图片处理异常的基类。继承 {@link OpenException} 以集成到统一的 OpenCode 异常体系中。</p>
  *
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>Base exception for all image processing errors - 所有图片处理错误的基础异常</li>
  *   <li>Carries ImageErrorCode for programmatic error handling - 携带 ImageErrorCode 用于编程式错误处理</li>
+ *   <li>Integrates with OpenException (component="Image") - 集成 OpenException（组件="Image"）</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -20,7 +26,8 @@ package cloud.opencode.base.image.exception;
  * try {
  *     OpenImage.read(path);
  * } catch (ImageException e) {
- *     System.err.println(e.getMessage());
+ *     System.err.println(e.getRawMessage());
+ *     ImageErrorCode code = e.getImageErrorCode();
  * }
  * }</pre>
  *
@@ -33,11 +40,18 @@ package cloud.opencode.base.image.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
-public class ImageException extends RuntimeException {
+public class ImageException extends OpenException {
 
-    private final ImageErrorCode errorCode;
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Image error code enum
+     * 图片错误码枚举
+     */
+    private final ImageErrorCode imageErrorCode;
 
     /**
      * Create an image exception with message and error code
@@ -47,8 +61,8 @@ public class ImageException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public ImageException(String message, ImageErrorCode errorCode) {
-        super(message);
-        this.errorCode = errorCode;
+        super("Image", errorCode.name(), message, null);
+        this.imageErrorCode = errorCode;
     }
 
     /**
@@ -60,8 +74,8 @@ public class ImageException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public ImageException(String message, Throwable cause, ImageErrorCode errorCode) {
-        super(message, cause);
-        this.errorCode = errorCode;
+        super("Image", errorCode.name(), message, cause);
+        this.imageErrorCode = errorCode;
     }
 
     /**
@@ -86,12 +100,17 @@ public class ImageException extends RuntimeException {
     }
 
     /**
-     * Get the error code
-     * 获取错误码
+     * Get the image error code enum
+     * 获取图片错误码枚举
      *
-     * @return the error code | 错误码
+     * <p>Returns the typed {@link ImageErrorCode} enum. For the String error code
+     * inherited from {@link OpenException}, use {@link #getErrorCode()}.</p>
+     * <p>返回类型化的 {@link ImageErrorCode} 枚举。若需要从 {@link OpenException}
+     * 继承的 String 错误码，请使用 {@link #getErrorCode()}。</p>
+     *
+     * @return the image error code enum | 图片错误码枚举
      */
-    public ImageErrorCode getErrorCode() {
-        return errorCode;
+    public ImageErrorCode getImageErrorCode() {
+        return imageErrorCode;
     }
 }

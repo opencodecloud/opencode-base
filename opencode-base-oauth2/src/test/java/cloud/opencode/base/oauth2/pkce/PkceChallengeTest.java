@@ -78,7 +78,7 @@ class PkceChallengeTest {
         @Test
         @DisplayName("plain创建plain方法的PKCE挑战")
         void testPlain() {
-            String verifier = "test-verifier-string";
+            String verifier = "test-verifier-string-that-is-at-least-43-characters-long";
             PkceChallenge pkce = PkceChallenge.plain(verifier);
 
             assertThat(pkce).isNotNull();
@@ -128,7 +128,7 @@ class PkceChallengeTest {
         @Test
         @DisplayName("verify - plain有效")
         void testVerifyPlainValid() {
-            String verifier = "test-verifier";
+            String verifier = "test-verifier-that-is-at-least-43-characters-long-for-rfc";
             PkceChallenge pkce = PkceChallenge.plain(verifier);
 
             assertThat(PkceChallenge.verify(pkce.verifier(), pkce.challenge(), "plain")).isTrue();
@@ -165,7 +165,7 @@ class PkceChallengeTest {
             PkceChallenge pkce = PkceChallenge.generate();
             assertThat(pkce.isS256()).isTrue();
 
-            PkceChallenge plain = PkceChallenge.plain("verifier");
+            PkceChallenge plain = PkceChallenge.plain("verifier-that-is-at-least-43-characters-long-for-rfc7636");
             assertThat(plain.isS256()).isFalse();
         }
 
@@ -175,7 +175,7 @@ class PkceChallengeTest {
             PkceChallenge pkce = PkceChallenge.generate();
             assertThat(pkce.isPlain()).isFalse();
 
-            PkceChallenge plain = PkceChallenge.plain("verifier");
+            PkceChallenge plain = PkceChallenge.plain("verifier-that-is-at-least-43-characters-long-for-rfc7636");
             assertThat(plain.isPlain()).isTrue();
         }
     }
@@ -211,8 +211,8 @@ class PkceChallengeTest {
             assertThat(pkce1).isNotEqualTo(pkce2);
 
             // 相同参数的PKCE应该相等
-            PkceChallenge plain1 = PkceChallenge.plain("verifier");
-            PkceChallenge plain2 = PkceChallenge.plain("verifier");
+            PkceChallenge plain1 = PkceChallenge.plain("verifier-that-is-at-least-43-characters-long-for-rfc7636");
+            PkceChallenge plain2 = PkceChallenge.plain("verifier-that-is-at-least-43-characters-long-for-rfc7636");
             assertThat(plain1).isEqualTo(plain2);
             assertThat(plain1.hashCode()).isEqualTo(plain2.hashCode());
         }

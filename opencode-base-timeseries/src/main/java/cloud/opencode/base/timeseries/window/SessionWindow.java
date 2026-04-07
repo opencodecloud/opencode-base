@@ -27,7 +27,7 @@ import java.util.*;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: No (mutable session state) - 线程安全: 否（可变会话状态）</li>
+ *   <li>Thread-safe: Yes (synchronized methods) - 线程安全: 是（同步方法）</li>
  *   <li>Null-safe: No - 空值安全: 否</li>
  * </ul>
  *
@@ -80,7 +80,7 @@ public final class SessionWindow implements Window {
     }
 
     @Override
-    public List<Long> assignWindows(DataPoint point) {
+    public synchronized List<Long> assignWindows(DataPoint point) {
         long timestamp = point.epochMillis();
 
         // Find existing session or create new one
@@ -89,14 +89,14 @@ public final class SessionWindow implements Window {
 
         Long sessionKey = null;
 
-        // Check if point fits in floor session
-        if (floorEntry != null && timestamp <= floorEntry.getValue() + gapMillis) {
+        // Check if point fits in floor session (overflow-safe comparison)
+        if (floorEntry != null && timestamp - floorEntry.getValue() <= gapMillis) {
             sessionKey = floorEntry.getKey();
             // Extend session end time
             sessions.put(sessionKey, Math.max(floorEntry.getValue(), timestamp));
         }
         // Check if point should merge with ceiling session
-        else if (ceilingEntry != null && ceilingEntry.getKey() - gapMillis <= timestamp) {
+        else if (ceilingEntry != null && ceilingEntry.getKey() - timestamp <= gapMillis) {
             // Merge sessions if both conditions met
             if (sessionKey != null) {
                 // Merge floor and ceiling sessions
@@ -119,14 +119,19 @@ public final class SessionWindow implements Window {
     }
 
     @Override
-    public Instant getWindowStart(long windowKey) {
+    public synchronized Instant getWindowStart(long windowKey) {
         return Instant.ofEpochMilli(windowKey);
     }
 
     @Override
-    public Instant getWindowEnd(long windowKey) {
+    public synchronized Instant getWindowEnd(long windowKey) {
         Long endTime = sessions.get(windowKey);
-        return endTime != null ? Instant.ofEpochMilli(endTime + gapMillis) : Instant.ofEpochMilli(windowKey);
+        if (endTime == null) {
+            return Instant.ofEpochMilli(windowKey);
+        }
+        // Overflow-safe addition
+        long windowEnd = (endTime > Long.MAX_VALUE - gapMillis) ? Long.MAX_VALUE : endTime + gapMillis;
+        return Instant.ofEpochMilli(windowEnd);
     }
 
     @Override
@@ -140,7 +145,7 @@ public final class SessionWindow implements Window {
      *
      * @return the sessions (start -> end) | 会话（开始时间 -> 结束时间）
      */
-    public Map<Instant, Instant> getSessions() {
+    public synchronized Map<Instant, Instant> getSessions() {
         Map<Instant, Instant> result = new LinkedHashMap<>();
         for (Map.Entry<Long, Long> entry : sessions.entrySet()) {
             result.put(
@@ -157,7 +162,7 @@ public final class SessionWindow implements Window {
      *
      * @return the session count | 会话数量
      */
-    public int getSessionCount() {
+    public synchronized int getSessionCount() {
         return sessions.size();
     }
 
@@ -165,12 +170,12 @@ public final class SessionWindow implements Window {
      * Clear all sessions
      * 清除所有会话
      */
-    public void clear() {
+    public synchronized void clear() {
         sessions.clear();
     }
 
     @Override
-    public String toString() {
+    public synchronized String toString() {
         return String.format("SessionWindow[gap=%s, sessions=%d]", gap, sessions.size());
     }
 }

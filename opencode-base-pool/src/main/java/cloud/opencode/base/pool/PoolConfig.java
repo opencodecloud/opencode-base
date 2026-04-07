@@ -55,6 +55,8 @@ import java.time.Duration;
  * @param waitPolicy                wait policy when exhausted - 耗尽时的等待策略
  * @param lifo                      last-in-first-out ordering - 后进先出顺序
  * @param evictionPolicy            eviction policy - 驱逐策略
+ * @param maxObjectLifetime         maximum object lifetime before forced eviction (Duration.ZERO = disabled) - 强制驱逐前的最大对象生命周期（Duration.ZERO = 禁用）
+ * @param eventListener             optional event listener for pool lifecycle events (null = none) - 池生命周期事件的可选事件监听器（null = 无）
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
@@ -74,7 +76,9 @@ public record PoolConfig(
         boolean testWhileIdle,
         WaitPolicy waitPolicy,
         boolean lifo,
-        EvictionPolicy<?> evictionPolicy
+        EvictionPolicy<?> evictionPolicy,
+        Duration maxObjectLifetime,
+        PoolEventListener<?> eventListener
 ) {
 
     /**
@@ -118,6 +122,16 @@ public record PoolConfig(
     }
 
     /**
+     * Checks if maximum object lifetime eviction is enabled.
+     * 检查是否启用最大对象生命周期驱逐。
+     *
+     * @return true if lifetime eviction is enabled - 如果启用生命周期驱逐返回true
+     */
+    public boolean isLifetimeEnabled() {
+        return !maxObjectLifetime.isZero() && !maxObjectLifetime.isNegative();
+    }
+
+    /**
      * Builder for PoolConfig.
      * PoolConfig构建器。
      */
@@ -136,6 +150,8 @@ public record PoolConfig(
         private WaitPolicy waitPolicy = WaitPolicy.BLOCK;
         private boolean lifo = true;
         private EvictionPolicy<?> evictionPolicy = new EvictionPolicy.IdleTime<>(Duration.ofMinutes(30));
+        private Duration maxObjectLifetime = Duration.ZERO;
+        private PoolEventListener<?> eventListener = null;
 
         /**
          * Sets the maximum total objects.
@@ -306,18 +322,67 @@ public record PoolConfig(
         }
 
         /**
+         * Sets the maximum object lifetime before forced eviction.
+         * 设置强制驱逐前的最大对象生命周期。
+         *
+         * @param maxObjectLifetime the max lifetime (Duration.ZERO to disable) - 最大生命周期（Duration.ZERO禁用）
+         * @return this builder - 此构建器
+         */
+        public Builder maxObjectLifetime(Duration maxObjectLifetime) {
+            this.maxObjectLifetime = maxObjectLifetime;
+            return this;
+        }
+
+        /**
+         * Sets the pool event listener.
+         * 设置池事件监听器。
+         *
+         * <p><strong>Type Safety Warning | 类型安全警告:</strong> The listener's type parameter
+         * must match the pool's object type {@code <T>}. Due to Java type erasure, mismatched
+         * types will not cause a compile-time error but may result in {@link ClassCastException}
+         * at runtime when listener methods are invoked.</p>
+         * <p>监听器的类型参数必须与池的对象类型 {@code <T>} 匹配。由于 Java 类型擦除，
+         * 类型不匹配不会产生编译时错误，但在调用监听器方法时可能导致 {@link ClassCastException}。</p>
+         *
+         * @param eventListener the event listener (null for none) - 事件监听器（null表示无）
+         * @return this builder - 此构建器
+         */
+        public Builder eventListener(PoolEventListener<?> eventListener) {
+            this.eventListener = eventListener;
+            return this;
+        }
+
+        /**
          * Builds the configuration.
          * 构建配置。
          *
          * @return the config - 配置
          */
         public PoolConfig build() {
+            if (maxTotal < 1) {
+                throw new IllegalArgumentException("maxTotal must be >= 1, got: " + maxTotal);
+            }
+            if (maxIdle < 0) {
+                throw new IllegalArgumentException("maxIdle must be >= 0, got: " + maxIdle);
+            }
+            if (minIdle < 0) {
+                throw new IllegalArgumentException("minIdle must be >= 0, got: " + minIdle);
+            }
+            // Auto-clamp: maxIdle cannot exceed maxTotal
+            if (maxIdle > maxTotal) {
+                maxIdle = maxTotal;
+            }
+            // Auto-clamp: minIdle cannot exceed maxIdle
+            if (minIdle > maxIdle) {
+                minIdle = maxIdle;
+            }
             return new PoolConfig(
                     maxTotal, maxIdle, minIdle, maxWait,
                     minEvictableIdleTime, timeBetweenEvictionRuns,
                     numTestsPerEvictionRun, testOnBorrow, testOnReturn,
                     testOnCreate, testWhileIdle, waitPolicy,
-                    lifo, evictionPolicy
+                    lifo, evictionPolicy,
+                    maxObjectLifetime, eventListener
             );
         }
     }

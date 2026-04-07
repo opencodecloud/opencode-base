@@ -106,6 +106,17 @@ public interface Rule extends Comparable<Rule> {
     }
 
     /**
+     * Checks if this rule is terminal (stops engine execution when fired)
+     * 检查此规则是否是终止规则（触发时停止引擎执行）
+     *
+     * @return true if the rule is terminal | 如果规则是终止规则返回true
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    default boolean isTerminal() {
+        return false;
+    }
+
+    /**
      * Compares rules by priority (lower value = higher priority)
      * 按优先级比较规则（值越小优先级越高）
      *

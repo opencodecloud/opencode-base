@@ -6,6 +6,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
@@ -140,6 +141,13 @@ public abstract class SignedEvent extends Event implements VerifiableEvent {
     @Override
     public boolean verify(String secret) {
         String expectedSignature = sign(secret);
-        return signature != null && signature.equals(expectedSignature);
+        if (signature == null || expectedSignature == null) {
+            return false;
+        }
+        // Constant-time comparison to prevent timing attacks
+        // 使用常量时间比较以防止时序攻击
+        return MessageDigest.isEqual(
+                signature.getBytes(StandardCharsets.UTF_8),
+                expectedSignature.getBytes(StandardCharsets.UTF_8));
     }
 }

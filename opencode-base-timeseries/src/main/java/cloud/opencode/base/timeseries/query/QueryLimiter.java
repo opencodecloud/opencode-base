@@ -6,6 +6,7 @@ import cloud.opencode.base.timeseries.exception.TimeSeriesException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Query Limiter
@@ -29,7 +30,7 @@ import java.util.List;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: No (static mutable state without synchronization) - 线程安全: 否</li>
+ *   <li>Thread-safe: Yes (uses AtomicInteger for configuration) - 线程安全: 是（使用AtomicInteger）</li>
  *   <li>Null-safe: No (null range throws NullPointerException) - 空值安全: 否</li>
  * </ul>
  *
@@ -43,8 +44,8 @@ public final class QueryLimiter {
     private static final int DEFAULT_MAX_RANGE_DAYS = 365;
     private static final int DEFAULT_MAX_RESULT_SIZE = 100_000;
 
-    private static int maxRangeDays = DEFAULT_MAX_RANGE_DAYS;
-    private static int maxResultSize = DEFAULT_MAX_RESULT_SIZE;
+    private static final AtomicInteger maxRangeDays = new AtomicInteger(DEFAULT_MAX_RANGE_DAYS);
+    private static final AtomicInteger maxResultSize = new AtomicInteger(DEFAULT_MAX_RESULT_SIZE);
 
     private QueryLimiter() {
         // Utility class
@@ -59,6 +60,8 @@ public final class QueryLimiter {
      * @throws TimeSeriesException if range is invalid | 如果范围无效抛出异常
      */
     public static void validateRange(Instant from, Instant to) {
+        java.util.Objects.requireNonNull(from, "from must not be null");
+        java.util.Objects.requireNonNull(to, "to must not be null");
         Duration range = Duration.between(from, to);
 
         if (range.isNegative()) {
@@ -68,10 +71,11 @@ public final class QueryLimiter {
             );
         }
 
-        if (range.toDays() > maxRangeDays) {
+        int currentMaxDays = maxRangeDays.get();
+        if (range.toDays() > currentMaxDays) {
             throw new TimeSeriesException(
                 TimeSeriesErrorCode.QUERY_RANGE_TOO_LARGE,
-                "Query range exceeds " + maxRangeDays + " days"
+                "Query range exceeds " + currentMaxDays + " days"
             );
         }
     }
@@ -84,6 +88,7 @@ public final class QueryLimiter {
      * @throws TimeSeriesException if range is invalid | 如果范围无效抛出异常
      */
     public static void validateRange(TimeRange range) {
+        java.util.Objects.requireNonNull(range, "range must not be null");
         validateRange(range.from(), range.to());
     }
 
@@ -96,8 +101,9 @@ public final class QueryLimiter {
      * @return the limited result | 限制后的结果
      */
     public static <T> List<T> limitResult(List<T> result) {
-        if (result.size() > maxResultSize) {
-            return result.subList(0, maxResultSize);
+        int currentMaxSize = maxResultSize.get();
+        if (result.size() > currentMaxSize) {
+            return result.subList(0, currentMaxSize);
         }
         return result;
     }
@@ -110,7 +116,7 @@ public final class QueryLimiter {
      * @return true if exceeds limit | 如果超过限制返回true
      */
     public static boolean exceedsLimit(int size) {
-        return size > maxResultSize;
+        return size > maxResultSize.get();
     }
 
     /**
@@ -123,7 +129,7 @@ public final class QueryLimiter {
         if (days <= 0) {
             throw new IllegalArgumentException("Max range days must be positive");
         }
-        maxRangeDays = days;
+        maxRangeDays.set(days);
     }
 
     /**
@@ -136,7 +142,7 @@ public final class QueryLimiter {
         if (size <= 0) {
             throw new IllegalArgumentException("Max result size must be positive");
         }
-        maxResultSize = size;
+        maxResultSize.set(size);
     }
 
     /**
@@ -146,7 +152,7 @@ public final class QueryLimiter {
      * @return the max range days | 最大范围天数
      */
     public static int getMaxRangeDays() {
-        return maxRangeDays;
+        return maxRangeDays.get();
     }
 
     /**
@@ -156,7 +162,7 @@ public final class QueryLimiter {
      * @return the max result size | 最大结果大小
      */
     public static int getMaxResultSize() {
-        return maxResultSize;
+        return maxResultSize.get();
     }
 
     /**
@@ -164,7 +170,7 @@ public final class QueryLimiter {
      * 重置为默认限制
      */
     public static void resetDefaults() {
-        maxRangeDays = DEFAULT_MAX_RANGE_DAYS;
-        maxResultSize = DEFAULT_MAX_RESULT_SIZE;
+        maxRangeDays.set(DEFAULT_MAX_RANGE_DAYS);
+        maxResultSize.set(DEFAULT_MAX_RESULT_SIZE);
     }
 }

@@ -4,7 +4,6 @@ import cloud.opencode.base.i18n.spi.MessageFormatter;
 
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -51,7 +50,6 @@ public class NamedParameterFormatter implements MessageFormatter {
     private static final Pattern PARAM_PATTERN = Pattern.compile("\\$\\{([^}]+)}");
     private static final Pattern ESCAPED_PATTERN = Pattern.compile("\\\\\\$\\{");
 
-    private final Map<String, Pattern> patternCache = new ConcurrentHashMap<>();
     private final String missingValuePrefix;
     private final String missingValueSuffix;
     private final boolean keepMissingParams;
@@ -140,7 +138,7 @@ public class NamedParameterFormatter implements MessageFormatter {
 
     @Override
     public void clearCache() {
-        patternCache.clear();
+        // No mutable caches — patterns are compiled statically
     }
 
     /**

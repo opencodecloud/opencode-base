@@ -205,8 +205,13 @@ public final class OpenChar {
      * 从码点转字符
      */
     public static char fromCodePoint(int codePoint) {
-        if (codePoint < 0 || codePoint > Character.MAX_VALUE) {
+        if (!Character.isValidCodePoint(codePoint)) {
             throw new IllegalArgumentException("Invalid code point: " + codePoint);
+        }
+        if (!Character.isBmpCodePoint(codePoint)) {
+            throw new IllegalArgumentException(
+                    "Code point U+" + Integer.toHexString(codePoint).toUpperCase()
+                            + " is not in the Basic Multilingual Plane and cannot be represented as a single char");
         }
         return (char) codePoint;
     }

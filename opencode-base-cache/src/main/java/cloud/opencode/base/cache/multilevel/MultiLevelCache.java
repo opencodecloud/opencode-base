@@ -105,6 +105,40 @@ public class MultiLevelCache<K, V> implements Cache<K, V> {
         return new Builder<>();
     }
 
+    /**
+     * Creates a two-level cache as a convenient replacement for
+     * {@link cloud.opencode.base.cache.LayeredCache}.
+     * 创建两级缓存，作为 {@link cloud.opencode.base.cache.LayeredCache} 的便捷替代。
+     *
+     * <p>The returned cache uses {@link WritePolicy#WRITE_ALL} and
+     * {@link InvalidationPolicy#INVALIDATE_ALL}, with L2 promotion on hit enabled.</p>
+     * <p>返回的缓存使用 {@link WritePolicy#WRITE_ALL} 和
+     * {@link InvalidationPolicy#INVALIDATE_ALL}，并在 L2 命中时启用提升。</p>
+     *
+     * @param l1  L1 cache (fast, small) | L1 缓存（快速、小）
+     * @param l2  L2 cache (slower, large) | L2 缓存（较慢、大）
+     * @param <K> key type | 键类型
+     * @param <V> value type | 值类型
+     * @return a two-level multi-level cache | 两级多级缓存
+     */
+    public static <K, V> MultiLevelCache<K, V> ofTwoLevel(Cache<K, V> l1, Cache<K, V> l2) {
+        return MultiLevelCache.<K, V>builder()
+                .name("two-level-" + l1.name() + "-" + l2.name())
+                .level(LevelConfig.<K, V>builder()
+                        .name("L1")
+                        .cache(l1)
+                        .promoteOnHit(false)
+                        .build())
+                .level(LevelConfig.<K, V>builder()
+                        .name("L2")
+                        .cache(l2)
+                        .promoteOnHit(true)
+                        .build())
+                .writePolicy(WritePolicy.WRITE_ALL)
+                .invalidationPolicy(InvalidationPolicy.INVALIDATE_ALL)
+                .build();
+    }
+
     // ==================== Cache Operations | 缓存操作 ====================
 
     @Override

@@ -31,6 +31,7 @@ module cloud.opencode.base.deepclone {
     exports cloud.opencode.base.deepclone.contract;
     exports cloud.opencode.base.deepclone.exception;
     exports cloud.opencode.base.deepclone.handler;
+    exports cloud.opencode.base.deepclone.internal;
     exports cloud.opencode.base.deepclone.spi;
     exports cloud.opencode.base.deepclone.strategy;
 

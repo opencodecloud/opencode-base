@@ -30,7 +30,7 @@ class CycleDetectedExceptionTest {
             CycleDetectedException ex = new CycleDetectedException(cycle);
 
             assertThat(ex.getMessage()).contains("Cycle detected");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
             assertThat(ex.getCycle()).isEqualTo(cycle);
         }
 
@@ -39,8 +39,8 @@ class CycleDetectedExceptionTest {
         void testMessageConstructor() {
             CycleDetectedException ex = new CycleDetectedException("Topological sort not possible");
 
-            assertThat(ex.getMessage()).isEqualTo("Topological sort not possible");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
+            assertThat(ex.getMessage()).contains("Topological sort not possible");
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
             assertThat(ex.getCycle()).isNull();
         }
     }
@@ -89,8 +89,8 @@ class CycleDetectedExceptionTest {
         void testErrorCode() {
             CycleDetectedException ex = new CycleDetectedException("test");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(2001);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(2001);
         }
     }
 }

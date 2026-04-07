@@ -30,7 +30,7 @@ import java.util.Map;
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
  *   <li>Thread-safe: Yes (immutable record) - 线程安全: 是（不可变记录）</li>
- *   <li>Null-safe: No (metadata may be null) - 空值安全: 否（元数据可能为空）</li>
+ *   <li>Null-safe: Yes (null imageData/metadata normalized on construction) - 空值安全: 是（构造时对 null imageData/metadata 做归一化处理）</li>
  * </ul>
  *
  * @param id        the unique identifier | 唯一标识符
@@ -56,6 +56,20 @@ public record Captcha(
     Instant createdAt,
     Instant expiresAt
 ) {
+
+    /**
+     * Compact constructor that makes defensive copies to ensure immutability.
+     * 紧凑构造器，通过防御性复制确保不可变性。
+     *
+     * <p>{@code imageData} is cloned and {@code metadata} is wrapped via
+     * {@link Map#copyOf} so that external mutation cannot affect this record.</p>
+     * <p>{@code imageData} 会被克隆，{@code metadata} 会通过 {@link Map#copyOf}
+     * 包装，使得外部修改不会影响此记录。</p>
+     */
+    public Captcha {
+        imageData = imageData != null ? imageData.clone() : new byte[0];
+        metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+    }
 
     /**
      * Converts the image data to Base64 string.
@@ -85,6 +99,9 @@ public record Captcha(
      * @return the MIME type | MIME 类型
      */
     public String getMimeType() {
+        if (type != null && type.isAudio()) {
+            return "audio/wav";
+        }
         return type == CaptchaType.GIF ? "image/gif" : "image/png";
     }
 
@@ -108,7 +125,7 @@ public record Captcha(
      */
     @SuppressWarnings("unchecked")
     public <T> T getMetadata(String key) {
-        return metadata != null ? (T) metadata.get(key) : null;
+        return (T) metadata.get(key);
     }
 
     /**
@@ -131,5 +148,18 @@ public record Captcha(
     public int getHeight() {
         Integer height = getMetadata("height");
         return height != null ? height : 0;
+    }
+
+    /**
+     * Returns a string representation that redacts the answer to prevent accidental
+     * exposure in logs.
+     * 返回一个字符串表示，其中答案被脱敏处理，防止在日志中意外暴露。
+     *
+     * @return a redacted string representation | 脱敏后的字符串表示
+     */
+    @Override
+    public String toString() {
+        return "Captcha[id=" + id + ", type=" + type +
+               ", createdAt=" + createdAt + ", expiresAt=" + expiresAt + ", answer=***]";
     }
 }

@@ -260,7 +260,7 @@ class OpenCharsetTest {
         void testIsAscii() {
             assertThat(OpenCharset.isAscii("Hello")).isTrue();
             assertThat(OpenCharset.isAscii("中文")).isFalse();
-            assertThat(OpenCharset.isAscii(null)).isTrue();
+            assertThat(OpenCharset.isAscii(null)).isFalse();
         }
     }
 

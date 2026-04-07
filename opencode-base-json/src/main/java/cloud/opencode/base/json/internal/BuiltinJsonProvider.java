@@ -171,7 +171,16 @@ public final class BuiltinJsonProvider implements JsonProvider {
 
     @Override
     public <T> T fromJson(byte[] json, Class<T> clazz) {
+        Objects.requireNonNull(json, "json must not be null");
+        Objects.requireNonNull(clazz, "clazz must not be null");
         return fromJson(new String(json, StandardCharsets.UTF_8), clazz);
+    }
+
+    @Override
+    public <T> T fromJson(byte[] json, TypeReference<T> typeReference) {
+        Objects.requireNonNull(json, "json must not be null");
+        Objects.requireNonNull(typeReference, "typeReference must not be null");
+        return fromJson(new String(json, StandardCharsets.UTF_8), typeReference);
     }
 
     @Override

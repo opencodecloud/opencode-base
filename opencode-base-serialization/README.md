@@ -20,6 +20,16 @@
 - **Compressed Serializer**: Transparent compression wrapper around any serializer
 - **String Serialization**: Direct to/from String for text-based formats
 
+### V1.0.3 New Features
+- **Streaming API**: `serialize(Object, OutputStream)` / `deserialize(InputStream, Class)` on `Serializer` interface
+- **ClassFilter**: Deserialization class filtering with allow/deny lists, package rules, and regex patterns
+- **SerializationResult**: Metadata-rich result wrapper with timing, format, and compression info; includes zero-copy `dataUnsafe()` method
+- **FormatDetector**: Auto-detect serialization format (JSON/XML/binary) from byte patterns
+- **SerializerInfo**: Serializer capability introspection record
+- **DefaultClassFilter**: Pre-built security filters (`secure()` and `strict()`)
+- **Global ClassFilter Enforcement**: `SerializerConfig.classFilter` is enforced by both JdkSerializer and KryoSerializer
+- **Decompression Safety**: All compression algorithms (GZIP/LZ4/Snappy/ZSTD) enforce a 256MB decompressed size limit to prevent decompression bomb attacks
+
 ### Supported Formats
 | Format | Serializer | Text-Based | Optional Dependency |
 |--------|-----------|------------|---------------------|
@@ -36,7 +46,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-serialization</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -105,15 +115,92 @@ CompressedSerializer compressed = new CompressedSerializer(
 byte[] compressedData = compressed.serialize(largeObject);
 ```
 
+### Streaming API (V1.0.3)
+```java
+// Serialize to OutputStream
+try (var out = new FileOutputStream("data.bin")) {
+    OpenSerializer.serialize(user, out);
+}
+
+// Deserialize from InputStream
+try (var in = new FileInputStream("data.bin")) {
+    User restored = OpenSerializer.deserialize(in, User.class);
+}
+```
+
+### Format Detection (V1.0.3)
+```java
+import cloud.opencode.base.serialization.FormatDetector;
+
+// Auto-detect format from data
+String format = FormatDetector.detect(data);  // "json", "xml", "binary", "unknown"
+boolean isJson = FormatDetector.isJson(data);
+boolean isXml = FormatDetector.isXml(data);
+
+// Also via OpenSerializer facade
+String detected = OpenSerializer.detect(data);
+```
+
+### Class Filtering (V1.0.3)
+```java
+import cloud.opencode.base.serialization.filter.*;
+
+// Use pre-built security filter
+ClassFilter secure = DefaultClassFilter.secure();
+
+// Use strict mode (allowlist only)
+ClassFilter strict = DefaultClassFilter.strict();
+
+// Custom filter
+ClassFilter custom = new ClassFilterBuilder()
+    .allowPackage("com.myapp.model")
+    .denyPackage("javax.naming", "java.rmi")
+    .deny("java.lang.Runtime", "java.lang.ProcessBuilder")
+    .defaultDeny()
+    .build();
+
+// Apply globally (enforced by JdkSerializer and KryoSerializer)
+OpenSerializer.setConfig(SerializerConfig.builder()
+    .classFilter(secure)
+    .build());
+```
+
+### Serialization Result (V1.0.3)
+```java
+// Serialize with metadata
+SerializationResult result = OpenSerializer.serializeWithResult(user);
+byte[] data = result.data();
+String format = result.format();
+long nanos = result.durationNanos();
+int size = result.size();
+
+// Auto-timed serialization
+SerializationResult timed = SerializationResult.timed(
+    () -> OpenSerializer.serialize(user), "json"
+);
+```
+
+### Serializer Introspection (V1.0.3)
+```java
+// List all registered serializers with capabilities
+List<SerializerInfo> infos = OpenSerializer.listSerializers();
+for (SerializerInfo info : infos) {
+    System.out.println(info.format() + " - " + info.description());
+}
+```
+
 ## Class Reference
 
 ### Root Package (`cloud.opencode.base.serialization`)
 | Class | Description |
 |-------|-------------|
-| `OpenSerializer` | Main facade for all serialization operations (serialize, deserialize, deep copy, convert) |
-| `Serializer` | Core interface for all serializers (serialize, deserialize, format, MIME type) |
-| `SerializerConfig` | Global serialization configuration |
+| `OpenSerializer` | Main facade for all serialization operations (serialize, deserialize, deep copy, convert, stream, detect) |
+| `Serializer` | Core interface for all serializers (serialize, deserialize, stream, format, MIME type) |
+| `SerializerConfig` | Global serialization configuration (compression, class filter) |
 | `TypeReference<T>` | Captures generic type information for deserialization |
+| `SerializationResult` | Serialization result with metadata (size, format, timing) |
+| `FormatDetector` | Auto-detect data format from byte patterns |
+| `SerializerInfo` | Serializer capability description record |
 
 ### Binary (`cloud.opencode.base.serialization.binary`)
 | Class | Description |
@@ -147,6 +234,13 @@ byte[] compressedData = compressed.serialize(largeObject);
 | Class | Description |
 |-------|-------------|
 | `SerializerProvider` | SPI interface for registering serializers via ServiceLoader |
+
+### Filter (`cloud.opencode.base.serialization.filter`)
+| Class | Description |
+|-------|-------------|
+| `ClassFilter` | Functional interface for deserialization class filtering |
+| `ClassFilterBuilder` | Builder for constructing class filters with allow/deny rules |
+| `DefaultClassFilter` | Pre-built security filters (`secure()`, `strict()`) |
 
 ### Exception (`cloud.opencode.base.serialization.exception`)
 | Class | Description |

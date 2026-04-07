@@ -49,7 +49,11 @@ import java.util.*;
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
+ * // Default sketch size (expectedSize=10000)
  * EvictionPolicy<String, User> policy = EvictionPolicy.wTinyLfu();
+ *
+ * // Sized to match cache capacity
+ * EvictionPolicy<String, User> policy = EvictionPolicy.wTinyLfu(100_000);
  * }</pre>
  *
  * @author Leon Soo
@@ -59,22 +63,64 @@ import java.util.*;
  */
 public final class WTinyLfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> {
 
-    /** Creates a new WTinyLfuEvictionPolicy instance | 创建新的 WTinyLfuEvictionPolicy 实例 */
-    public WTinyLfuEvictionPolicy() {}
+    /** Default expected size used when no size is specified | 未指定大小时使用的默认期望大小 */
+    private static final int DEFAULT_EXPECTED_SIZE = 10_000;
+
+    /** Minimum sketch width (power of 2) | 最小 sketch 宽度（2 的幂） */
+    private static final int MIN_SKETCH_WIDTH = 1024;
 
     // Window size ratio (1% of total)
     private static final double WINDOW_RATIO = 0.01;
 
     // Frequency sketch parameters
     private static final int SKETCH_DEPTH = 4;
-    private static final int SKETCH_WIDTH = 1024;
     private static final int COUNTER_BITS = 4;
     private static final int COUNTER_MAX = (1 << COUNTER_BITS) - 1;
-
-    // Frequency sketch (Count-Min Sketch) - NOT thread-safe, requires external sync
-    private final long[][] sketch = new long[SKETCH_DEPTH][SKETCH_WIDTH];
     // Per-row hash seeds to reduce hash collisions across depths
     private static final int[] HASH_SEEDS = {0x7feb352d, 0x846ca68b, 0x2c9277b5, 0x6ff2a933};
+
+    /**
+     * Sketch width, always a power of 2, derived from expectedSize.
+     * sketch 宽度，始终为 2 的幂，根据 expectedSize 计算。
+     */
+    private final int sketchWidth;
+
+    /**
+     * Bit-mask for fast modulo: {@code sketchWidth - 1}.
+     * 快速取模的位掩码：{@code sketchWidth - 1}。
+     */
+    private final int sketchMask;
+
+    // Frequency sketch (Count-Min Sketch) - NOT thread-safe, requires external sync
+    private final long[][] sketch;
+
+    /**
+     * Creates a new WTinyLfuEvictionPolicy with the default expected size (10,000).
+     * 使用默认期望大小（10,000）创建新的 WTinyLfuEvictionPolicy 实例。
+     */
+    public WTinyLfuEvictionPolicy() {
+        this(DEFAULT_EXPECTED_SIZE);
+    }
+
+    /**
+     * Creates a new WTinyLfuEvictionPolicy with a sketch sized for the given expected cache capacity.
+     * 创建新的 WTinyLfuEvictionPolicy 实例，sketch 大小根据给定的期望缓存容量计算。
+     *
+     * <p>The sketch width is set to {@code max(1024, highestOneBit(expectedSize * 4))} to ensure
+     * a low collision rate while remaining a power of two for fast modulo via bit-masking.</p>
+     * <p>sketch 宽度设为 {@code max(1024, highestOneBit(expectedSize * 4))}，以确保低碰撞率，
+     * 同时保持 2 的幂次方以便通过位掩码快速取模。</p>
+     *
+     * @param expectedSize the expected maximum number of cache entries | 期望的缓存最大条目数
+     */
+    public WTinyLfuEvictionPolicy(int expectedSize) {
+        if (expectedSize <= 0) {
+            throw new IllegalArgumentException("expectedSize must be positive, got: " + expectedSize);
+        }
+        this.sketchWidth = computeSketchWidth(expectedSize);
+        this.sketchMask = sketchWidth - 1;
+        this.sketch = new long[SKETCH_DEPTH][sketchWidth];
+    }
 
     // @GuardedBy("external lock") - Window segment (for new entries), NOT thread-safe
     private final LinkedHashSet<K> window = new LinkedHashSet<>();
@@ -132,6 +178,7 @@ public final class WTinyLfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> 
                     if (getFrequency(windowVictim) > getFrequency(probationVictim)) {
                         // Window victim is hotter, admit to probation
                         window.remove(windowVictim);
+                        probation.remove(probationVictim);
                         probation.add(windowVictim);
                         return Optional.of(probationVictim);
                     }
@@ -183,7 +230,7 @@ public final class WTinyLfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> 
         int baseHash = key.hashCode();
         for (int i = 0; i < SKETCH_DEPTH; i++) {
             int hash = spread(baseHash ^ HASH_SEEDS[i]);
-            int index = hash & (SKETCH_WIDTH - 1);
+            int index = hash & sketchMask;
             int counterOffset = (hash >>> 10) & 3;
             long current = (sketch[i][index] >>> (COUNTER_BITS * counterOffset)) & COUNTER_MAX;
             if (current < COUNTER_MAX) {
@@ -203,7 +250,7 @@ public final class WTinyLfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> 
         int min = Integer.MAX_VALUE;
         for (int i = 0; i < SKETCH_DEPTH; i++) {
             int hash = spread(baseHash ^ HASH_SEEDS[i]);
-            int index = hash & (SKETCH_WIDTH - 1);
+            int index = hash & sketchMask;
             int counterOffset = (hash >>> 10) & 3;
             int count = (int) ((sketch[i][index] >>> (COUNTER_BITS * counterOffset)) & COUNTER_MAX);
             min = Math.min(min, count);
@@ -213,10 +260,24 @@ public final class WTinyLfuEvictionPolicy<K, V> implements EvictionPolicy<K, V> 
 
     private void ageSketch() {
         for (int i = 0; i < SKETCH_DEPTH; i++) {
-            for (int j = 0; j < SKETCH_WIDTH; j++) {
+            for (int j = 0; j < sketchWidth; j++) {
                 sketch[i][j] = (sketch[i][j] >>> 1) & 0x7777777777777777L;
             }
         }
+    }
+
+    /**
+     * Compute sketch width as a power of 2, sized proportionally to the expected cache capacity.
+     * 计算 sketch 宽度为 2 的幂，与期望缓存容量成比例。
+     *
+     * @param expectedSize the expected cache capacity | 期望缓存容量
+     * @return sketch width (power of 2, at least {@value MIN_SKETCH_WIDTH}) | sketch 宽度
+     */
+    private static int computeSketchWidth(int expectedSize) {
+        // Use 4x the expected size to keep collision rate low, clamped to int range
+        long raw = Math.min((long) expectedSize * 4L, Integer.MAX_VALUE);
+        int highBit = Integer.highestOneBit((int) Math.max(raw, 1));
+        return Math.max(MIN_SKETCH_WIDTH, highBit);
     }
 
     private static int spread(int h) {

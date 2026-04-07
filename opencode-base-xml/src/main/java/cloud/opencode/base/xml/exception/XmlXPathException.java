@@ -1,5 +1,7 @@
 package cloud.opencode.base.xml.exception;
 
+import java.io.Serial;
+
 /**
  * XPath Exception - Thrown when XPath evaluation fails
  * XPath 异常 - 当 XPath 求值失败时抛出
@@ -34,9 +36,12 @@ package cloud.opencode.base.xml.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 public class XmlXPathException extends OpenXmlException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final String xpath;
 

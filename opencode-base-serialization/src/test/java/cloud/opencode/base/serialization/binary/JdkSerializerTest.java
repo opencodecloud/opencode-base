@@ -1,7 +1,10 @@
 package cloud.opencode.base.serialization.binary;
 
+import cloud.opencode.base.serialization.OpenSerializer;
+import cloud.opencode.base.serialization.SerializerConfig;
 import cloud.opencode.base.serialization.TypeReference;
 import cloud.opencode.base.serialization.exception.OpenSerializationException;
+import cloud.opencode.base.serialization.filter.DefaultClassFilter;
 import org.junit.jupiter.api.*;
 
 import java.io.Serializable;
@@ -168,7 +171,7 @@ class JdkSerializerTest {
         @Test
         @DisplayName("Should deserialize null data to null")
         void shouldDeserializeNullDataToNull() {
-            String result = serializer.deserialize(null, String.class);
+            String result = serializer.deserialize((byte[]) null, String.class);
 
             assertThat(result).isNull();
         }
@@ -305,6 +308,71 @@ class JdkSerializerTest {
         @DisplayName("Should round-trip custom object")
         void shouldRoundTripCustomObject() {
             TestPerson original = new TestPerson("Alice", 28);
+            byte[] data = serializer.serialize(original);
+            TestPerson result = serializer.deserialize(data, TestPerson.class);
+
+            assertThat(result).isEqualTo(original);
+        }
+    }
+
+    @Nested
+    @DisplayName("Global ClassFilter Tests")
+    class GlobalClassFilterTests {
+
+        private SerializerConfig originalConfig;
+
+        @BeforeEach
+        void saveConfig() {
+            originalConfig = OpenSerializer.getConfig();
+        }
+
+        @AfterEach
+        void restoreConfig() {
+            OpenSerializer.setConfig(originalConfig);
+        }
+
+        @Test
+        @DisplayName("Global ClassFilter should reject classes not in allowlist")
+        void globalClassFilterShouldRejectDeniedClass() {
+            // Configure strict allowlist via SerializerConfig
+            SerializerConfig strictConfig = SerializerConfig.builder()
+                    .classFilter(DefaultClassFilter.strict())
+                    .build();
+            OpenSerializer.setConfig(strictConfig);
+
+            // Serialize is fine
+            TestPerson person = new TestPerson("Bob", 40);
+            byte[] data = new JdkSerializer().serialize(person);
+
+            // TestPerson is not in the strict allowlist → should be rejected
+            assertThatThrownBy(() -> new JdkSerializer().deserialize(data, TestPerson.class))
+                    .isInstanceOf(OpenSerializationException.class);
+        }
+
+        @Test
+        @DisplayName("Global ClassFilter should allow classes in allowlist")
+        void globalClassFilterShouldAllowPermittedClass() {
+            // Use the secure filter (blocklist-based, allows unknown classes by default)
+            SerializerConfig secureConfig = SerializerConfig.builder()
+                    .classFilter(DefaultClassFilter.secure())
+                    .build();
+            OpenSerializer.setConfig(secureConfig);
+
+            String original = "hello";
+            byte[] data = new JdkSerializer().serialize(original);
+
+            String result = new JdkSerializer().deserialize(data, String.class);
+
+            assertThat(result).isEqualTo(original);
+        }
+
+        @Test
+        @DisplayName("No global ClassFilter should allow normal deserialization")
+        void noGlobalClassFilterShouldAllowNormalDeserialization() {
+            // Default config has null classFilter → no extra filtering
+            OpenSerializer.setConfig(SerializerConfig.defaults());
+
+            TestPerson original = new TestPerson("Carol", 35);
             byte[] data = serializer.serialize(original);
             TestPerson result = serializer.deserialize(data, TestPerson.class);
 

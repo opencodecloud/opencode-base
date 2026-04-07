@@ -1,5 +1,7 @@
 package cloud.opencode.base.oauth2.oidc;
 
+import cloud.opencode.base.oauth2.internal.JsonParser;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -227,23 +229,40 @@ public record UserInfo(
             // Parse value
             char ch = json.charAt(pos);
             if (ch == '"') {
-                int valueStart = pos + 1;
-                int valueEnd = json.indexOf('"', valueStart);
-                if (valueEnd < 0) break;
-                claims.put(key, json.substring(valueStart, valueEnd));
-                pos = valueEnd + 1;
+                // Find closing quote (escape-aware)
+                int i = pos + 1;
+                boolean hasEscape = false;
+                while (i < json.length()) {
+                    char vc = json.charAt(i);
+                    if (vc == '\\' && i + 1 < json.length()) {
+                        hasEscape = true;
+                        i += 2;
+                        continue;
+                    }
+                    if (vc == '"') break;
+                    i++;
+                }
+                if (i >= json.length()) break;
+                if (!hasEscape) {
+                    // Fast path: no escapes, direct substring
+                    claims.put(key, json.substring(pos + 1, i));
+                } else {
+                    // Slow path: unescape
+                    claims.put(key, JsonParser.unescape(json, pos + 1, i));
+                }
+                pos = i + 1;
             } else if (ch == 't' || ch == 'f') {
-                // Boolean
-                if (json.substring(pos).startsWith("true")) {
+                // Boolean — use regionMatches to avoid substring allocation
+                if (pos + 4 <= json.length() && json.regionMatches(pos, "true", 0, 4)) {
                     claims.put(key, true);
                     pos += 4;
-                } else if (json.substring(pos).startsWith("false")) {
+                } else if (pos + 5 <= json.length() && json.regionMatches(pos, "false", 0, 5)) {
                     claims.put(key, false);
                     pos += 5;
                 }
             } else if (ch == 'n') {
-                // Null
-                if (json.substring(pos).startsWith("null")) {
+                // Null — use regionMatches
+                if (pos + 4 <= json.length() && json.regionMatches(pos, "null", 0, 4)) {
                     pos += 4;
                 }
             } else if (Character.isDigit(ch) || ch == '-') {

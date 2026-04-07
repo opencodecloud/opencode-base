@@ -24,9 +24,7 @@
  *
  * <h2>Classes | 类</h2>
  * <ul>
- *   <li>{@link cloud.opencode.base.parallel.structured.StructuredScope} - Structured scope wrapper</li>
  *   <li>{@link cloud.opencode.base.parallel.structured.ScopedContext} - Scoped values context</li>
- *   <li>{@link cloud.opencode.base.parallel.structured.TaskResult} - Task result wrapper</li>
  * </ul>
  *
  * @author Leon Soo

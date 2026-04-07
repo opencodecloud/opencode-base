@@ -1,5 +1,10 @@
 package cloud.opencode.base.classloader;
 
+import cloud.opencode.base.classloader.diagnostic.ClassLoadTrace;
+import cloud.opencode.base.classloader.diagnostic.ClassLoaderDiagnostics;
+import cloud.opencode.base.classloader.diagnostic.DuplicateClassReport;
+import cloud.opencode.base.classloader.diagnostic.PackageSplitReport;
+import cloud.opencode.base.classloader.graalvm.NativeImageSupport;
 import cloud.opencode.base.classloader.loader.*;
 
 import java.nio.file.Path;
@@ -133,6 +138,29 @@ public final class OpenClassLoader {
      */
     public static HotSwapClassLoader hotSwapLoader(ClassLoader parent) {
         return HotSwapClassLoader.create(parent);
+    }
+
+    /**
+     * Create hot-swap classloader with version history support
+     * 创建带版本历史支持的热替换类加载器
+     *
+     * @param maxHistoryVersions max history versions to keep per class | 每个类保留的最大历史版本数
+     * @return hot-swap classloader | 热替换类加载器
+     */
+    public static HotSwapClassLoader hotSwapLoader(int maxHistoryVersions) {
+        return HotSwapClassLoader.create(maxHistoryVersions);
+    }
+
+    /**
+     * Create hot-swap classloader with parent and version history support
+     * 使用父加载器创建带版本历史支持的热替换类加载器
+     *
+     * @param parent             parent classloader | 父类加载器
+     * @param maxHistoryVersions max history versions to keep per class | 每个类保留的最大历史版本数
+     * @return hot-swap classloader | 热替换类加载器
+     */
+    public static HotSwapClassLoader hotSwapLoader(ClassLoader parent, int maxHistoryVersions) {
+        return HotSwapClassLoader.create(parent, maxHistoryVersions);
     }
 
     /**
@@ -285,5 +313,53 @@ public final class OpenClassLoader {
         } catch (ClassNotFoundException e) {
             return Optional.empty();
         }
+    }
+
+    // ==================== Diagnostics | 诊断工具 ====================
+
+    /**
+     * Find duplicate classes across the specified ClassLoaders
+     * 在指定的 ClassLoader 中查找重复类
+     *
+     * @param classLoaders classloaders to scan | 要扫描的类加载器
+     * @return list of duplicate class reports | 重复类报告列表
+     */
+    public static List<DuplicateClassReport> findDuplicateClasses(ClassLoader... classLoaders) {
+        return ClassLoaderDiagnostics.findDuplicateClasses(classLoaders);
+    }
+
+    /**
+     * Detect package splits across the specified ClassLoaders
+     * 检测指定 ClassLoader 中的包拆分
+     *
+     * @param classLoaders classloaders to scan | 要扫描的类加载器
+     * @return list of package split reports | 包拆分报告列表
+     */
+    public static List<PackageSplitReport> detectPackageSplits(ClassLoader... classLoaders) {
+        return ClassLoaderDiagnostics.detectPackageSplits(classLoaders);
+    }
+
+    /**
+     * Trace the class loading delegation chain for a class
+     * 跟踪类的类加载委托链
+     *
+     * @param className   fully-qualified class name | 完全限定类名
+     * @param classLoader starting classloader | 起始类加载器
+     * @return class load trace | 类加载跟踪
+     */
+    public static ClassLoadTrace traceClassLoading(String className, ClassLoader classLoader) {
+        return ClassLoaderDiagnostics.traceClassLoading(className, classLoader);
+    }
+
+    // ==================== Native Image Support | 原生镜像支持 ====================
+
+    /**
+     * Check if running in GraalVM native image
+     * 检查是否在 GraalVM 原生镜像中运行
+     *
+     * @return true if in native image | 在原生镜像中返回 true
+     */
+    public static boolean isNativeImage() {
+        return NativeImageSupport.isNativeImage();
     }
 }

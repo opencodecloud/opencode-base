@@ -154,12 +154,20 @@ public final class WatermarkOp {
             int textWidth = (int) bounds.getWidth();
             int textHeight = (int) bounds.getHeight();
 
+            // Guard against zero or negative step sizes that would cause infinite loop
+            int stepX = textWidth + spacingX;
+            int stepY = textHeight + spacingY;
+            if (stepX <= 0 || stepY <= 0) {
+                throw new IllegalArgumentException(
+                        "Tile step must be positive: stepX=" + stepX + ", stepY=" + stepY);
+            }
+
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, watermark.opacity()));
             g.setColor(watermark.color());
 
             // Tile watermark across image
-            for (int y = watermark.margin(); y < height; y += textHeight + spacingY) {
-                for (int x = watermark.margin(); x < width; x += textWidth + spacingX) {
+            for (int y = watermark.margin(); y < height; y += stepY) {
+                for (int x = watermark.margin(); x < width; x += stepX) {
                     g.drawString(watermark.text(), x, y + textHeight);
                 }
             }
@@ -193,11 +201,19 @@ public final class WatermarkOp {
             int wmWidth = watermark.getWidth();
             int wmHeight = watermark.getHeight();
 
+            // Guard against zero or negative step sizes that would cause infinite loop
+            int stepX = wmWidth + spacingX;
+            int stepY = wmHeight + spacingY;
+            if (stepX <= 0 || stepY <= 0) {
+                throw new IllegalArgumentException(
+                        "Tile step must be positive: stepX=" + stepX + ", stepY=" + stepY);
+            }
+
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, watermark.opacity()));
 
             // Tile watermark across image
-            for (int y = watermark.margin(); y < height; y += wmHeight + spacingY) {
-                for (int x = watermark.margin(); x < width; x += wmWidth + spacingX) {
+            for (int y = watermark.margin(); y < height; y += stepY) {
+                for (int x = watermark.margin(); x < width; x += stepX) {
                     g.drawImage(watermark.image(), x, y, null);
                 }
             }

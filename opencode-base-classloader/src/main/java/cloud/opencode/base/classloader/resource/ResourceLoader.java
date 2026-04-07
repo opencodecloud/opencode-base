@@ -59,6 +59,44 @@ public class ResourceLoader {
     private static final String URL_PREFIX = "url:";
     private static final String JAR_PREFIX = "jar:";
 
+    /**
+     * Shared NestedJarHandler singleton for nested JAR resource parsing.
+     * Lazily initialized on first use; cleaned up via a single persistent shutdown hook.
+     * 用于嵌套 JAR 资源解析的共享 NestedJarHandler 单例。
+     * 首次使用时延迟初始化；通过单一持久 shutdown hook 清理。
+     */
+    private static volatile NestedJarHandler sharedNestedJarHandler;
+    private static final Object NESTED_HANDLER_LOCK = new Object();
+    private static volatile boolean shutdownHookRegistered;
+
+    private static NestedJarHandler getSharedNestedJarHandler() {
+        NestedJarHandler handler = sharedNestedJarHandler;
+        if (handler != null && !handler.isClosed()) {
+            return handler;
+        }
+        synchronized (NESTED_HANDLER_LOCK) {
+            handler = sharedNestedJarHandler;
+            if (handler != null && !handler.isClosed()) {
+                return handler;
+            }
+            handler = NestedJarHandler.builder().build();
+            sharedNestedJarHandler = handler;
+            // Register shutdown hook only once — it reads the volatile field at shutdown time
+            if (!shutdownHookRegistered) {
+                shutdownHookRegistered = true;
+                Runtime.getRuntime().addShutdownHook(Thread.ofVirtual()
+                        .name("nested-jar-handler-cleanup")
+                        .unstarted(() -> {
+                            NestedJarHandler h = sharedNestedJarHandler;
+                            if (h != null) {
+                                h.close();
+                            }
+                        }));
+            }
+            return handler;
+        }
+    }
+
     private ClassLoader classLoader;
 
     /**
@@ -267,13 +305,31 @@ public class ResourceLoader {
 
     private Resource parseJarResource(String location) {
         // jar:file:/path/to/jar.jar!/entry/path
+        // Nested JAR: jar:file:/app.jar!/BOOT-INF/lib/dep.jar!/com/Config.class
         String jarLocation = location.substring(JAR_PREFIX.length());
-        int separatorIndex = jarLocation.indexOf("!/");
-        if (separatorIndex == -1) {
+        int firstSep = jarLocation.indexOf("!/");
+        if (firstSep == -1) {
             throw new OpenClassLoaderException("Invalid JAR URL: " + location);
         }
-        String jarPath = jarLocation.substring(0, separatorIndex);
-        String entryPath = jarLocation.substring(separatorIndex + 2);
+
+        String afterFirstSep = jarLocation.substring(firstSep + 2);
+        int secondSep = afterFirstSep.indexOf("!/");
+
+        if (secondSep >= 0) {
+            // Double-nested JAR: outer.jar!/nested.jar!/resource
+            String outerJarPath = jarLocation.substring(0, firstSep);
+            if (outerJarPath.startsWith("file:")) {
+                outerJarPath = outerJarPath.substring(5);
+            }
+            String nestedJarEntry = afterFirstSep.substring(0, secondSep);
+            String resourceEntry = afterFirstSep.substring(secondSep + 2);
+
+            return new NestedJarResource(getSharedNestedJarHandler(), Path.of(outerJarPath), nestedJarEntry, resourceEntry);
+        }
+
+        // Simple JAR entry
+        String jarPath = jarLocation.substring(0, firstSep);
+        String entryPath = afterFirstSep;
 
         if (jarPath.startsWith("file:")) {
             jarPath = jarPath.substring(5);

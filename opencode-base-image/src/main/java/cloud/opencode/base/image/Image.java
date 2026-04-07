@@ -1,9 +1,28 @@
 package cloud.opencode.base.image;
 
+import cloud.opencode.base.image.color.BrightnessContrastOp;
+import cloud.opencode.base.image.color.ColorFilterOp;
+import cloud.opencode.base.image.color.GammaOp;
+import cloud.opencode.base.image.color.SaturationOp;
+import cloud.opencode.base.image.color.WhiteBalanceOp;
+import cloud.opencode.base.image.edge.CannyOp;
+import cloud.opencode.base.image.edge.SobelOp;
 import cloud.opencode.base.image.exception.ImageIOException;
 import cloud.opencode.base.image.exception.ImageOperationException;
 import cloud.opencode.base.image.exception.ImageWriteException;
+import cloud.opencode.base.image.exif.ExifOp;
+import cloud.opencode.base.image.exif.ExifTag;
+import cloud.opencode.base.image.filter.BilateralFilterOp;
+import cloud.opencode.base.image.filter.BoxBlurOp;
+import cloud.opencode.base.image.filter.GaussianBlurOp;
+import cloud.opencode.base.image.filter.MedianBlurOp;
+import cloud.opencode.base.image.filter.SharpenOp;
+import cloud.opencode.base.image.histogram.ClaheOp;
+import cloud.opencode.base.image.histogram.HistogramEqualizationOp;
 import cloud.opencode.base.image.internal.*;
+import cloud.opencode.base.image.threshold.AdaptiveThresholdOp;
+import cloud.opencode.base.image.threshold.OtsuOp;
+import cloud.opencode.base.image.threshold.ThresholdOp;
 import cloud.opencode.base.image.watermark.ImageWatermark;
 import cloud.opencode.base.image.watermark.TextWatermark;
 
@@ -15,6 +34,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Image
@@ -70,7 +90,7 @@ public class Image {
      * @param image the buffered image | 缓冲图片
      */
     public Image(BufferedImage image) {
-        this.image = image;
+        this.image = Objects.requireNonNull(image, "image must not be null");
         this.format = ImageFormat.PNG;
     }
 
@@ -82,8 +102,8 @@ public class Image {
      * @param format the image format | 图片格式
      */
     public Image(BufferedImage image, ImageFormat format) {
-        this.image = image;
-        this.format = format;
+        this.image = Objects.requireNonNull(image, "image must not be null");
+        this.format = Objects.requireNonNull(format, "format must not be null");
     }
 
     /**
@@ -174,7 +194,7 @@ public class Image {
      * @return this image for chaining | 用于链式调用的图片
      */
     public Image format(ImageFormat format) {
-        this.format = format;
+        this.format = Objects.requireNonNull(format, "format must not be null");
         return this;
     }
 
@@ -261,6 +281,19 @@ public class Image {
     }
 
     /**
+     * Resize using progressive multi-step downscaling for better quality on large reductions
+     * 使用渐进式多步缩小，在大幅缩小时获得更好的质量
+     *
+     * @param width target width | 目标宽度
+     * @param height target height | 目标高度
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image resizeProgressive(int width, int height) {
+        this.image = ResizeOp.resizeProgressive(image, width, height);
+        return this;
+    }
+
+    /**
      * Scale to fit height
      * 缩放以适应高度
      *
@@ -310,6 +343,19 @@ public class Image {
      */
     public Image cropSquare() {
         this.image = CropOp.cropSquare(image);
+        return this;
+    }
+
+    /**
+     * Crop to a specific aspect ratio from center
+     * 从中心按指定宽高比裁剪
+     *
+     * @param aspectWidth aspect ratio width component | 宽高比的宽度分量
+     * @param aspectHeight aspect ratio height component | 宽高比的高度分量
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image cropToAspectRatio(int aspectWidth, int aspectHeight) {
+        this.image = CropOp.cropToAspectRatio(image, aspectWidth, aspectHeight);
         return this;
     }
 
@@ -434,6 +480,79 @@ public class Image {
         return this;
     }
 
+    /**
+     * Add tiled text watermark across the image
+     * 在图片上平铺文字水印
+     *
+     * @param watermark the text watermark configuration | 文字水印配置
+     * @param spacingX horizontal spacing between tiles | 水平方向瓦片间距
+     * @param spacingY vertical spacing between tiles | 垂直方向瓦片间距
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image tiledWatermark(TextWatermark watermark, int spacingX, int spacingY) {
+        this.image = WatermarkOp.applyTiled(image, watermark, spacingX, spacingY);
+        return this;
+    }
+
+    // ==================== Padding / Border / Overlay Operations (v1.0.3) ====================
+
+    /**
+     * Add uniform padding around the image
+     * 在图片四周添加等距内边距
+     *
+     * @param padding the padding size in pixels | 内边距大小（像素）
+     * @param color the padding color | 内边距颜色
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image pad(int padding, Color color) {
+        this.image = PaddingOp.pad(image, padding, color);
+        return this;
+    }
+
+    /**
+     * Add independent padding for each edge of the image
+     * 为图片的每条边添加独立的内边距
+     *
+     * @param top the top padding | 顶部内边距
+     * @param right the right padding | 右侧内边距
+     * @param bottom the bottom padding | 底部内边距
+     * @param left the left padding | 左侧内边距
+     * @param color the padding color | 内边距颜色
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image pad(int top, int right, int bottom, int left, Color color) {
+        this.image = PaddingOp.pad(image, top, right, bottom, left, color);
+        return this;
+    }
+
+    /**
+     * Add a border around the image
+     * 在图片外部添加边框
+     *
+     * @param thickness the border thickness in pixels | 边框厚度（像素）
+     * @param color the border color | 边框颜色
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image border(int thickness, Color color) {
+        this.image = PaddingOp.border(image, thickness, color);
+        return this;
+    }
+
+    /**
+     * Overlay another image at the specified position and opacity
+     * 在指定位置以指定透明度叠加另一张图片
+     *
+     * @param overlay the image to overlay | 要叠加的图片
+     * @param x the x position | X 坐标
+     * @param y the y position | Y 坐标
+     * @param opacity the opacity from 0.0 (transparent) to 1.0 (opaque) | 透明度（0.0 全透明，1.0 完全不透明）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image overlay(BufferedImage overlay, int x, int y, float opacity) {
+        this.image = OverlayOp.overlay(image, overlay, x, y, opacity);
+        return this;
+    }
+
     // ==================== Compression Operations ====================
 
     /**
@@ -471,6 +590,288 @@ public class Image {
      */
     public Image grayscale() {
         this.image = ConvertOp.grayscale(image);
+        return this;
+    }
+
+    // ==================== Filter Operations (v2.0) | 滤波操作 ====================
+
+    /**
+     * Apply Gaussian blur
+     * 应用高斯模糊
+     *
+     * @param sigma Gaussian sigma value | 高斯 sigma 值
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image gaussianBlur(double sigma) {
+        this.image = GaussianBlurOp.apply(image, sigma);
+        return this;
+    }
+
+    /**
+     * Apply median blur
+     * 应用中值滤波
+     *
+     * @param kernelSize kernel size (must be odd) | 核大小（必须为奇数）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image medianBlur(int kernelSize) {
+        this.image = MedianBlurOp.apply(image, kernelSize);
+        return this;
+    }
+
+    /**
+     * Apply box blur
+     * 应用方框模糊
+     *
+     * @param kernelSize kernel size (must be odd) | 核大小（必须为奇数）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image boxBlur(int kernelSize) {
+        this.image = BoxBlurOp.apply(image, kernelSize);
+        return this;
+    }
+
+    /**
+     * Apply sharpening (Unsharp Mask) with default parameters
+     * 应用锐化（非锐化掩模），使用默认参数
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image sharpen() {
+        this.image = SharpenOp.apply(image);
+        return this;
+    }
+
+    /**
+     * Apply sharpening (Unsharp Mask) with custom amount
+     * 应用锐化（非锐化掩模），自定义强度
+     *
+     * @param amount sharpening amount | 锐化强度
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image sharpen(double amount) {
+        this.image = SharpenOp.apply(image, amount);
+        return this;
+    }
+
+    /**
+     * Apply bilateral filter with default parameters
+     * 应用双边滤波，使用默认参数
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image bilateralFilter() {
+        this.image = BilateralFilterOp.apply(image);
+        return this;
+    }
+
+    // ==================== Color Operations (v2.0) | 色彩操作 ====================
+
+    /**
+     * Apply gamma correction
+     * 应用伽马校正
+     *
+     * @param gamma gamma value (must be positive) | 伽马值（必须为正数）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image gamma(double gamma) {
+        this.image = GammaOp.apply(image, gamma);
+        return this;
+    }
+
+    /**
+     * Adjust saturation
+     * 调整饱和度
+     *
+     * @param factor saturation factor (0.0=grayscale, 1.0=original, 2.0=double) | 饱和度因子
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image saturation(double factor) {
+        this.image = SaturationOp.apply(image, factor);
+        return this;
+    }
+
+    /**
+     * Apply Gray World white balance
+     * 应用灰色世界白平衡
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image whiteBalance() {
+        this.image = WhiteBalanceOp.apply(image);
+        return this;
+    }
+
+    // ==================== Brightness / Contrast / Filter Operations (v1.0.3) | 亮度/对比度/滤镜操作 ====================
+
+    /**
+     * Adjust brightness
+     * 调整亮度
+     *
+     * @param factor brightness factor (>1 brighter, <1 darker, 1 unchanged) | 亮度因子（>1 变亮，<1 变暗，1 不变）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image brightness(double factor) {
+        this.image = BrightnessContrastOp.brightness(image, factor);
+        return this;
+    }
+
+    /**
+     * Adjust contrast
+     * 调整对比度
+     *
+     * @param factor contrast factor (>1 more contrast, <1 less, 1 unchanged) | 对比度因子（>1 增加，<1 降低，1 不变）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image contrast(double factor) {
+        this.image = BrightnessContrastOp.contrast(image, factor);
+        return this;
+    }
+
+    /**
+     * Apply sepia (nostalgic brown tone) filter
+     * 应用怀旧棕褐色滤镜
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image sepia() {
+        this.image = ColorFilterOp.sepia(image);
+        return this;
+    }
+
+    /**
+     * Apply color inversion filter
+     * 应用反色滤镜
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image invert() {
+        this.image = ColorFilterOp.invert(image);
+        return this;
+    }
+
+    // ==================== Edge Detection Operations (v2.0) | 边缘检测操作 ====================
+
+    /**
+     * Apply Sobel edge detection
+     * 应用 Sobel 边缘检测
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image sobelEdge() {
+        this.image = SobelOp.apply(image);
+        return this;
+    }
+
+    /**
+     * Apply Canny edge detection
+     * 应用 Canny 边缘检测
+     *
+     * @param lowThreshold low threshold | 低阈值
+     * @param highThreshold high threshold | 高阈值
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image cannyEdge(double lowThreshold, double highThreshold) {
+        this.image = CannyOp.apply(image, lowThreshold, highThreshold);
+        return this;
+    }
+
+    // ==================== Threshold Operations (v2.0) | 二值化操作 ====================
+
+    /**
+     * Apply fixed threshold (binary mode)
+     * 应用固定阈值（二值模式）
+     *
+     * @param value threshold value (0-255) | 阈值（0-255）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image threshold(int value) {
+        this.image = ThresholdOp.apply(image, value);
+        return this;
+    }
+
+    /**
+     * Apply Otsu automatic thresholding
+     * 应用 Otsu 自动阈值
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image otsuThreshold() {
+        this.image = OtsuOp.apply(image);
+        return this;
+    }
+
+    /**
+     * Apply adaptive threshold (MEAN method)
+     * 应用自适应阈值（均值方法）
+     *
+     * @param blockSize block size (must be odd, >= 3) | 块大小（必须为奇数，>= 3）
+     * @param c constant subtracted from mean | 从均值中减去的常数
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image adaptiveThreshold(int blockSize, double c) {
+        this.image = AdaptiveThresholdOp.apply(image, blockSize, c);
+        return this;
+    }
+
+    // ==================== Histogram Operations (v2.0) | 直方图操作 ====================
+
+    /**
+     * Apply histogram equalization
+     * 应用直方图均衡化
+     *
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image equalizeHistogram() {
+        this.image = HistogramEqualizationOp.apply(image);
+        return this;
+    }
+
+    /**
+     * Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+     * 应用 CLAHE 自适应局部直方图均衡化
+     *
+     * @param clipLimit clip limit | 裁剪限制
+     * @param tileGridSize tile grid size | 分块网格大小
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image clahe(double clipLimit, int tileGridSize) {
+        this.image = ClaheOp.apply(image, clipLimit, tileGridSize);
+        return this;
+    }
+
+    // ==================== EXIF Operations (v2.0) | EXIF 操作 ====================
+
+    /**
+     * Auto-orient based on EXIF orientation
+     * 根据 EXIF 方向信息自动旋转
+     *
+     * @param orientation EXIF orientation value (1-8) | EXIF 方向值（1-8）
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image autoOrient(int orientation) {
+        this.image = ExifOp.autoOrient(image, orientation);
+        return this;
+    }
+
+    /**
+     * Strip EXIF tags (operates on byte-level, re-encodes image)
+     * 清除 EXIF 标签（字节级操作，重新编码图像）
+     *
+     * @param tags EXIF tags to strip | 要清除的 EXIF 标签
+     * @return this image for chaining | 用于链式调用的图片
+     */
+    public Image stripExif(ExifTag... tags) {
+        try {
+            byte[] bytes = toBytes(ImageFormat.JPEG);
+            byte[] stripped = ExifOp.strip(bytes, tags);
+            this.image = OpenImage.read(stripped).getBufferedImage();
+        } catch (ImageIOException e) {
+            if (format == ImageFormat.JPEG) {
+                throw e;
+            }
+            // Non-JPEG format — strip not applicable, leave image unchanged
+        }
         return this;
     }
 
@@ -584,11 +985,6 @@ public class Image {
      * @return a new Image instance | 新的Image实例
      */
     public Image copy() {
-        BufferedImage copy = new BufferedImage(
-            image.getWidth(), image.getHeight(), image.getType());
-        Graphics2D g = copy.createGraphics();
-        g.drawImage(image, 0, 0, null);
-        g.dispose();
-        return new Image(copy, format);
+        return new Image(copyBufferedImage(), format);
     }
 }

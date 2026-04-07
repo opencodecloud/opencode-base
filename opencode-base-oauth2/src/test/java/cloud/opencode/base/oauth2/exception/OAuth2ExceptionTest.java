@@ -1,5 +1,6 @@
 package cloud.opencode.base.oauth2.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,10 @@ class OAuth2ExceptionTest {
             OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
             assertThat(ex.errorCode()).isEqualTo(OAuth2ErrorCode.TOKEN_EXPIRED);
             assertThat(ex.getMessage()).contains("Token has expired");
+            assertThat(ex.details()).isNull();
+            assertThat(ex.serverError()).isNull();
+            assertThat(ex.serverErrorDescription()).isNull();
+            assertThat(ex.serverErrorUri()).isNull();
         }
 
         @Test
@@ -36,6 +41,7 @@ class OAuth2ExceptionTest {
             OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED, "Custom message");
             assertThat(ex.errorCode()).isEqualTo(OAuth2ErrorCode.TOKEN_EXPIRED);
             assertThat(ex.getMessage()).contains("Custom message");
+            assertThat(ex.details()).isEqualTo("Custom message");
         }
 
         @Test
@@ -45,6 +51,7 @@ class OAuth2ExceptionTest {
             OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.NETWORK_ERROR, cause);
             assertThat(ex.errorCode()).isEqualTo(OAuth2ErrorCode.NETWORK_ERROR);
             assertThat(ex.getCause()).isEqualTo(cause);
+            assertThat(ex.details()).isEqualTo("cause");
         }
 
         @Test
@@ -55,6 +62,28 @@ class OAuth2ExceptionTest {
             assertThat(ex.errorCode()).isEqualTo(OAuth2ErrorCode.TOKEN_INVALID);
             assertThat(ex.getMessage()).contains("Custom message");
             assertThat(ex.getCause()).isEqualTo(cause);
+            assertThat(ex.details()).isEqualTo("Custom message");
+        }
+
+        @Test
+        @DisplayName("使用服务器错误字段构造")
+        void testServerErrorConstructor() {
+            OAuth2Exception ex = new OAuth2Exception(
+                    OAuth2ErrorCode.PROVIDER_ERROR, "invalid_grant",
+                    "invalid_grant", "The authorization code has expired",
+                    "https://example.com/errors/expired");
+            assertThat(ex.errorCode()).isEqualTo(OAuth2ErrorCode.PROVIDER_ERROR);
+            assertThat(ex.serverError()).isEqualTo("invalid_grant");
+            assertThat(ex.serverErrorDescription()).isEqualTo("The authorization code has expired");
+            assertThat(ex.serverErrorUri()).isEqualTo("https://example.com/errors/expired");
+        }
+
+        @Test
+        @DisplayName("使用null原因构造")
+        void testNullCauseConstructor() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.NETWORK_ERROR, (Throwable) null);
+            assertThat(ex.getCause()).isNull();
+            assertThat(ex.details()).isNull();
         }
     }
 
@@ -101,6 +130,28 @@ class OAuth2ExceptionTest {
             assertThat(ex.errorCode()).isEqualTo(OAuth2ErrorCode.INVALID_CONFIG);
             assertThat(ex.getMessage()).contains("Missing client ID");
         }
+
+        @Test
+        @DisplayName("fromServerError with all fields")
+        void testFromServerError() {
+            OAuth2Exception ex = OAuth2Exception.fromServerError(
+                    "invalid_grant", "Code expired", "https://example.com/err");
+            assertThat(ex.errorCode()).isEqualTo(OAuth2ErrorCode.PROVIDER_ERROR);
+            assertThat(ex.serverError()).isEqualTo("invalid_grant");
+            assertThat(ex.serverErrorDescription()).isEqualTo("Code expired");
+            assertThat(ex.serverErrorUri()).isEqualTo("https://example.com/err");
+            assertThat(ex.details()).isEqualTo("Code expired");
+        }
+
+        @Test
+        @DisplayName("fromServerError with null description uses error as message")
+        void testFromServerErrorNullDescription() {
+            OAuth2Exception ex = OAuth2Exception.fromServerError("invalid_grant", null, null);
+            assertThat(ex.serverError()).isEqualTo("invalid_grant");
+            assertThat(ex.serverErrorDescription()).isNull();
+            assertThat(ex.serverErrorUri()).isNull();
+            assertThat(ex.details()).isEqualTo("invalid_grant");
+        }
     }
 
     @Nested
@@ -127,10 +178,25 @@ class OAuth2ExceptionTest {
     class HierarchyTests {
 
         @Test
+        @DisplayName("继承OpenException")
+        void testExtendsOpenException() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
         @DisplayName("继承RuntimeException")
         void testExtendsRuntimeException() {
             OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
             assertThat(ex).isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        @DisplayName("可以被捕获为OpenException")
+        void testCatchAsOpenException() {
+            assertThatThrownBy(() -> {
+                throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
+            }).isInstanceOf(OpenException.class);
         }
 
         @Test
@@ -140,6 +206,20 @@ class OAuth2ExceptionTest {
                 throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
             }).isInstanceOf(RuntimeException.class);
         }
+
+        @Test
+        @DisplayName("OpenException组件名为OAuth2")
+        void testOpenExceptionComponent() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
+            assertThat(ex.getComponent()).isEqualTo("OAuth2");
+        }
+
+        @Test
+        @DisplayName("OpenException错误码为字符串形式的int code")
+        void testOpenExceptionErrorCode() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
+            assertThat(ex.getErrorCode()).isEqualTo("7001");
+        }
     }
 
     @Nested
@@ -147,11 +227,61 @@ class OAuth2ExceptionTest {
     class MessageFormatTests {
 
         @Test
-        @DisplayName("消息包含错误码")
-        void testMessageContainsErrorCode() {
-            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED, "Token has expired");
+        @DisplayName("消息包含组件名和错误码")
+        void testMessageContainsComponentAndCode() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
             String message = ex.getMessage();
-            assertThat(message).containsAnyOf("7001", "TOKEN_EXPIRED", "Token has expired");
+            assertThat(message).contains("[OAuth2]");
+            assertThat(message).contains("(7001)");
+            assertThat(message).contains("Token has expired");
+        }
+
+        @Test
+        @DisplayName("消息包含详情")
+        void testMessageContainsDetails() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED, "Custom detail");
+            String message = ex.getMessage();
+            assertThat(message).contains("Custom detail");
+        }
+
+        @Test
+        @DisplayName("消息包含服务器错误详情")
+        void testMessageContainsServerErrorDetails() {
+            OAuth2Exception ex = OAuth2Exception.fromServerError(
+                    "invalid_grant", "Code expired", "https://example.com/err");
+            String message = ex.getMessage();
+            assertThat(message).contains("[server_error=invalid_grant]");
+            assertThat(message).contains("[server_error_description=Code expired]");
+            assertThat(message).contains("[server_error_uri=https://example.com/err]");
+        }
+
+        @Test
+        @DisplayName("无服务器错误时消息不包含服务器错误标记")
+        void testMessageWithoutServerError() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
+            String message = ex.getMessage();
+            assertThat(message).doesNotContain("[server_error=");
+        }
+
+        @Test
+        @DisplayName("getRawMessage返回原始消息")
+        void testGetRawMessage() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED, "detail");
+            String rawMessage = ex.getRawMessage();
+            assertThat(rawMessage).isEqualTo("Token has expired: detail");
+            assertThat(rawMessage).doesNotContain("[OAuth2]");
+        }
+    }
+
+    @Nested
+    @DisplayName("序列化测试")
+    class SerializationTests {
+
+        @Test
+        @DisplayName("实现Serializable")
+        void testIsSerializable() {
+            OAuth2Exception ex = new OAuth2Exception(OAuth2ErrorCode.TOKEN_EXPIRED);
+            assertThat(ex).isInstanceOf(java.io.Serializable.class);
         }
     }
 }

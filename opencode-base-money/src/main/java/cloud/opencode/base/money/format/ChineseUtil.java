@@ -85,6 +85,20 @@ public final class ChineseUtil {
      */
     private static final String CN_NEGATIVE = "负";
 
+    /**
+     * Simplified Chinese numbers | 简体中文数字
+     */
+    private static final String[] CN_SIMPLIFIED_NUMBERS = {
+        "〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"
+    };
+
+    /**
+     * Simplified Chinese units | 简体中文单位
+     */
+    private static final String[] CN_SIMPLIFIED_UNITS = {
+        "", "十", "百", "千", "万", "十", "百", "千", "亿"
+    };
+
     private ChineseUtil() {
         // Utility class
     }
@@ -166,6 +180,11 @@ public final class ChineseUtil {
         String numStr = String.valueOf(num);
         int len = numStr.length();
 
+        if (len > CN_UPPER_UNITS.length) {
+            throw new IllegalArgumentException(
+                    "Number has too many digits (" + len + ") for Chinese conversion, max supported: " + CN_UPPER_UNITS.length);
+        }
+
         boolean lastZero = false;
 
         for (int i = 0; i < len; i++) {
@@ -202,10 +221,23 @@ public final class ChineseUtil {
      * 检查字符串是否以指定单位结尾
      */
     private static boolean endsWithUnit(StringBuilder sb, String... units) {
-        String str = sb.toString();
+        int len = sb.length();
+        if (len == 0) {
+            return false;
+        }
         for (String unit : units) {
-            if (str.endsWith(unit)) {
-                return true;
+            int uLen = unit.length();
+            if (uLen <= len) {
+                boolean match = true;
+                for (int i = 0; i < uLen; i++) {
+                    if (sb.charAt(len - uLen + i) != unit.charAt(i)) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    return true;
+                }
             }
         }
         return false;
@@ -242,15 +274,17 @@ public final class ChineseUtil {
             return "";
         }
 
-        String[] simplifiedNumbers = {"〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"};
-        String[] simplifiedUnits = {"", "十", "百", "千", "万", "十", "百", "千", "亿"};
-
         StringBuilder sb = new StringBuilder();
         String numStr = amount.toPlainString();
 
         // Handle integer part
         int dotIndex = numStr.indexOf('.');
         String intPart = dotIndex == -1 ? numStr : numStr.substring(0, dotIndex);
+        String digits = intPart.startsWith("-") ? intPart.substring(1) : intPart;
+        if (digits.length() > CN_SIMPLIFIED_UNITS.length) {
+            throw new IllegalArgumentException(
+                    "Number has too many digits (" + digits.length() + ") for Chinese simplified conversion, max supported: " + CN_SIMPLIFIED_UNITS.length);
+        }
 
         for (int i = 0; i < intPart.length(); i++) {
             char c = intPart.charAt(i);
@@ -260,11 +294,11 @@ public final class ChineseUtil {
                 int digit = c - '0';
                 int pos = intPart.length() - i - 1;
                 if (digit != 0) {
-                    sb.append(simplifiedNumbers[digit]);
-                    if (pos < simplifiedUnits.length) {
-                        sb.append(simplifiedUnits[pos]);
+                    sb.append(CN_SIMPLIFIED_NUMBERS[digit]);
+                    if (pos < CN_SIMPLIFIED_UNITS.length) {
+                        sb.append(CN_SIMPLIFIED_UNITS[pos]);
                     }
-                } else if (sb.length() > 0 && !sb.toString().endsWith("〇")) {
+                } else if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '〇') {
                     sb.append("〇");
                 }
             }
@@ -273,9 +307,8 @@ public final class ChineseUtil {
         // Handle decimal part
         if (dotIndex != -1) {
             sb.append("点");
-            String decPart = numStr.substring(dotIndex + 1);
-            for (char c : decPart.toCharArray()) {
-                sb.append(simplifiedNumbers[c - '0']);
+            for (int i = dotIndex + 1; i < numStr.length(); i++) {
+                sb.append(CN_SIMPLIFIED_NUMBERS[numStr.charAt(i) - '0']);
             }
         }
 

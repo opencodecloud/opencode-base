@@ -52,6 +52,7 @@ final class DefaultReactiveJsonWriter implements ReactiveJsonWriter {
     private static final byte[] ARRAY_END = "]".getBytes(StandardCharsets.UTF_8);
     private static final byte[] COMMA = ",".getBytes(StandardCharsets.UTF_8);
     private static final byte[] NEWLINE = "\n".getBytes(StandardCharsets.UTF_8);
+    private static final int BATCH_SIZE = 64;
 
     private final OutputStream output;
     private final boolean prettyPrint;
@@ -118,7 +119,7 @@ final class DefaultReactiveJsonWriter implements ReactiveJsonWriter {
             @Override
             public void onSubscribe(Flow.Subscription subscription) {
                 this.subscription = subscription;
-                subscription.request(Long.MAX_VALUE);
+                subscription.request(BATCH_SIZE);
             }
 
             @Override
@@ -132,7 +133,8 @@ final class DefaultReactiveJsonWriter implements ReactiveJsonWriter {
                         bytesWritten.addAndGet(bytes.length + NEWLINE.length);
                         elementsWritten.incrementAndGet();
                     }
-                } catch (IOException e) {
+                    subscription.request(1);
+                } catch (Exception e) {
                     subscription.cancel();
                     future.completeExceptionally(e);
                 }
@@ -180,7 +182,7 @@ final class DefaultReactiveJsonWriter implements ReactiveJsonWriter {
                             bytesWritten.addAndGet(NEWLINE.length);
                         }
                     }
-                    subscription.request(Long.MAX_VALUE);
+                    subscription.request(BATCH_SIZE);
                 } catch (IOException e) {
                     future.completeExceptionally(e);
                 }
@@ -205,7 +207,8 @@ final class DefaultReactiveJsonWriter implements ReactiveJsonWriter {
                         bytesWritten.addAndGet(bytes.length);
                         elementsWritten.incrementAndGet();
                     }
-                } catch (IOException e) {
+                    subscription.request(1);
+                } catch (Exception e) {
                     subscription.cancel();
                     future.completeExceptionally(e);
                 }
@@ -213,6 +216,14 @@ final class DefaultReactiveJsonWriter implements ReactiveJsonWriter {
 
             @Override
             public void onError(Throwable throwable) {
+                try {
+                    synchronized (output) {
+                        output.write(']');
+                        output.flush();
+                    }
+                } catch (IOException ignored) {
+                    // Best effort — output may already be broken
+                }
                 future.completeExceptionally(throwable);
             }
 

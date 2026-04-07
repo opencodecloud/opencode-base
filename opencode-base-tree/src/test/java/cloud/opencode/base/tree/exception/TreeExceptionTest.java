@@ -1,5 +1,6 @@
 package cloud.opencode.base.tree.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -17,6 +18,26 @@ import static org.assertj.core.api.Assertions.*;
 class TreeExceptionTest {
 
     @Nested
+    @DisplayName("Hierarchy Tests")
+    class HierarchyTests {
+
+        @Test
+        @DisplayName("TreeException should extend OpenException")
+        void treeExceptionShouldExtendOpenException() {
+            TreeException ex = new TreeException("test");
+            assertThat(ex).isInstanceOf(OpenException.class);
+            assertThat(ex).isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        @DisplayName("TreeException should have component 'Tree'")
+        void treeExceptionShouldHaveComponentTree() {
+            TreeException ex = new TreeException("test");
+            assertThat(ex.getComponent()).isEqualTo("Tree");
+        }
+    }
+
+    @Nested
     @DisplayName("Constructor Tests")
     class ConstructorTests {
 
@@ -25,7 +46,7 @@ class TreeExceptionTest {
         void constructorWithMessageShouldSetMessageAndDefaultCode() {
             TreeException ex = new TreeException("Test error");
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.OPERATION_FAILED.getCode());
         }
 
@@ -34,7 +55,7 @@ class TreeExceptionTest {
         void constructorWithCodeAndMessageShouldSetBoth() {
             TreeException ex = new TreeException("CUSTOM_CODE", "Custom message");
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom message");
             assertThat(ex.getCode()).isEqualTo("CUSTOM_CODE");
         }
 
@@ -44,7 +65,7 @@ class TreeExceptionTest {
             TreeException ex = new TreeException(TreeErrorCode.CYCLE_DETECTED);
 
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.CYCLE_DETECTED.getCode());
-            assertThat(ex.getMessage()).isEqualTo(TreeErrorCode.CYCLE_DETECTED.getMessage());
+            assertThat(ex.getRawMessage()).isEqualTo(TreeErrorCode.CYCLE_DETECTED.getMessage());
         }
 
         @Test
@@ -53,7 +74,7 @@ class TreeExceptionTest {
             TreeException ex = new TreeException(TreeErrorCode.BUILD_FAILED, "Custom build error");
 
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.BUILD_FAILED.getCode());
-            assertThat(ex.getMessage()).isEqualTo("Custom build error");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom build error");
         }
 
         @Test
@@ -62,7 +83,7 @@ class TreeExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             TreeException ex = new TreeException("Error occurred", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Error occurred");
+            assertThat(ex.getRawMessage()).isEqualTo("Error occurred");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
 
@@ -78,6 +99,29 @@ class TreeExceptionTest {
     }
 
     @Nested
+    @DisplayName("getMessage Format Tests")
+    class GetMessageFormatTests {
+
+        @Test
+        @DisplayName("getMessage should include component and error code prefix")
+        void getMessageShouldIncludeComponentAndErrorCodePrefix() {
+            TreeException ex = new TreeException(TreeErrorCode.BUILD_FAILED, "something broke");
+
+            assertThat(ex.getMessage()).contains("[Tree]");
+            assertThat(ex.getMessage()).contains("(TREE-1001)");
+            assertThat(ex.getMessage()).contains("something broke");
+        }
+
+        @Test
+        @DisplayName("getCode should be consistent with getErrorCode")
+        void getCodeShouldBeConsistentWithGetErrorCode() {
+            TreeException ex = new TreeException(TreeErrorCode.CYCLE_DETECTED);
+
+            assertThat(ex.getCode()).isEqualTo(ex.getErrorCode());
+        }
+    }
+
+    @Nested
     @DisplayName("Factory Method Tests")
     class FactoryMethodTests {
 
@@ -87,7 +131,7 @@ class TreeExceptionTest {
             TreeException ex = TreeException.buildFailed("Build error message");
 
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.BUILD_FAILED.getCode());
-            assertThat(ex.getMessage()).isEqualTo("Build error message");
+            assertThat(ex.getRawMessage()).isEqualTo("Build error message");
         }
 
         @Test
@@ -104,7 +148,7 @@ class TreeExceptionTest {
             TreeException ex = TreeException.duplicateId(123L);
 
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.DUPLICATE_ID.getCode());
-            assertThat(ex.getMessage()).contains("123");
+            assertThat(ex.getRawMessage()).contains("123");
         }
 
         @Test
@@ -113,7 +157,7 @@ class TreeExceptionTest {
             TreeException ex = TreeException.parentNotFound(456L);
 
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.PARENT_NOT_FOUND.getCode());
-            assertThat(ex.getMessage()).contains("456");
+            assertThat(ex.getRawMessage()).contains("456");
         }
 
         @Test
@@ -122,7 +166,7 @@ class TreeExceptionTest {
             TreeException ex = TreeException.nodeNotFound(789L);
 
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.NODE_NOT_FOUND.getCode());
-            assertThat(ex.getMessage()).contains("789");
+            assertThat(ex.getRawMessage()).contains("789");
         }
 
         @Test
@@ -131,7 +175,7 @@ class TreeExceptionTest {
             TreeException ex = TreeException.maxDepthExceeded(100);
 
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.MAX_DEPTH_EXCEEDED.getCode());
-            assertThat(ex.getMessage()).contains("100");
+            assertThat(ex.getRawMessage()).contains("100");
         }
     }
 }

@@ -18,7 +18,7 @@
  *
  * @author Leon Soo
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-graph V1.0.0
+ * @since JDK 25, opencode-base-graph V1.0.3
  */
 module cloud.opencode.base.graph {
     // Required modules

@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.geo.Coordinate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,8 +28,9 @@ class GeoExceptionTest {
         void testMessageOnlyConstructor() {
             GeoException ex = new GeoException("test error");
 
-            assertThat(ex.getMessage()).isEqualTo("test error");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.UNKNOWN);
+            assertThat(ex.getMessage()).contains("test error");
+            assertThat(ex.getRawMessage()).isEqualTo("test error");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.UNKNOWN);
             assertThat(ex.getCoordinate()).isNull();
             assertThat(ex.getCause()).isNull();
         }
@@ -38,8 +40,9 @@ class GeoExceptionTest {
         void testMessageAndErrorCodeConstructor() {
             GeoException ex = new GeoException("test error", GeoErrorCode.INVALID_COORDINATE);
 
-            assertThat(ex.getMessage()).isEqualTo("test error");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
+            assertThat(ex.getMessage()).contains("test error");
+            assertThat(ex.getRawMessage()).isEqualTo("test error");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
             assertThat(ex.getCoordinate()).isNull();
         }
 
@@ -49,9 +52,10 @@ class GeoExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             GeoException ex = new GeoException("test error", cause, GeoErrorCode.TRANSFORM_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("test error");
+            assertThat(ex.getMessage()).contains("test error");
+            assertThat(ex.getRawMessage()).isEqualTo("test error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.TRANSFORM_FAILED);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.TRANSFORM_FAILED);
         }
 
         @Test
@@ -61,9 +65,10 @@ class GeoExceptionTest {
             Coordinate coord = Coordinate.wgs84(116.4074, 39.9042);
             GeoException ex = new GeoException("test error", cause, GeoErrorCode.COORDINATE_OUT_OF_RANGE, coord);
 
-            assertThat(ex.getMessage()).isEqualTo("test error");
+            assertThat(ex.getMessage()).contains("test error");
+            assertThat(ex.getRawMessage()).isEqualTo("test error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
             assertThat(ex.getCoordinate()).isEqualTo(coord);
         }
 
@@ -72,20 +77,20 @@ class GeoExceptionTest {
         void testNullErrorCodeUsesUnknown() {
             GeoException ex = new GeoException("test", null, null, null);
 
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.UNKNOWN);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.UNKNOWN);
         }
     }
 
     @Nested
-    @DisplayName("getErrorCode()测试")
-    class GetErrorCodeTests {
+    @DisplayName("getGeoErrorCode()测试")
+    class GetGeoErrorCodeTests {
 
         @Test
         @DisplayName("返回正确的错误码")
-        void testGetErrorCode() {
+        void testGetGeoErrorCode() {
             GeoException ex = new GeoException("test", GeoErrorCode.FENCE_NOT_FOUND);
 
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.FENCE_NOT_FOUND);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.FENCE_NOT_FOUND);
         }
     }
 
@@ -112,6 +117,51 @@ class GeoExceptionTest {
     }
 
     @Nested
+    @DisplayName("OpenException集成测试")
+    class OpenExceptionIntegrationTests {
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            GeoException ex = new GeoException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("组件名为Geo")
+        void testComponentIsGeo() {
+            GeoException ex = new GeoException("test");
+
+            assertThat(ex.getComponent()).isEqualTo("Geo");
+        }
+
+        @Test
+        @DisplayName("getErrorCode返回数字码字符串")
+        void testGetErrorCodeReturnsStringCode() {
+            GeoException ex = new GeoException("test", GeoErrorCode.INVALID_COORDINATE);
+
+            assertThat(ex.getErrorCode()).isEqualTo(String.valueOf(GeoErrorCode.INVALID_COORDINATE.getCode()));
+        }
+
+        @Test
+        @DisplayName("getMessage格式化为[Geo] (code) message")
+        void testGetMessageFormat() {
+            GeoException ex = new GeoException("test error", GeoErrorCode.INVALID_COORDINATE);
+
+            assertThat(ex.getMessage()).isEqualTo("[Geo] (1001) test error");
+        }
+
+        @Test
+        @DisplayName("getRawMessage返回原始消息")
+        void testGetRawMessage() {
+            GeoException ex = new GeoException("raw message", GeoErrorCode.UNKNOWN);
+
+            assertThat(ex.getRawMessage()).isEqualTo("raw message");
+        }
+    }
+
+    @Nested
     @DisplayName("继承RuntimeException测试")
     class InheritanceTests {
 
@@ -129,7 +179,7 @@ class GeoExceptionTest {
             assertThatThrownBy(() -> {
                 throw new GeoException("test error");
             }).isInstanceOf(GeoException.class)
-              .hasMessage("test error");
+              .isInstanceOf(OpenException.class);
         }
     }
 }

@@ -27,7 +27,21 @@ module cloud.opencode.base.image {
     exports cloud.opencode.base.image.thumbnail;
     exports cloud.opencode.base.image.validation;
     exports cloud.opencode.base.image.security;
+    exports cloud.opencode.base.image.exif;
+    exports cloud.opencode.base.image.compare;
+    exports cloud.opencode.base.image.filter;
+    exports cloud.opencode.base.image.responsive;
+    exports cloud.opencode.base.image.threshold;
+    exports cloud.opencode.base.image.color;
+    exports cloud.opencode.base.image.analysis;
+    exports cloud.opencode.base.image.morphology;
+    exports cloud.opencode.base.image.histogram;
+    exports cloud.opencode.base.image.edge;
+    exports cloud.opencode.base.image.draw;
+    exports cloud.opencode.base.image.transform;
+    exports cloud.opencode.base.image.feature;
 
     // Internal packages - not exported
     // cloud.opencode.base.image.internal
+    // cloud.opencode.base.image.kernel
 }

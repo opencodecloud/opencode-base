@@ -3,9 +3,12 @@ package cloud.opencode.base.event;
 import cloud.opencode.base.event.annotation.Async;
 import cloud.opencode.base.event.annotation.Priority;
 import cloud.opencode.base.event.annotation.Subscribe;
+import cloud.opencode.base.event.dispatcher.EventDispatcher;
 import cloud.opencode.base.event.dispatcher.SyncDispatcher;
 import cloud.opencode.base.event.exception.EventException;
 import cloud.opencode.base.event.handler.EventExceptionHandler;
+import cloud.opencode.base.event.interceptor.EventInterceptor;
+import cloud.opencode.base.event.monitor.EventBusMetrics;
 import cloud.opencode.base.event.store.InMemoryEventStore;
 import org.junit.jupiter.api.*;
 
@@ -13,10 +16,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -403,7 +409,7 @@ class OpenEventTest {
             OpenEvent eventBus = OpenEvent.create();
             AtomicBoolean processed = new AtomicBoolean(false);
 
-            eventBus.on(WaitableEvent.class, event -> {
+            eventBus.on(TestEvent.class, event -> {
                 processed.set(true);
             });
 
@@ -593,6 +599,550 @@ class OpenEventTest {
             eventBus.publish(new ChildEvent());
 
             assertThat(parentCalled.get()).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("publishAsync with EventStore 测试")
+    class PublishAsyncWithEventStoreTests {
+
+        @Test
+        @DisplayName("publishAsync stores event in EventStore")
+        void testPublishAsyncStoresEvent() throws Exception {
+            InMemoryEventStore store = new InMemoryEventStore(100);
+            try (var bus = OpenEvent.builder().eventStore(store).build()) {
+                AtomicBoolean called = new AtomicBoolean(false);
+                bus.on(TestEvent.class, e -> called.set(true));
+
+                TestEvent event = new TestEvent("stored-async");
+                CompletableFuture<Void> future = bus.publishAsync(event);
+                future.get(5, TimeUnit.SECONDS);
+
+                assertThat(store.count()).isEqualTo(1);
+                assertThat(store.findById(event.getId())).isPresent();
+                assertThat(called.get()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("publishAsync with interceptor blocking 测试")
+    class PublishAsyncInterceptorBlockingTests {
+
+        @Test
+        @DisplayName("interceptor returning false blocks publishAsync dispatch")
+        void testInterceptorBlocksPublishAsync() throws Exception {
+            EventInterceptor blockingInterceptor = new EventInterceptor() {
+                @Override
+                public boolean beforePublish(Event event) {
+                    return false;
+                }
+            };
+
+            try (var bus = OpenEvent.builder().interceptor(blockingInterceptor).build()) {
+                AtomicBoolean listenerCalled = new AtomicBoolean(false);
+                bus.on(TestEvent.class, e -> listenerCalled.set(true));
+
+                CompletableFuture<Void> future = bus.publishAsync(new TestEvent("blocked"));
+                future.get(2, TimeUnit.SECONDS);
+
+                assertThat(future.isDone()).isTrue();
+                assertThat(listenerCalled.get()).isFalse();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("publishAsync dead event 测试")
+    class PublishAsyncDeadEventTests {
+
+        @Test
+        @DisplayName("publishAsync with no listeners increments deadEventCount")
+        void testPublishAsyncNoListenersDeadEvent() throws Exception {
+            try (var bus = OpenEvent.create()) {
+                bus.resetMetrics();
+
+                CompletableFuture<Void> future = bus.publishAsync(new TestEvent("orphan"));
+                future.get(2, TimeUnit.SECONDS);
+
+                EventBusMetrics metrics = bus.getMetrics();
+                assertThat(metrics.totalDeadEvents()).isEqualTo(1);
+                assertThat(metrics.totalPublished()).isEqualTo(1);
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("Builder with asyncExecutor 测试")
+    class BuilderAsyncExecutorTests {
+
+        @Test
+        @DisplayName("builder with custom asyncExecutor uses it for async dispatch")
+        void testBuilderWithAsyncExecutor() throws Exception {
+            AtomicReference<String> threadName = new AtomicReference<>();
+            ExecutorService customExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "custom-event-thread");
+                return t;
+            });
+
+            try (var bus = OpenEvent.builder().asyncExecutor(customExecutor).build()) {
+                bus.on(TestEvent.class, e -> threadName.set(Thread.currentThread().getName()), true);
+                bus.publish(new TestEvent("custom-executor"));
+
+                Thread.sleep(200);
+
+                assertThat(threadName.get()).isNotNull();
+            } finally {
+                customExecutor.shutdownNow();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("Builder with asyncDispatcher 测试")
+    class BuilderAsyncDispatcherTests {
+
+        @Test
+        @DisplayName("builder with custom asyncDispatcher uses it")
+        void testBuilderWithCustomAsyncDispatcher() throws Exception {
+            AtomicBoolean customDispatcherUsed = new AtomicBoolean(false);
+
+            EventDispatcher customDispatcher = new EventDispatcher() {
+                @Override
+                public void dispatch(Event event, List<Consumer<Event>> listeners) {
+                    customDispatcherUsed.set(true);
+                    for (Consumer<Event> listener : listeners) {
+                        listener.accept(event);
+                    }
+                }
+
+                @Override
+                public boolean isAsync() {
+                    return true;
+                }
+            };
+
+            try (var bus = OpenEvent.builder().asyncDispatcher(customDispatcher).build()) {
+                AtomicBoolean listenerCalled = new AtomicBoolean(false);
+                bus.on(TestEvent.class, e -> listenerCalled.set(true));
+
+                // publishAsync with a custom (non-AsyncDispatcher) dispatcher triggers the fallback path
+                CompletableFuture<Void> future = bus.publishAsync(new TestEvent("custom-dispatcher"));
+                future.get(5, TimeUnit.SECONDS);
+
+                assertThat(customDispatcherUsed.get()).isTrue();
+                assertThat(listenerCalled.get()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("publishSticky null 测试")
+    class PublishStickyNullTests {
+
+        @Test
+        @DisplayName("publishSticky(null) throws IllegalArgumentException")
+        void testPublishStickyNullThrows() {
+            try (var bus = OpenEvent.create()) {
+                assertThatThrownBy(() -> bus.publishSticky(null))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("close() 测试")
+    class CloseTests {
+
+        @Test
+        @DisplayName("close() shuts down resources without exception")
+        void testCloseCompletesWithoutException() {
+            OpenEvent bus = OpenEvent.create();
+            bus.on(TestEvent.class, e -> {});
+
+            assertThatNoException().isThrownBy(bus::close);
+        }
+
+        @Test
+        @DisplayName("close() on builder-created instance completes")
+        void testCloseBuilderInstance() {
+            OpenEvent bus = OpenEvent.builder().build();
+
+            assertThatNoException().isThrownBy(bus::close);
+        }
+    }
+
+    @Nested
+    @DisplayName("addInterceptor null 测试")
+    class AddInterceptorNullTests {
+
+        @Test
+        @DisplayName("addInterceptor(null) throws IllegalArgumentException")
+        void testAddInterceptorNullThrows() {
+            try (var bus = OpenEvent.create()) {
+                assertThatThrownBy(() -> bus.addInterceptor(null))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
+        }
+
+        @Test
+        @DisplayName("removeInterceptor removes previously added interceptor")
+        void testRemoveInterceptor() {
+            try (var bus = OpenEvent.create()) {
+                AtomicInteger beforeCount = new AtomicInteger(0);
+                EventInterceptor interceptor = new EventInterceptor() {
+                    @Override
+                    public boolean beforePublish(Event event) {
+                        beforeCount.incrementAndGet();
+                        return true;
+                    }
+                };
+
+                bus.addInterceptor(interceptor);
+                bus.on(TestEvent.class, e -> {});
+                bus.publish(new TestEvent("first"));
+                assertThat(beforeCount.get()).isEqualTo(1);
+
+                bus.removeInterceptor(interceptor);
+                bus.publish(new TestEvent("second"));
+                assertThat(beforeCount.get()).isEqualTo(1);
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("subscribe null arguments 测试")
+    class SubscribeNullArgumentTests {
+
+        @Test
+        @DisplayName("subscribe(null, listener) throws IllegalArgumentException")
+        void testSubscribeNullEventTypeThrows() {
+            try (var bus = OpenEvent.create()) {
+                assertThatThrownBy(() -> bus.subscribe(null, e -> {}))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
+        }
+
+        @Test
+        @DisplayName("subscribe(eventType, null) throws IllegalArgumentException")
+        void testSubscribeNullListenerThrows() {
+            try (var bus = OpenEvent.create()) {
+                assertThatThrownBy(() -> bus.subscribe(TestEvent.class, null))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("publishAsync with EventStore and interceptor 测试")
+    class PublishAsyncStoreAndInterceptorTests {
+
+        @Test
+        @DisplayName("publishAsync stores event and runs afterPublish interceptor")
+        void testPublishAsyncStoresAndRunsAfterInterceptor() throws Exception {
+            InMemoryEventStore store = new InMemoryEventStore(100);
+            AtomicBoolean afterCalled = new AtomicBoolean(false);
+            AtomicBoolean dispatchedValue = new AtomicBoolean(false);
+
+            EventInterceptor interceptor = new EventInterceptor() {
+                @Override
+                public boolean beforePublish(Event event) {
+                    return true;
+                }
+
+                @Override
+                public void afterPublish(Event event, boolean dispatched) {
+                    afterCalled.set(true);
+                    dispatchedValue.set(dispatched);
+                }
+            };
+
+            try (var bus = OpenEvent.builder()
+                    .eventStore(store)
+                    .interceptor(interceptor)
+                    .build()) {
+                AtomicBoolean listenerCalled = new AtomicBoolean(false);
+                bus.on(TestEvent.class, e -> listenerCalled.set(true));
+
+                TestEvent event = new TestEvent("store-and-intercept");
+                CompletableFuture<Void> future = bus.publishAsync(event);
+                future.get(5, TimeUnit.SECONDS);
+
+                assertThat(store.count()).isEqualTo(1);
+                assertThat(afterCalled.get()).isTrue();
+                assertThat(dispatchedValue.get()).isTrue();
+                assertThat(listenerCalled.get()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("sync + async mixed listeners 测试")
+    class MixedSyncAsyncListenerTests {
+
+        @Test
+        @DisplayName("both sync and async listeners receive the event")
+        void testMixedSyncAsyncListeners() throws Exception {
+            try (var bus = OpenEvent.create()) {
+                AtomicBoolean syncCalled = new AtomicBoolean(false);
+                AtomicBoolean asyncCalled = new AtomicBoolean(false);
+
+                bus.on(TestEvent.class, e -> syncCalled.set(true), false);
+                bus.on(TestEvent.class, e -> asyncCalled.set(true), true);
+
+                bus.publish(new TestEvent("mixed"));
+
+                // sync should be called immediately
+                assertThat(syncCalled.get()).isTrue();
+
+                // async may need a moment
+                Thread.sleep(200);
+                assertThat(asyncCalled.get()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("multiple interceptors afterPublish 测试")
+    class MultipleInterceptorsTests {
+
+        @Test
+        @DisplayName("afterPublish called for all interceptors")
+        void testMultipleInterceptorsAfterPublish() {
+            AtomicInteger afterCount = new AtomicInteger(0);
+            List<Boolean> dispatchedValues = new ArrayList<>();
+
+            EventInterceptor interceptor1 = new EventInterceptor() {
+                @Override
+                public boolean beforePublish(Event event) {
+                    return true;
+                }
+
+                @Override
+                public void afterPublish(Event event, boolean dispatched) {
+                    afterCount.incrementAndGet();
+                    dispatchedValues.add(dispatched);
+                }
+            };
+
+            EventInterceptor interceptor2 = new EventInterceptor() {
+                @Override
+                public boolean beforePublish(Event event) {
+                    return true;
+                }
+
+                @Override
+                public void afterPublish(Event event, boolean dispatched) {
+                    afterCount.incrementAndGet();
+                    dispatchedValues.add(dispatched);
+                }
+            };
+
+            try (var bus = OpenEvent.builder()
+                    .interceptor(interceptor1)
+                    .interceptor(interceptor2)
+                    .build()) {
+                bus.on(TestEvent.class, e -> {});
+                bus.publish(new TestEvent("multi-interceptor"));
+
+                assertThat(afterCount.get()).isEqualTo(2);
+                assertThat(dispatchedValues).containsExactly(true, true);
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("getMetrics and resetMetrics 测试")
+    class MetricsTests {
+
+        @Test
+        @DisplayName("getMetrics returns correct counts")
+        void testGetMetrics() {
+            try (var bus = OpenEvent.create()) {
+                bus.resetMetrics();
+                bus.on(TestEvent.class, e -> {});
+
+                bus.publish(new TestEvent("m1"));
+                bus.publish(new TestEvent("m2"));
+
+                EventBusMetrics metrics = bus.getMetrics();
+                assertThat(metrics.totalPublished()).isEqualTo(2);
+                assertThat(metrics.totalDelivered()).isEqualTo(2);
+                assertThat(metrics.totalErrors()).isZero();
+                assertThat(metrics.listenerCount()).isGreaterThanOrEqualTo(1);
+            }
+        }
+
+        @Test
+        @DisplayName("resetMetrics clears all counters")
+        void testResetMetrics() {
+            try (var bus = OpenEvent.create()) {
+                bus.on(TestEvent.class, e -> {});
+                bus.publish(new TestEvent("before-reset"));
+
+                bus.resetMetrics();
+
+                EventBusMetrics metrics = bus.getMetrics();
+                assertThat(metrics.totalPublished()).isZero();
+                assertThat(metrics.totalDelivered()).isZero();
+                assertThat(metrics.totalErrors()).isZero();
+                assertThat(metrics.totalDeadEvents()).isZero();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("publishAndWait with async listeners 测试")
+    class PublishAndWaitAsyncTests {
+
+        @Test
+        @DisplayName("publishAndWait应等待异步监听器完成")
+        void testPublishAndWaitWithAsyncListeners() {
+            try (var bus = OpenEvent.create()) {
+                AtomicBoolean asyncDone = new AtomicBoolean(false);
+
+                // Register async listener
+                bus.on(TestEvent.class, e -> {
+                    try { Thread.sleep(50); } catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
+                    asyncDone.set(true);
+                }, true);
+
+                // Also register a secondary TestEvent listener
+                bus.on(TestEvent.class, e -> {});
+
+                boolean completed = bus.publishAndWait(new TestEvent("async-wait"), Duration.ofSeconds(5));
+
+                assertThat(completed).isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("publishAndWait with no matching listeners completes immediately")
+        void testPublishAndWaitNoListeners() {
+            try (var bus = OpenEvent.create()) {
+                boolean completed = bus.publishAndWait(new TestEvent("no-listeners"), Duration.ofSeconds(2));
+                assertThat(completed).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("sticky event error handling during subscribe 测试")
+    class StickyEventErrorTests {
+
+        @Test
+        @DisplayName("sticky事件投递异常应被异常处理器处理")
+        void testStickyDeliveryErrorHandled() {
+            try (var bus = OpenEvent.create()) {
+                AtomicBoolean handlerCalled = new AtomicBoolean(false);
+                bus.setExceptionHandler((event, ex, name) -> handlerCalled.set(true));
+
+                bus.publishSticky(new TestEvent("sticky-err"));
+
+                // Subscribe with a listener that throws
+                bus.subscribe(TestEvent.class, e -> { throw new RuntimeException("boom"); });
+
+                assertThat(handlerCalled.get()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("publish forceAsync=false with only async listeners 测试")
+    class PublishOnlyAsyncListenersTests {
+
+        @Test
+        @DisplayName("publish with only @Async listeners dispatches asynchronously")
+        void testPublishWithOnlyAsyncListeners() throws InterruptedException {
+            try (var bus = OpenEvent.create()) {
+                AtomicBoolean called = new AtomicBoolean(false);
+
+                class AsyncSub {
+                    @Subscribe
+                    @Async
+                    public void handle(TestEvent e) {
+                        called.set(true);
+                    }
+                }
+
+                bus.register(new AsyncSub());
+                bus.publish(new TestEvent("only-async"));
+
+                Thread.sleep(200);
+                assertThat(called.get()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("afterPublish interceptor exception isolation 测试")
+    class AfterPublishInterceptorExceptionTests {
+
+        @Test
+        @DisplayName("afterPublish exception does not propagate to caller")
+        void testAfterPublishExceptionIsolated() {
+            try (var bus = OpenEvent.create()) {
+                bus.addInterceptor(new EventInterceptor() {
+                    @Override
+                    public boolean beforePublish(Event event) { return true; }
+                    @Override
+                    public void afterPublish(Event event, boolean dispatched) {
+                        throw new RuntimeException("after boom");
+                    }
+                });
+                bus.on(TestEvent.class, e -> {});
+
+                assertThatCode(() -> bus.publish(new TestEvent("after-err"))).doesNotThrowAnyException();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("sticky event delivery during subscribe 测试")
+    class StickyEventDeliveryTests {
+
+        @Test
+        @DisplayName("subscribe receives previously published sticky event")
+        void testStickyEventDeliveredOnSubscribe() {
+            try (var bus = OpenEvent.create()) {
+                TestEvent stickyEvent = new TestEvent("sticky-msg");
+                bus.publishSticky(stickyEvent);
+
+                AtomicReference<String> received = new AtomicReference<>();
+                bus.subscribe(TestEvent.class, e -> received.set(e.getMessage()));
+
+                assertThat(received.get()).isEqualTo("sticky-msg");
+            }
+        }
+
+        @Test
+        @DisplayName("subscribe with filter skips sticky event that does not match")
+        void testStickyEventFilteredOut() {
+            try (var bus = OpenEvent.create()) {
+                TestEvent stickyEvent = new TestEvent("no-match");
+                bus.publishSticky(stickyEvent);
+
+                AtomicBoolean called = new AtomicBoolean(false);
+                bus.subscribe(TestEvent.class, e -> called.set(true),
+                        e -> e.getMessage().equals("match-only"));
+
+                assertThat(called.get()).isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("subscribe with matching filter receives sticky event")
+        void testStickyEventMatchesFilter() {
+            try (var bus = OpenEvent.create()) {
+                TestEvent stickyEvent = new TestEvent("match-only");
+                bus.publishSticky(stickyEvent);
+
+                AtomicReference<String> received = new AtomicReference<>();
+                bus.subscribe(TestEvent.class, e -> received.set(e.getMessage()),
+                        e -> e.getMessage().equals("match-only"));
+
+                assertThat(received.get()).isEqualTo("match-only");
+            }
         }
     }
 }

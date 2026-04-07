@@ -8,7 +8,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Directed Graph
@@ -136,20 +135,24 @@ public class DirectedGraph<V> implements Graph<V> {
 
     @Override
     public Set<Edge<V>> edges() {
-        return adjacencyList.values().stream()
-            .flatMap(Set::stream)
-            .collect(Collectors.toUnmodifiableSet());
+        Set<Edge<V>> allEdges = new HashSet<>();
+        for (Set<Edge<V>> edgeSet : adjacencyList.values()) {
+            allEdges.addAll(edgeSet);
+        }
+        return Collections.unmodifiableSet(allEdges);
     }
 
     @Override
     public Set<V> neighbors(V vertex) {
         Set<Edge<V>> edges = adjacencyList.get(vertex);
-        if (edges == null) {
+        if (edges == null || edges.isEmpty()) {
             return Set.of();
         }
-        return edges.stream()
-            .map(Edge::to)
-            .collect(Collectors.toUnmodifiableSet());
+        Set<V> result = HashSet.newHashSet(edges.size());
+        for (Edge<V> edge : edges) {
+            result.add(edge.to());
+        }
+        return Collections.unmodifiableSet(result);
     }
 
     @Override

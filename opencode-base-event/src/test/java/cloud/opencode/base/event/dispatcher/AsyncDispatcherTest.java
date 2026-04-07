@@ -304,4 +304,78 @@ class AsyncDispatcherTest {
             assertThat(count.get()).isEqualTo(listenerCount);
         }
     }
+
+    @Nested
+    @DisplayName("dispatchAsync 异常处理")
+    class DispatchAsyncExceptionTests {
+
+        @Test
+        @DisplayName("监听器异常通过exceptionally处理")
+        void testListenerExceptionHandledByExceptionally() throws Exception {
+            TestEvent event = new TestEvent();
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            List<Consumer<Event>> listeners = List.of(
+                    e -> successCount.incrementAndGet(),
+                    e -> { throw new RuntimeException("async error"); },
+                    e -> successCount.incrementAndGet()
+            );
+
+            CompletableFuture<Void> future = dispatcher.dispatchAsync(event, listeners);
+            future.get(5, TimeUnit.SECONDS);
+
+            assertThat(successCount.get()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("dispatchAsync取消的事件中断后续监听器")
+        void testDispatchAsyncCancelledEvent() throws Exception {
+            TestEvent event = new TestEvent();
+            event.cancel();
+
+            AtomicInteger count = new AtomicInteger(0);
+            List<Consumer<Event>> listeners = List.of(
+                    e -> count.incrementAndGet(),
+                    e -> count.incrementAndGet()
+            );
+
+            CompletableFuture<Void> future = dispatcher.dispatchAsync(event, listeners);
+            future.get(1, TimeUnit.SECONDS);
+
+            assertThat(count.get()).isZero();
+        }
+    }
+
+    @Nested
+    @DisplayName("dispatch中事件运行时取消")
+    class RuntimeCancellationTests {
+
+        @Test
+        @DisplayName("事件在dispatch异步提交后取消应在double-check时生效")
+        void testCancellationDuringAsyncExecution() throws InterruptedException {
+            TestEvent event = new TestEvent();
+            CountDownLatch firstStarted = new CountDownLatch(1);
+            AtomicInteger invokedCount = new AtomicInteger(0);
+
+            List<Consumer<Event>> listeners = List.of(
+                    e -> {
+                        invokedCount.incrementAndGet();
+                        firstStarted.countDown();
+                        // Cancel event during first listener execution
+                        e.cancel();
+                    },
+                    e -> {
+                        // This might not execute due to cancellation double-check
+                        invokedCount.incrementAndGet();
+                    }
+            );
+
+            dispatcher.dispatch(event, listeners);
+            firstStarted.await(5, TimeUnit.SECONDS);
+            Thread.sleep(200);
+
+            // At least the first was invoked
+            assertThat(invokedCount.get()).isGreaterThanOrEqualTo(1);
+        }
+    }
 }

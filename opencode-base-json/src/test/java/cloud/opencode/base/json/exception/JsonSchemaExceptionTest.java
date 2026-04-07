@@ -172,7 +172,7 @@ class JsonSchemaExceptionTest {
         void testMessageNoErrors() {
             JsonSchemaException ex = new JsonSchemaException("Failed", List.of());
 
-            assertThat(ex.getMessage()).isEqualTo("Failed");
+            assertThat(ex.getMessage()).contains("Failed");
         }
 
         @Test

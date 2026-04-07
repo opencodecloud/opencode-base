@@ -4,12 +4,16 @@ import cloud.opencode.base.id.ksuid.KsuidGenerator;
 import cloud.opencode.base.id.ksuid.KsuidParser;
 import cloud.opencode.base.id.nanoid.NanoIdBuilder;
 import cloud.opencode.base.id.nanoid.NanoIdGenerator;
+import cloud.opencode.base.id.prefixed.PrefixedId;
+import cloud.opencode.base.id.prefixed.TypedIdGenerator;
 import cloud.opencode.base.id.segment.SegmentAllocator;
 import cloud.opencode.base.id.segment.SegmentIdGenerator;
 import cloud.opencode.base.id.simple.AtomicIdGenerator;
 import cloud.opencode.base.id.simple.RandomIdGenerator;
 import cloud.opencode.base.id.simple.TimestampIdGenerator;
+import cloud.opencode.base.id.snowflake.SafeJsSnowflakeGenerator;
 import cloud.opencode.base.id.snowflake.SnowflakeBuilder;
+import cloud.opencode.base.id.snowflake.SnowflakeFriendlyId;
 import cloud.opencode.base.id.snowflake.SnowflakeGenerator;
 import cloud.opencode.base.id.snowflake.SnowflakeIdParser;
 import cloud.opencode.base.id.tsid.TsidGenerator;
@@ -17,6 +21,7 @@ import cloud.opencode.base.id.tsid.TsidParser;
 import cloud.opencode.base.id.ulid.UlidGenerator;
 import cloud.opencode.base.id.ulid.UlidParser;
 import cloud.opencode.base.id.uuid.OpenUuid;
+import cloud.opencode.base.id.uuid.UuidParser;
 import cloud.opencode.base.id.uuid.UuidV7Generator;
 
 import java.util.UUID;
@@ -91,6 +96,7 @@ import java.util.UUID;
 public final class OpenId {
 
     private static final SnowflakeGenerator DEFAULT_SNOWFLAKE = SnowflakeGenerator.create();
+    private static final SafeJsSnowflakeGenerator DEFAULT_SAFE_JS_SNOWFLAKE = SafeJsSnowflakeGenerator.create();
     private static final UlidGenerator DEFAULT_ULID = UlidGenerator.create();
     private static final TsidGenerator DEFAULT_TSID = TsidGenerator.create();
     private static final KsuidGenerator DEFAULT_KSUID = KsuidGenerator.create();
@@ -166,6 +172,93 @@ public final class OpenId {
         return DEFAULT_SNOWFLAKE.parse(id);
     }
 
+    // ==================== Safe JavaScript Snowflake ====================
+
+    /**
+     * Generates a JavaScript-safe Snowflake ID (value always ≤ 2^53-1)
+     * 生成JavaScript安全的雪花ID（值始终≤ 2^53-1）
+     *
+     * <p>Prevents silent rounding when the ID is serialized as a JSON number
+     * and consumed by a JavaScript frontend.</p>
+     * <p>防止ID被序列化为JSON数字并被JavaScript前端消费时的静默四舍五入。</p>
+     *
+     * @return JavaScript-safe ID | JavaScript安全的ID
+     */
+    public static long safeJsSnowflakeId() {
+        return DEFAULT_SAFE_JS_SNOWFLAKE.generate();
+    }
+
+    /**
+     * Generates a JavaScript-safe Snowflake ID as string
+     * 生成JavaScript安全的雪花ID字符串
+     *
+     * @return ID string | ID字符串
+     */
+    public static String safeJsSnowflakeIdStr() {
+        return DEFAULT_SAFE_JS_SNOWFLAKE.generateStr();
+    }
+
+    /**
+     * Gets the default JavaScript-safe Snowflake generator
+     * 获取默认JavaScript安全雪花ID生成器
+     *
+     * @return generator | 生成器
+     */
+    public static SafeJsSnowflakeGenerator getSafeJsSnowflake() {
+        return DEFAULT_SAFE_JS_SNOWFLAKE;
+    }
+
+    // ==================== Snowflake Friendly ID ====================
+
+    /**
+     * Returns a SnowflakeFriendlyId converter using the default configuration
+     * 使用默认配置返回SnowflakeFriendlyId转换器
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>
+     * String readable = OpenId.snowflakeFriendly().toFriendly(snowflakeId);
+     * // → "2024-01-15T10:30:00.123Z#0-0-42"
+     * </pre>
+     *
+     * @return SnowflakeFriendlyId converter | SnowflakeFriendlyId转换器
+     */
+    public static SnowflakeFriendlyId snowflakeFriendly() {
+        return SnowflakeFriendlyId.ofDefault();
+    }
+
+    // ==================== Typed / Prefixed ID ====================
+
+    /**
+     * Creates a TypedIdGenerator with the specified prefix and underlying generator
+     * 创建带指定前缀和底层生成器的TypedIdGenerator
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>
+     * IdGenerator&lt;String&gt; gen = OpenId.typedIdGenerator("usr", UlidGenerator.create());
+     * String userId = gen.generate(); // → "usr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+     * </pre>
+     *
+     * @param prefix the lowercase entity-type prefix (e.g., "usr", "order") | 小写实体类型前缀（如"usr"、"order"）
+     * @param inner  the underlying string ID generator | 底层字符串ID生成器
+     * @return TypedIdGenerator | 类型化ID生成器
+     * @throws cloud.opencode.base.id.exception.OpenIdGenerationException if prefix is invalid | 前缀无效时抛出
+     */
+    public static TypedIdGenerator typedIdGenerator(String prefix, IdGenerator<String> inner) {
+        return TypedIdGenerator.of(prefix, inner);
+    }
+
+    /**
+     * Parses a prefixed ID string (e.g., "usr_01ARZ3NDEK") into a PrefixedId
+     * 将带前缀的ID字符串（如"usr_01ARZ3NDEK"）解析为PrefixedId
+     *
+     * @param prefixedId the full prefixed ID string | 完整的带前缀ID字符串
+     * @return parsed PrefixedId | 解析后的PrefixedId
+     * @throws cloud.opencode.base.id.exception.OpenIdGenerationException if the format is invalid | 格式无效时抛出
+     */
+    public static PrefixedId parsePrefixedId(String prefixedId) {
+        return PrefixedId.fromString(prefixedId);
+    }
+
     // ==================== UUID ====================
 
     /**
@@ -226,6 +319,17 @@ public final class OpenId {
      */
     public static IdGenerator<UUID> getUuidV7Generator() {
         return UuidV7Generator.create();
+    }
+
+    /**
+     * Parses a UUID to extract version, variant, and timestamp information
+     * 解析UUID以提取版本、变体和时间戳信息
+     *
+     * @param uuid the UUID to parse | 要解析的UUID
+     * @return parsed UUID info | 解析后的UUID信息
+     */
+    public static UuidParser.ParsedUuid parseUuid(UUID uuid) {
+        return UuidParser.create().parse(uuid);
     }
 
     // ==================== ULID ====================

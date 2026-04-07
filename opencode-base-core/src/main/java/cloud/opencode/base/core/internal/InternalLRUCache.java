@@ -2,7 +2,7 @@ package cloud.opencode.base.core.internal;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
@@ -46,9 +46,9 @@ public class InternalLRUCache<K, V> implements InternalCache<K, V> {
 
     private final int maxSize;
     private final Map<K, V> cache;
-    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final ReentrantLock lock = new ReentrantLock();
 
-    public InternalLRUCache(int maxSize) {
+    InternalLRUCache(int maxSize) {
         this.maxSize = maxSize;
         this.cache = new LinkedHashMap<>(16, 0.75f, true) {
             @Override
@@ -69,17 +69,22 @@ public class InternalLRUCache<K, V> implements InternalCache<K, V> {
     @Override
     public V get(K key) {
         // Must use writeLock because LinkedHashMap with accessOrder=true mutates on get()
-        lock.writeLock().lock();
+        lock.lock();
         try {
             return cache.get(key);
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
+    /**
+     * @implNote Null values returned by the mapping function are not cached.
+     * Subsequent calls with the same key will re-invoke the mapping function.
+     * 映射函数返回 null 时不会缓存，后续相同 key 的调用会重新执行映射函数。
+     */
     @Override
     public V computeIfAbsent(K key, Function<K, V> mappingFunction) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             V value = cache.get(key);
             if (value == null) {
@@ -90,67 +95,67 @@ public class InternalLRUCache<K, V> implements InternalCache<K, V> {
             }
             return value;
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public V put(K key, V value) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             return cache.put(key, value);
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public V putIfAbsent(K key, V value) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             return cache.putIfAbsent(key, value);
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public V remove(K key) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             return cache.remove(key);
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public boolean containsKey(K key) {
-        lock.readLock().lock();
+        lock.lock();
         try {
             return cache.containsKey(key);
         } finally {
-            lock.readLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public int size() {
-        lock.readLock().lock();
+        lock.lock();
         try {
             return cache.size();
         } finally {
-            lock.readLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public void clear() {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             cache.clear();
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 

@@ -5,14 +5,13 @@ import cloud.opencode.base.email.attachment.ByteArrayAttachment;
 import cloud.opencode.base.email.exception.EmailErrorCode;
 import cloud.opencode.base.email.exception.EmailReceiveException;
 import cloud.opencode.base.email.internal.EmailReceiver;
+import cloud.opencode.base.email.protocol.ProtocolException;
+import cloud.opencode.base.email.protocol.mime.MimeParser;
+import cloud.opencode.base.email.protocol.mime.ParsedMessage;
+import cloud.opencode.base.email.protocol.pop3.Pop3Client;
 import cloud.opencode.base.email.query.EmailQuery;
-import jakarta.mail.*;
-import jakarta.mail.internet.InternetAddress;
-import jakarta.mail.internet.MimeMessage;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.*;
 
@@ -74,9 +73,7 @@ public class Pop3EmailReceiver implements EmailReceiver {
     private static final String INBOX = "INBOX";
 
     private final EmailReceiveConfig config;
-    private Session session;
-    private Store store;
-    private Folder inbox;
+    private Pop3Client client;
 
     /**
      * Create POP3 receiver with configuration
@@ -100,81 +97,53 @@ public class Pop3EmailReceiver implements EmailReceiver {
             return;
         }
 
-        Properties props = new Properties();
-        String protocol = config.getStoreProtocol();
-
-        props.put("mail.store.protocol", protocol);
-        props.put("mail." + protocol + ".host", config.host());
-        props.put("mail." + protocol + ".port", String.valueOf(config.port()));
-
-        if (config.ssl()) {
-            props.put("mail." + protocol + ".ssl.enable", "true");
-        }
-
-        if (config.starttls()) {
-            props.put("mail." + protocol + ".starttls.enable", "true");
-            props.put("mail." + protocol + ".starttls.required", "true");
-        }
-
-        // OAuth2 XOAUTH2 mechanism for Gmail/Outlook
-        if (config.hasOAuth2()) {
-            props.put("mail." + protocol + ".auth.mechanisms", "XOAUTH2");
-        }
-
-        props.put("mail." + protocol + ".connectiontimeout",
-                String.valueOf(config.connectionTimeout().toMillis()));
-        props.put("mail." + protocol + ".timeout",
-                String.valueOf(config.timeout().toMillis()));
-
-        session = Session.getInstance(props);
-        session.setDebug(config.debug());
-
         try {
-            store = session.getStore(protocol);
-            if (config.requiresAuth()) {
-                // Use OAuth2 token if configured, otherwise use password
-                String credential = config.hasOAuth2()
-                        ? config.oauth2Token()
-                        : config.password();
-                store.connect(config.host(), config.port(), config.username(), credential);
-            } else {
-                store.connect();
-            }
+            client = new Pop3Client(
+                    config.host(),
+                    config.port(),
+                    config.ssl(),
+                    config.starttls(),
+                    config.connectionTimeout(),
+                    config.timeout()
+            );
 
-            // Open INBOX
-            inbox = store.getFolder(INBOX);
-            inbox.open(Folder.READ_WRITE);
-        } catch (AuthenticationFailedException e) {
-            throw new EmailReceiveException("Authentication failed", e, EmailErrorCode.AUTH_FAILED);
-        } catch (MessagingException e) {
+            client.connect();
+
+            if (config.hasOAuth2()) {
+                client.authXOAuth2(config.username(), config.oauth2Token());
+            } else if (config.requiresAuth()) {
+                client.login(config.username(), config.password());
+            }
+        } catch (ProtocolException e) {
+            client = null;
+            if (e.isAuthenticationFailure()) {
+                throw new EmailReceiveException("Authentication failed", e, EmailErrorCode.AUTH_FAILED);
+            }
             throw new EmailReceiveException("Failed to connect to mail server", e, EmailErrorCode.CONNECTION_FAILED);
         }
     }
 
     @Override
     public void disconnect() {
-        if (inbox != null && inbox.isOpen()) {
+        if (client != null) {
             try {
-                inbox.close(true);
-            } catch (MessagingException e) {
+                client.quit();
+            } catch (ProtocolException e) {
                 // Ignore close errors
+            } finally {
+                try {
+                    client.close();
+                } catch (Exception e) {
+                    // Ignore close errors
+                }
             }
+            client = null;
         }
-        inbox = null;
-
-        if (store != null && store.isConnected()) {
-            try {
-                store.close();
-            } catch (MessagingException e) {
-                // Ignore close errors
-            }
-        }
-        store = null;
     }
 
     @Override
     public boolean isConnected() {
-        return store != null && store.isConnected();
+        return client != null && client.isConnected();
     }
 
     @Override
@@ -190,10 +159,43 @@ public class Pop3EmailReceiver implements EmailReceiver {
         ensureConnected();
 
         try {
-            Message[] messages = inbox.getMessages();
+            int[] stat = client.stat();
+            int messageCount = stat[0];
 
-            // Apply client-side filtering since POP3 doesn't support server-side search
-            List<Message> filtered = filterMessages(messages, query);
+            // Calculate how many total results we need before we can stop
+            int needed = query.offset() + query.limit();
+            boolean canEarlyTerminate = query.sortOrder() == null;
+            boolean headerFilters = hasHeaderFilters(query);
+
+            // Retrieve and filter messages, using TOP for header pre-filtering when possible
+            List<MessageWithNumber> filtered = new ArrayList<>();
+            for (int i = 1; i <= messageCount; i++) {
+                try {
+                    String raw;
+                    if (headerFilters) {
+                        // Use TOP to download only headers for pre-filtering
+                        String headerRaw = fetchHeaders(i);
+                        ParsedMessage headerPm = MimeParser.parse(headerRaw);
+                        if (!matchesQuery(headerPm, query)) {
+                            continue;
+                        }
+                        // Header filters matched, download full message for body/attachment checks
+                        raw = client.retr(i);
+                    } else {
+                        raw = client.retr(i);
+                    }
+                    ParsedMessage pm = MimeParser.parse(raw);
+                    if (matchesQuery(pm, query)) {
+                        filtered.add(new MessageWithNumber(pm, i));
+                        if (canEarlyTerminate && filtered.size() >= needed) {
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOGGER.log(System.Logger.Level.WARNING,
+                            "Failed to retrieve/parse message {0}", i, e);
+                }
+            }
 
             // Apply sorting
             filtered = sortMessages(filtered, query.sortOrder());
@@ -202,24 +204,25 @@ public class Pop3EmailReceiver implements EmailReceiver {
             int start = Math.min(query.offset(), filtered.size());
             int end = Math.min(start + query.limit(), filtered.size());
 
-            List<ReceivedEmail> result = new ArrayList<>();
+            List<ReceivedEmail> result = new ArrayList<>(end - start);
             for (int i = start; i < end; i++) {
+                MessageWithNumber mwn = filtered.get(i);
                 try {
-                    ReceivedEmail email = parseMessage(filtered.get(i));
+                    ReceivedEmail email = buildReceivedEmail(mwn.message(), mwn.msgNum());
                     result.add(email);
 
                     // Apply post-receive actions
                     if (config.deleteAfterReceive()) {
-                        filtered.get(i).setFlag(Flags.Flag.DELETED, true);
+                        client.dele(mwn.msgNum());
                     }
                 } catch (Exception e) {
                     LOGGER.log(System.Logger.Level.WARNING,
-                            "Failed to parse email message at index {0}", i, e);
+                            "Failed to process email message at index {0}", i, e);
                 }
             }
 
             return result;
-        } catch (MessagingException e) {
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to receive emails", e);
         }
     }
@@ -233,16 +236,27 @@ public class Pop3EmailReceiver implements EmailReceiver {
         }
 
         try {
-            Message[] messages = inbox.getMessages();
-            for (Message message : messages) {
-                if (message instanceof MimeMessage mimeMessage) {
-                    if (messageId.equals(mimeMessage.getMessageID())) {
-                        return parseMessage(message);
+            int[] stat = client.stat();
+            int messageCount = stat[0];
+
+            for (int i = 1; i <= messageCount; i++) {
+                try {
+                    // Use TOP to download only headers for Message-ID matching
+                    String headerRaw = fetchHeaders(i);
+                    ParsedMessage headerPm = MimeParser.parse(headerRaw);
+                    if (messageId.equals(headerPm.messageId())) {
+                        // Found it - download full message
+                        String fullRaw = client.retr(i);
+                        ParsedMessage full = MimeParser.parse(fullRaw);
+                        return buildReceivedEmail(full, i);
                     }
+                } catch (Exception e) {
+                    LOGGER.log(System.Logger.Level.WARNING,
+                            "Failed to retrieve/parse message {0}", i, e);
                 }
             }
             return null;
-        } catch (MessagingException e) {
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to receive email by ID: " + messageId, e);
         }
     }
@@ -251,8 +265,8 @@ public class Pop3EmailReceiver implements EmailReceiver {
     public int getMessageCount(String folder) {
         ensureConnected();
         try {
-            return inbox.getMessageCount();
-        } catch (MessagingException e) {
+            return client.stat()[0];
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to get message count", e);
         }
     }
@@ -283,18 +297,25 @@ public class Pop3EmailReceiver implements EmailReceiver {
         ensureConnected();
 
         try {
-            Message[] messages = inbox.getMessages();
-            for (Message message : messages) {
-                if (message instanceof MimeMessage mimeMessage) {
-                    if (messageId.equals(mimeMessage.getMessageID())) {
-                        message.setFlag(Flags.Flag.DELETED, true);
-                        inbox.expunge();
+            int[] stat = client.stat();
+            int messageCount = stat[0];
+
+            for (int i = 1; i <= messageCount; i++) {
+                try {
+                    // Use TOP to download only headers for Message-ID matching
+                    String headerRaw = fetchHeaders(i);
+                    ParsedMessage headerPm = MimeParser.parse(headerRaw);
+                    if (messageId.equals(headerPm.messageId())) {
+                        client.dele(i);
                         return;
                     }
+                } catch (Exception e) {
+                    LOGGER.log(System.Logger.Level.WARNING,
+                            "Failed to retrieve/parse message {0} while searching for deletion", i, e);
                 }
             }
             throw EmailReceiveException.messageNotFound(messageId);
-        } catch (MessagingException e) {
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to delete message: " + messageId, e);
         }
     }
@@ -321,37 +342,57 @@ public class Pop3EmailReceiver implements EmailReceiver {
         }
     }
 
-    private List<Message> filterMessages(Message[] messages, EmailQuery query) throws MessagingException {
-        List<Message> result = new ArrayList<>();
-
-        for (Message message : messages) {
-            if (matchesQuery(message, query)) {
-                result.add(message);
-            }
+    /**
+     * Fetch only message headers using POP3 TOP command.
+     * Falls back to full RETR if the server does not support TOP.
+     * 使用POP3 TOP命令仅获取消息头部。如果服务器不支持TOP，则回退到完整RETR。
+     *
+     * @param msgNum the POP3 message number | POP3消息编号
+     * @return the raw message headers (or full message on fallback) | 原始消息头部（或回退时的完整消息）
+     * @throws ProtocolException if both TOP and RETR fail | 如果TOP和RETR都失败
+     */
+    private String fetchHeaders(int msgNum) throws ProtocolException {
+        try {
+            return client.top(msgNum, 0);
+        } catch (ProtocolException e) {
+            // TOP is an optional POP3 extension; fall back to full RETR
+            LOGGER.log(System.Logger.Level.DEBUG,
+                    "TOP command not supported, falling back to RETR for message {0}", msgNum);
+            return client.retr(msgNum);
         }
-
-        return result;
     }
 
-    private boolean matchesQuery(Message message, EmailQuery query) throws MessagingException {
+    /**
+     * Check whether the query has filters that can be evaluated from headers alone.
+     * 检查查询是否包含可以仅从头部评估的过滤条件。
+     *
+     * @param query the email query | 邮件查询
+     * @return true if header-based pre-filtering is possible | 如果可以基于头部预过滤则返回true
+     */
+    private boolean hasHeaderFilters(EmailQuery query) {
+        return query.fromDate() != null || query.toDate() != null
+                || (query.from() != null && !query.from().isEmpty())
+                || (query.to() != null && !query.to().isEmpty())
+                || query.subjectContains() != null;
+    }
+
+    private boolean matchesQuery(ParsedMessage pm, EmailQuery query) {
         // Date filters
         if (query.fromDate() != null) {
-            Date received = message.getReceivedDate();
-            if (received == null) received = message.getSentDate();
+            Instant received = pm.receivedDate() != null ? pm.receivedDate() : pm.sentDate();
             if (received != null) {
-                Date from = Date.from(query.fromDate().atZone(ZoneId.systemDefault()).toInstant());
-                if (received.before(from)) {
+                Instant from = query.fromDate().atZone(ZoneId.systemDefault()).toInstant();
+                if (received.isBefore(from)) {
                     return false;
                 }
             }
         }
 
         if (query.toDate() != null) {
-            Date received = message.getReceivedDate();
-            if (received == null) received = message.getSentDate();
+            Instant received = pm.receivedDate() != null ? pm.receivedDate() : pm.sentDate();
             if (received != null) {
-                Date to = Date.from(query.toDate().atZone(ZoneId.systemDefault()).toInstant());
-                if (received.after(to)) {
+                Instant to = query.toDate().atZone(ZoneId.systemDefault()).toInstant();
+                if (received.isAfter(to)) {
                     return false;
                 }
             }
@@ -359,35 +400,30 @@ public class Pop3EmailReceiver implements EmailReceiver {
 
         // From filter
         if (query.from() != null && !query.from().isEmpty()) {
-            Address[] from = message.getFrom();
-            if (from == null || from.length == 0) {
+            String fromAddr = pm.from();
+            if (fromAddr == null || fromAddr.isBlank()) {
                 return false;
             }
             boolean found = false;
-            for (Address addr : from) {
-                String addrStr = addr instanceof InternetAddress ia ? ia.getAddress() : addr.toString();
-                for (String queryFrom : query.from()) {
-                    if (addrStr.toLowerCase().contains(queryFrom.toLowerCase())) {
-                        found = true;
-                        break;
-                    }
+            for (String queryFrom : query.from()) {
+                if (fromAddr.toLowerCase().contains(queryFrom.toLowerCase())) {
+                    found = true;
+                    break;
                 }
-                if (found) break;
             }
             if (!found) return false;
         }
 
         // To filter
         if (query.to() != null && !query.to().isEmpty()) {
-            Address[] to = message.getRecipients(Message.RecipientType.TO);
-            if (to == null || to.length == 0) {
+            List<String> toAddrs = pm.to();
+            if (toAddrs == null || toAddrs.isEmpty()) {
                 return false;
             }
             boolean found = false;
-            for (Address addr : to) {
-                String addrStr = addr instanceof InternetAddress ia ? ia.getAddress() : addr.toString();
+            for (String addr : toAddrs) {
                 for (String queryTo : query.to()) {
-                    if (addrStr.toLowerCase().contains(queryTo.toLowerCase())) {
+                    if (addr.toLowerCase().contains(queryTo.toLowerCase())) {
                         found = true;
                         break;
                     }
@@ -399,31 +435,16 @@ public class Pop3EmailReceiver implements EmailReceiver {
 
         // Subject filter
         if (query.subjectContains() != null) {
-            String subject = message.getSubject();
+            String subject = pm.subject();
             if (subject == null || !subject.toLowerCase().contains(query.subjectContains().toLowerCase())) {
                 return false;
             }
         }
 
-        // Attachment filter (basic check)
+        // Attachment filter
         if (query.hasAttachments()) {
-            try {
-                Object content = message.getContent();
-                if (!(content instanceof Multipart)) {
-                    return false;
-                }
-                Multipart mp = (Multipart) content;
-                boolean hasAttachment = false;
-                for (int i = 0; i < mp.getCount(); i++) {
-                    Part part = mp.getBodyPart(i);
-                    if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())
-                            || (part.getFileName() != null && !part.getFileName().isBlank())) {
-                        hasAttachment = true;
-                        break;
-                    }
-                }
-                if (!hasAttachment) return false;
-            } catch (IOException e) {
+            List<ParsedMessage.ParsedAttachment> attachments = pm.attachments();
+            if (attachments == null || attachments.isEmpty()) {
                 return false;
             }
         }
@@ -431,210 +452,94 @@ public class Pop3EmailReceiver implements EmailReceiver {
         return true;
     }
 
-    private List<Message> sortMessages(List<Message> messages, EmailQuery.SortOrder sortOrder) {
+    private List<MessageWithNumber> sortMessages(List<MessageWithNumber> messages, EmailQuery.SortOrder sortOrder) {
         if (sortOrder == null || messages.size() <= 1) {
             return messages;
         }
 
-        Comparator<Message> comparator = switch (sortOrder) {
+        Comparator<MessageWithNumber> comparator = switch (sortOrder) {
             case NEWEST_FIRST -> (m1, m2) -> {
-                try {
-                    Date d1 = m1.getReceivedDate();
-                    Date d2 = m2.getReceivedDate();
-                    if (d1 == null) return 1;
-                    if (d2 == null) return -1;
-                    return d2.compareTo(d1);
-                } catch (MessagingException e) {
-                    return 0;
-                }
+                Instant d1 = effectiveDate(m1.message());
+                Instant d2 = effectiveDate(m2.message());
+                if (d1 == null) return 1;
+                if (d2 == null) return -1;
+                return d2.compareTo(d1);
             };
             case OLDEST_FIRST -> (m1, m2) -> {
-                try {
-                    Date d1 = m1.getReceivedDate();
-                    Date d2 = m2.getReceivedDate();
-                    if (d1 == null) return 1;
-                    if (d2 == null) return -1;
-                    return d1.compareTo(d2);
-                } catch (MessagingException e) {
-                    return 0;
-                }
+                Instant d1 = effectiveDate(m1.message());
+                Instant d2 = effectiveDate(m2.message());
+                if (d1 == null) return 1;
+                if (d2 == null) return -1;
+                return d1.compareTo(d2);
             };
             case SUBJECT_ASC -> (m1, m2) -> {
-                try {
-                    String s1 = m1.getSubject();
-                    String s2 = m2.getSubject();
-                    if (s1 == null) return 1;
-                    if (s2 == null) return -1;
-                    return s1.compareToIgnoreCase(s2);
-                } catch (MessagingException e) {
-                    return 0;
-                }
+                String s1 = m1.message().subject();
+                String s2 = m2.message().subject();
+                if (s1 == null) return 1;
+                if (s2 == null) return -1;
+                return s1.compareToIgnoreCase(s2);
             };
             case SUBJECT_DESC -> (m1, m2) -> {
-                try {
-                    String s1 = m1.getSubject();
-                    String s2 = m2.getSubject();
-                    if (s1 == null) return 1;
-                    if (s2 == null) return -1;
-                    return s2.compareToIgnoreCase(s1);
-                } catch (MessagingException e) {
-                    return 0;
-                }
+                String s1 = m1.message().subject();
+                String s2 = m2.message().subject();
+                if (s1 == null) return 1;
+                if (s2 == null) return -1;
+                return s2.compareToIgnoreCase(s1);
             };
             case SENDER_ASC, SENDER_DESC -> (m1, m2) -> {
-                try {
-                    Address[] a1 = m1.getFrom();
-                    Address[] a2 = m2.getFrom();
-                    String s1 = a1 != null && a1.length > 0 ? a1[0].toString() : "";
-                    String s2 = a2 != null && a2.length > 0 ? a2[0].toString() : "";
-                    int result = s1.compareToIgnoreCase(s2);
-                    return sortOrder == EmailQuery.SortOrder.SENDER_DESC ? -result : result;
-                } catch (MessagingException e) {
-                    return 0;
-                }
+                String s1 = m1.message().from() != null ? m1.message().from() : "";
+                String s2 = m2.message().from() != null ? m2.message().from() : "";
+                int result = s1.compareToIgnoreCase(s2);
+                return sortOrder == EmailQuery.SortOrder.SENDER_DESC ? -result : result;
             };
         };
 
-        List<Message> sorted = new ArrayList<>(messages);
+        List<MessageWithNumber> sorted = new ArrayList<>(messages);
         sorted.sort(comparator);
         return sorted;
     }
 
-    private ReceivedEmail parseMessage(Message message) throws MessagingException {
+    private static Instant effectiveDate(ParsedMessage pm) {
+        return pm.receivedDate() != null ? pm.receivedDate() : pm.sentDate();
+    }
+
+    private ReceivedEmail buildReceivedEmail(ParsedMessage pm, int messageNumber) {
         ReceivedEmail.Builder builder = ReceivedEmail.builder()
                 .folder(INBOX)
-                .messageNumber(message.getMessageNumber());
+                .messageNumber(messageNumber)
+                .messageId(pm.messageId())
+                .from(pm.from())
+                .fromName(pm.fromName())
+                .to(pm.to() != null ? pm.to() : List.of())
+                .cc(pm.cc() != null ? pm.cc() : List.of())
+                .bcc(pm.bcc() != null ? pm.bcc() : List.of())
+                .replyTo(pm.replyTo())
+                .subject(pm.subject())
+                .textContent(pm.textContent())
+                .htmlContent(pm.htmlContent())
+                .sentDate(pm.sentDate())
+                .receivedDate(pm.receivedDate())
+                .size(pm.size())
+                .headers(pm.headers() != null ? pm.headers() : Map.of())
+                .flags(EmailFlags.UNREAD);
 
-        // Message ID
-        if (message instanceof MimeMessage mimeMessage) {
-            builder.messageId(mimeMessage.getMessageID());
-        }
-
-        // From
-        Address[] from = message.getFrom();
-        if (from != null && from.length > 0) {
-            if (from[0] instanceof InternetAddress ia) {
-                builder.from(ia.getAddress());
-                builder.fromName(ia.getPersonal());
-            } else {
-                builder.from(from[0].toString());
+        // Convert ParsedAttachments to Attachments
+        if (pm.attachments() != null && !pm.attachments().isEmpty()) {
+            List<Attachment> attachments = new ArrayList<>(pm.attachments().size());
+            for (ParsedMessage.ParsedAttachment pa : pm.attachments()) {
+                if (pa.fileName() != null) {
+                    attachments.add(ByteArrayAttachment.of(
+                            pa.fileName(), pa.data(), pa.contentType()));
+                }
             }
+            builder.attachments(attachments);
         }
-
-        // To
-        builder.to(parseAddresses(message.getRecipients(Message.RecipientType.TO)));
-
-        // CC
-        builder.cc(parseAddresses(message.getRecipients(Message.RecipientType.CC)));
-
-        // BCC
-        builder.bcc(parseAddresses(message.getRecipients(Message.RecipientType.BCC)));
-
-        // Reply-To
-        Address[] replyTo = message.getReplyTo();
-        if (replyTo != null && replyTo.length > 0) {
-            if (replyTo[0] instanceof InternetAddress ia) {
-                builder.replyTo(ia.getAddress());
-            } else {
-                builder.replyTo(replyTo[0].toString());
-            }
-        }
-
-        // Subject
-        builder.subject(message.getSubject());
-
-        // Dates
-        if (message.getSentDate() != null) {
-            builder.sentDate(message.getSentDate().toInstant());
-        }
-        if (message.getReceivedDate() != null) {
-            builder.receivedDate(message.getReceivedDate().toInstant());
-        }
-
-        // Flags - POP3 doesn't persist flags, use default
-        builder.flags(EmailFlags.UNREAD);
-
-        // Size
-        builder.size(message.getSize());
-
-        // Headers
-        Map<String, String> headers = new HashMap<>();
-        Enumeration<?> allHeaders = message.getAllHeaders();
-        while (allHeaders.hasMoreElements()) {
-            Header header = (Header) allHeaders.nextElement();
-            headers.put(header.getName(), header.getValue());
-        }
-        builder.headers(headers);
-
-        // Content and attachments
-        parseContent(message, builder);
 
         return builder.build();
     }
 
-    private List<String> parseAddresses(Address[] addresses) {
-        if (addresses == null) {
-            return List.of();
-        }
-        List<String> result = new ArrayList<>();
-        for (Address addr : addresses) {
-            if (addr instanceof InternetAddress ia) {
-                result.add(ia.getAddress());
-            } else {
-                result.add(addr.toString());
-            }
-        }
-        return result;
-    }
-
-    private void parseContent(Part part, ReceivedEmail.Builder builder) throws MessagingException {
-        try {
-            List<Attachment> attachments = new ArrayList<>();
-            parseContentRecursive(part, builder, attachments);
-            builder.attachments(attachments);
-        } catch (IOException e) {
-            throw new MessagingException("Failed to parse message content", e);
-        }
-    }
-
-    private void parseContentRecursive(Part part, ReceivedEmail.Builder builder,
-                                        List<Attachment> attachments) throws MessagingException, IOException {
-        Object content = part.getContent();
-
-        if (part.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            String text = content.toString();
-            if (builder.build().textContent() == null) {
-                builder.textContent(text);
-            }
-        } else if (part.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            String html = content.toString();
-            if (builder.build().htmlContent() == null) {
-                builder.htmlContent(html);
-            }
-        } else if (content instanceof Multipart multipart) {
-            for (int i = 0; i < multipart.getCount(); i++) {
-                parseContentRecursive(multipart.getBodyPart(i), builder, attachments);
-            }
-        } else if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())
-                || Part.INLINE.equalsIgnoreCase(part.getDisposition())
-                || part.getFileName() != null) {
-            String fileName = part.getFileName();
-            if (fileName != null) {
-                try (InputStream is = part.getInputStream()) {
-                    byte[] data = readAllBytes(is);
-                    attachments.add(ByteArrayAttachment.of(fileName, data, part.getContentType()));
-                }
-            }
-        }
-    }
-
-    private byte[] readAllBytes(InputStream is) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        while ((bytesRead = is.read(buffer)) != -1) {
-            baos.write(buffer, 0, bytesRead);
-        }
-        return baos.toByteArray();
-    }
+    /**
+     * Internal record pairing a parsed message with its POP3 message number.
+     */
+    private record MessageWithNumber(ParsedMessage message, int msgNum) {}
 }

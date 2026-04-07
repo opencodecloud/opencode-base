@@ -214,7 +214,7 @@ public final class OpenStream {
         List<List<T>> batches = new ArrayList<>();
         List<T> currentBatch = new ArrayList<>(batchSize);
 
-        stream.forEach(item -> {
+        stream.sequential().forEachOrdered(item -> {
             currentBatch.add(item);
             if (currentBatch.size() >= batchSize) {
                 batches.add(new ArrayList<>(currentBatch));
@@ -245,12 +245,14 @@ public final class OpenStream {
 
         List<T> list = source instanceof List<T> l ? l : new ArrayList<>(source);
         int size = list.size();
-        int numBatches = (size + batchSize - 1) / batchSize;
+        int numBatches = (size - 1) / batchSize + 1;
 
         return IntStream.range(0, numBatches)
-            .mapToObj(i -> list.subList(
-                i * batchSize,
-                Math.min((i + 1) * batchSize, size)));
+            .mapToObj(i -> {
+                int from = (int) Math.min((long) i * batchSize, size);
+                int to = (int) Math.min((long) (i + 1) * batchSize, size);
+                return list.subList(from, to);
+            });
     }
 
     // ==================== Windowing | 窗口操作 ====================
@@ -292,7 +294,11 @@ public final class OpenStream {
 
         int numWindows = (size - windowSize) / step + 1;
         return IntStream.range(0, numWindows)
-            .mapToObj(i -> new ArrayList<>(list.subList(i * step, i * step + windowSize)));
+            .mapToObj(i -> {
+                int from = (int) Math.min((long) i * step, size);
+                int to = (int) Math.min((long) i * step + windowSize, size);
+                return new ArrayList<>(list.subList(from, to));
+            });
     }
 
     /**
@@ -359,8 +365,8 @@ public final class OpenStream {
             return Stream.empty();
         }
 
-        long[] index = {0};
-        return stream.map(value -> new IndexedValue<>(index[0]++, value));
+        java.util.concurrent.atomic.AtomicLong index = new java.util.concurrent.atomic.AtomicLong(0);
+        return stream.map(value -> new IndexedValue<>(index.getAndIncrement(), value));
     }
 
     /**
@@ -724,6 +730,9 @@ public final class OpenStream {
             return pool.submit(() ->
                 source.parallelStream().map(mapper).toList()
             ).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new OpenException("Parallel processing interrupted", e);
         } catch (Exception e) {
             throw new OpenException("Parallel processing failed", e);
         } finally {

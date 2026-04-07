@@ -23,6 +23,26 @@
 - **SPI 扩展**：可插拔的函数提供者、属性访问器和类型转换器
 - **多种上下文**：Map 上下文、Bean 上下文、链式上下文
 
+## V1.0.3 新特性
+
+### 新增运算符
+- **Elvis 运算符** (`?:`)：空值合并运算符，左侧非空则返回左侧，否则返回右侧
+- **In 运算符** (`in`)：集合成员测试
+- **Between 运算符** (`between`)：包含边界的范围测试
+- **位运算符** (`&`、`|`、`^`、`~`、`<<`、`>>`)：完整的位运算支持
+
+### 新增表达式类型
+- **Lambda 表达式**：一等公民 Lambda 支持，可与集合函数配合使用
+- **Map 字面量**：使用 `#{'key': value}` 语法内联构造 Map
+- **字符串插值**：表达式内的模板式字符串构造
+
+### 新增 API
+- **表达式访问者** (`ExpressionVisitor<T>`)：用于 AST 遍历和转换的泛型访问者接口
+- **变量提取** (`VariableExtractor`)：从表达式中提取引用的变量名
+- **求值监听器** (`EvaluationListener`)：求值前/后/错误钩子，用于调试、性能分析和追踪
+- **算术模式** (`ArithmeticMode`)：在标准精度和 BigDecimal 精度之间切换，适用于金融计算
+- **表达式模板** (`ExpressionTemplate`)：将字面文本与 `${expression}` 占位符混合
+
 ## 快速开始
 
 ### Maven 依赖
@@ -30,7 +50,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-expression</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -90,6 +110,203 @@ StandardContext ctx = OpenExpression.contextBuilder()
     .build();
 ```
 
+### Elvis 运算符（空值合并）
+
+```java
+// 左侧非空则返回左侧，否则返回右侧
+Object result = OpenExpression.eval("name ?: 'default'", Map.of());  // "default"
+Object result = OpenExpression.eval("name ?: 'default'", Map.of("name", "Jon"));  // "Jon"
+
+// 链式使用多个 Elvis 运算符
+Object result = OpenExpression.eval("a ?: b ?: 'fallback'", Map.of("b", "found"));  // "found"
+```
+
+### In 运算符（成员测试）
+
+```java
+// 检查值是否包含在集合中
+Object result = OpenExpression.eval("x in {1, 2, 3}", Map.of("x", 2));  // true
+Object result = OpenExpression.eval("x in {1, 2, 3}", Map.of("x", 5));  // false
+
+// 支持字符串集合
+Object result = OpenExpression.eval(
+    "status in {'active', 'pending'}",
+    Map.of("status", "active")
+);  // true
+```
+
+### Between 运算符（范围测试）
+
+```java
+// 包含边界的范围测试：lower <= value <= upper
+Object result = OpenExpression.eval("age between 18 and 65", Map.of("age", 25));  // true
+Object result = OpenExpression.eval("age between 18 and 65", Map.of("age", 10));  // false
+
+// 边界值是包含的
+Object result = OpenExpression.eval("x between 1 and 10", Map.of("x", 1));   // true
+Object result = OpenExpression.eval("x between 1 and 10", Map.of("x", 10));  // true
+```
+
+### 位运算符
+
+```java
+// 与、或、异或
+Object result = OpenExpression.eval("flags & 0x0F", Map.of("flags", 0xFF));  // 15
+Object result = OpenExpression.eval("a | b", Map.of("a", 0x0F, "b", 0xF0));  // 255
+Object result = OpenExpression.eval("a ^ b", Map.of("a", 0xFF, "b", 0x0F));  // 240
+
+// 取反（按位补码）
+Object result = OpenExpression.eval("~0", Map.of());  // -1
+
+// 移位运算符
+Object result = OpenExpression.eval("1 << 3", Map.of());   // 8
+Object result = OpenExpression.eval("16 >> 2", Map.of());   // 4
+```
+
+### Lambda 表达式
+
+```java
+// Lambda 与集合函数配合使用
+Object result = OpenExpression.eval(
+    "filter({1,2,3,4,5}, x -> x > 3)", Map.of()
+);  // [4, 5]
+
+Object result = OpenExpression.eval(
+    "map({1,2,3}, x -> x * 2)", Map.of()
+);  // [2, 4, 6]
+```
+
+### Map 字面量
+
+```java
+// 使用 #{} 语法内联创建 Map
+Object result = OpenExpression.eval("#{'name': 'Jon', 'age': 30}");
+// 返回 Map：{name=Jon, age=30}
+
+// 在 Map 值中使用变量
+Object result = OpenExpression.eval(
+    "#{'greeting': name + ' World'}",
+    Map.of("name", "Hello")
+);
+// 返回 Map：{greeting=Hello World}
+```
+
+### 字符串插值（表达式模板）
+
+```java
+// 简单变量替换
+String result = ExpressionTemplate.render(
+    "Hello, ${name}!",
+    Map.of("name", "World")
+);
+// "Hello, World!"
+
+// 模板内的表达式求值
+String result = ExpressionTemplate.render(
+    "Total: ${price * quantity}",
+    Map.of("price", 9.99, "quantity", 3)
+);
+// "Total: 29.97"
+
+// 也可通过 OpenExpression 门面调用
+String result = OpenExpression.render(
+    "${firstName} ${lastName}",
+    Map.of("firstName", "John", "lastName", "Doe")
+);
+// "John Doe"
+
+// 使用反斜杠转义
+String result = ExpressionTemplate.render("Use \\${var} syntax", Map.of());
+// "Use ${var} syntax"
+```
+
+### 表达式访问者 API
+
+```java
+import cloud.opencode.base.expression.ExpressionVisitor;
+import cloud.opencode.base.expression.ast.*;
+
+// 创建将 AST 转换为字符串表示的访问者
+ExpressionVisitor<String> printer = new ExpressionVisitor<>() {
+    @Override
+    public String visit(LiteralNode node) {
+        return String.valueOf(node.value());
+    }
+
+    @Override
+    public String visit(BinaryOpNode node) {
+        return "(" + visit(node.left()) + " " + node.operator()
+            + " " + visit(node.right()) + ")";
+    }
+
+    @Override
+    public String visit(IdentifierNode node) {
+        return node.name();
+    }
+
+    // ... 为所有节点类型实现其他 visit 方法
+};
+```
+
+### 变量提取
+
+```java
+// 从表达式中提取变量名
+Set<String> vars = VariableExtractor.extract("x + y * 2");
+// vars = [x, y]
+
+Set<String> vars = VariableExtractor.extract(
+    "user.name == 'John' && age > 18"
+);
+// vars = [user, age]
+
+// 也可通过 OpenExpression 门面调用
+Set<String> vars = OpenExpression.extractVariables("a + b");
+// vars = [a, b]
+
+// 特殊标识符（#root、#this、true、false、null）会被排除
+Set<String> vars = VariableExtractor.extract("#root.name + true");
+// vars = []
+```
+
+### 求值监听器
+
+```java
+// 创建用于调试的日志监听器
+EvaluationListener logger = new EvaluationListener() {
+    @Override
+    public void beforeEvaluate(Node node, EvaluationContext context) {
+        System.out.println("正在求值: " + node.toExpressionString());
+    }
+
+    @Override
+    public void afterEvaluate(Node node, EvaluationContext context, Object result) {
+        System.out.println("结果: " + result);
+    }
+
+    @Override
+    public void onError(Node node, EvaluationContext context, Exception error) {
+        System.err.println("错误: " + error.getMessage());
+    }
+};
+
+// 组合多个监听器（异常隔离）
+EvaluationListener combined = EvaluationListener.composite(logger, timer);
+
+// 空操作监听器（零开销）
+EvaluationListener noop = EvaluationListener.noOp();
+```
+
+### 算术模式（BigDecimal 精度）
+
+> **注意**：`ArithmeticMode` 在 V1.0.3 中定义为未来 BigDecimal 求值支持的基础。当前枚举可用于配置标记，但求值引擎尚未根据模式切换算术行为。完整的 BigDecimal 集成计划在 V1.0.4 中实现。
+
+```java
+// ArithmeticMode 枚举值
+ArithmeticMode standard = ArithmeticMode.STANDARD;     // 默认：int/long/double
+ArithmeticMode precise = ArithmeticMode.BIG_DECIMAL;   // 计划中：精确十进制算术
+```
+
 ## 类参考
 
 ### 根包 (`cloud.opencode.base.expression`)
@@ -99,6 +316,11 @@ StandardContext ctx = OpenExpression.contextBuilder()
 | `Expression` | 表示可求值的已解析表达式的接口 |
 | `ExpressionParser` | 将表达式字符串解析为 Expression 对象的接口 |
 | `OpenExpressionException` | 表达式求值错误的基础异常 |
+| `ExpressionVisitor<T>` | 用于 AST 遍历的泛型访问者接口（V1.0.3） |
+| `VariableExtractor` | 从表达式中提取引用的变量名（V1.0.3） |
+| `EvaluationListener` | 求值前/后/错误监控钩子（V1.0.3） |
+| `ArithmeticMode` | 标准与 BigDecimal 算术精度模式枚举（V1.0.3） |
+| `ExpressionTemplate` | 将文本与 `${expression}` 占位符混合的模板引擎（V1.0.3） |
 
 ### AST 包 (`cloud.opencode.base.expression.ast`)
 | 类 | 说明 |
@@ -116,6 +338,13 @@ StandardContext ctx = OpenExpression.contextBuilder()
 | `ListLiteralNode` | 列表字面量节点（`{1, 2, 3}`） |
 | `CollectionFilterNode` | 集合过滤节点（`list.?[predicate]`） |
 | `CollectionProjectNode` | 集合投影节点（`list.![expr]`） |
+| `ElvisNode` | Elvis（空值合并）节点（`a ?: b`）（V1.0.3） |
+| `InNode` | 成员测试节点（`x in {1,2,3}`）（V1.0.3） |
+| `BetweenNode` | 范围测试节点（`x between 1 and 10`）（V1.0.3） |
+| `BitwiseOpNode` | 位运算节点（`a & b`、`a \| b`）（V1.0.3） |
+| `LambdaNode` | Lambda 表达式节点（`x -> x + 1`）（V1.0.3） |
+| `MapLiteralNode` | Map 字面量节点（`#{'key': value}`）（V1.0.3） |
+| `StringInterpolationNode` | 字符串插值节点（V1.0.3） |
 
 ### 编译器包 (`cloud.opencode.base.expression.compiler`)
 | 类 | 说明 |

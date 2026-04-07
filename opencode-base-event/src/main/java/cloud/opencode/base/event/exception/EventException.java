@@ -1,18 +1,23 @@
 package cloud.opencode.base.event.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.event.Event;
+
+import java.io.Serial;
 
 /**
  * Event Exception Base Class
  * 事件异常基类
  *
- * <p>Base exception class for all event-related errors.</p>
- * <p>所有事件相关错误的基类异常。</p>
+ * <p>Base exception class for all event-related errors, extending {@link OpenException}
+ * to participate in the unified OpenCode exception hierarchy.</p>
+ * <p>所有事件相关错误的基类异常，继承 {@link OpenException} 以参与 OpenCode 统一异常体系。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
- *   <li>Error code support - 错误码支持</li>
+ *   <li>Error code support (EventErrorCode) - 错误码支持</li>
  *   <li>Event context preservation - 事件上下文保留</li>
+ *   <li>Inherits OpenException component/errorCode formatting - 继承 OpenException 组件/错误码格式</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -21,7 +26,7 @@ import cloud.opencode.base.event.Event;
  *     OpenEvent.getDefault().publish(event);
  * } catch (EventException e) {
  *     log.error("Event error: code={}, message={}",
- *         e.getErrorCode().getCode(), e.getMessage());
+ *         e.getEventErrorCode().getCode(), e.getMessage());
  * }
  * }</pre>
  *
@@ -35,10 +40,15 @@ import cloud.opencode.base.event.Event;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-event V1.0.0
  */
-public class EventException extends RuntimeException {
+public class EventException extends OpenException {
 
-    private final Event event;
-    private final EventErrorCode errorCode;
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private static final String COMPONENT = "Event";
+
+    private final transient Event event;
+    private final EventErrorCode eventErrorCode;
 
     /**
      * Create exception with message only
@@ -82,19 +92,19 @@ public class EventException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public EventException(String message, Throwable cause, Event event, EventErrorCode errorCode) {
-        super(message, cause);
+        super(COMPONENT, errorCode != null ? String.valueOf(errorCode.getCode()) : "0", message, cause);
         this.event = event;
-        this.errorCode = errorCode != null ? errorCode : EventErrorCode.UNKNOWN;
+        this.eventErrorCode = errorCode != null ? errorCode : EventErrorCode.UNKNOWN;
     }
 
     /**
-     * Get the error code
-     * 获取错误码
+     * Get the event error code
+     * 获取事件错误码
      *
-     * @return the error code | 错误码
+     * @return the event error code | 事件错误码
      */
-    public EventErrorCode getErrorCode() {
-        return errorCode;
+    public EventErrorCode getEventErrorCode() {
+        return eventErrorCode;
     }
 
     /**

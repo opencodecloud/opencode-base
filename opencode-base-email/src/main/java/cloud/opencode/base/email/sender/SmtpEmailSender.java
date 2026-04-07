@@ -1,20 +1,28 @@
 package cloud.opencode.base.email.sender;
 
 import cloud.opencode.base.email.Attachment;
+import cloud.opencode.base.email.BatchSendResult;
+import cloud.opencode.base.email.ConnectionTestResult;
 import cloud.opencode.base.email.Email;
 import cloud.opencode.base.email.EmailConfig;
 import cloud.opencode.base.email.SendResult;
 import cloud.opencode.base.email.exception.*;
 import cloud.opencode.base.email.internal.EmailSender;
+import cloud.opencode.base.email.protocol.ProtocolException;
+import cloud.opencode.base.email.protocol.mime.MimeBuilder;
+import cloud.opencode.base.email.protocol.smtp.SmtpClient;
 import cloud.opencode.base.email.security.DkimSigner;
 import cloud.opencode.base.email.security.EmailSecurity;
-import jakarta.mail.*;
-import jakarta.mail.internet.*;
 
-import java.io.UnsupportedEncodingException;
-import java.util.Date;
-import java.util.Properties;
-import java.util.UUID;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * SMTP Email Sender
@@ -69,7 +77,6 @@ import java.util.UUID;
 public class SmtpEmailSender implements EmailSender {
 
     private final EmailConfig config;
-    private final Session session;
 
     /**
      * Create SMTP sender with configuration
@@ -79,7 +86,6 @@ public class SmtpEmailSender implements EmailSender {
      */
     public SmtpEmailSender(EmailConfig config) {
         this.config = config;
-        this.session = createSession();
     }
 
     @Override
@@ -90,299 +96,131 @@ public class SmtpEmailSender implements EmailSender {
     @Override
     public SendResult sendWithResult(Email email) {
         try {
-            MimeMessage message = createMessage(email);
+            // Build the raw MIME message
+            String rawMessage = buildRawMessage(email);
 
             // Apply DKIM signature if configured
             if (config.hasDkim()) {
-                DkimSigner.sign(message, config.dkim());
+                rawMessage = DkimSigner.sign(rawMessage, config.dkim());
             }
 
-            // Use try-with-resources for Transport to ensure proper cleanup
-            String protocol = config.ssl() ? "smtps" : "smtp";
-            try (Transport transport = session.getTransport(protocol)) {
-                if (config.requiresAuth()) {
-                    String credential = config.hasOAuth2() ? config.oauth2Token() : config.password();
-                    transport.connect(config.host(), config.port(), config.username(), credential);
-                } else {
-                    transport.connect();
-                }
-                transport.sendMessage(message, message.getAllRecipients());
+            // Collect all recipients for RCPT TO
+            List<String> allRecipients = collectRecipients(email);
+
+            // Resolve sender address
+            String sender = resolveSender(email);
+
+            // Create SmtpClient, connect, authenticate, send, quit
+            try (SmtpClient smtp = createSmtpClient()) {
+                smtp.connect();
+                authenticate(smtp);
+                smtp.sendMessage(sender, allRecipients, rawMessage);
+                smtp.quit();
             }
 
-            // Get message ID from the sent message
-            String messageId = message.getMessageID();
+            // Extract message ID from raw message
+            String messageId = MimeBuilder.getMessageId(rawMessage);
             return SendResult.success(messageId);
-        } catch (AuthenticationFailedException e) {
-            throw new EmailSendException("Authentication failed", e, email, EmailErrorCode.AUTH_FAILED);
-        } catch (SendFailedException e) {
+        } catch (ProtocolException e) {
+            throw convertProtocolException(e, email);
+        } catch (Exception e) {
             throw new EmailSendException("Failed to send email: " + e.getMessage(), e, email,
-                    EmailErrorCode.MESSAGE_REJECTED);
-        } catch (MessagingException e) {
-            EmailErrorCode errorCode = EmailErrorCode.fromException(e);
-            throw new EmailSendException("Failed to send email: " + e.getMessage(), e, email, errorCode);
+                    EmailErrorCode.UNKNOWN);
         }
     }
 
     /**
-     * Create mail session
+     * Send multiple emails using a single SMTP connection
+     * 使用单个SMTP连接发送多封邮件
+     *
+     * <p>Reuses the same Transport connection for all emails in the batch,
+     * reducing TCP handshake and TLS negotiation overhead.</p>
+     * <p>对批量中所有邮件复用同一个Transport连接，减少TCP握手和TLS协商开销。</p>
+     *
+     * @param emails the emails to send | 要发送的邮件
+     * @return the batch result | 批量结果
      */
-    private Session createSession() {
-        Properties props = new Properties();
-
-        // Basic settings
-        props.put("mail.smtp.host", config.host());
-        props.put("mail.smtp.port", String.valueOf(config.port()));
-
-        // Timeout settings
-        String timeoutMs = String.valueOf(config.timeout().toMillis());
-        String connectionTimeoutMs = String.valueOf(config.connectionTimeout().toMillis());
-        props.put("mail.smtp.connectiontimeout", connectionTimeoutMs);
-        props.put("mail.smtp.timeout", timeoutMs);
-        props.put("mail.smtp.writetimeout", timeoutMs);
-
-        // Authentication
-        if (config.requiresAuth()) {
-            props.put("mail.smtp.auth", "true");
-
-            // OAuth2 XOAUTH2 mechanism for Gmail/Outlook
-            if (config.hasOAuth2()) {
-                props.put("mail.smtp.auth.mechanisms", "XOAUTH2");
-            }
+    public BatchSendResult sendBatch(List<Email> emails) {
+        if (emails == null || emails.isEmpty()) {
+            return new BatchSendResult(List.of(), Instant.now(), Duration.ZERO);
         }
 
-        // SSL/TLS settings
-        if (config.ssl()) {
-            props.put("mail.smtp.ssl.enable", "true");
-            props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
-            props.put("mail.smtp.socketFactory.port", String.valueOf(config.port()));
-        } else if (config.starttls()) {
-            props.put("mail.smtp.starttls.enable", "true");
-            props.put("mail.smtp.starttls.required", "true");
-        }
+        Instant startedAt = Instant.now();
+        List<BatchSendResult.ItemResult> results = new ArrayList<>(emails.size());
 
-        // Debug mode
-        if (config.debug()) {
-            props.put("mail.debug", "true");
-        }
+        try (SmtpClient smtp = createSmtpClient()) {
+            smtp.connect();
+            authenticate(smtp);
 
-        // Create session with authenticator if needed
-        if (config.requiresAuth()) {
-            return Session.getInstance(props, new Authenticator() {
-                @Override
-                protected PasswordAuthentication getPasswordAuthentication() {
-                    // Use OAuth2 token if configured, otherwise use password
-                    String credential = config.hasOAuth2()
-                            ? config.oauth2Token()
-                            : config.password();
-                    return new PasswordAuthentication(config.username(), credential);
-                }
-            });
-        }
+            for (Email email : emails) {
+                try {
+                    // Build the raw MIME message
+                    String rawMessage = buildRawMessage(email);
 
-        return Session.getInstance(props);
-    }
+                    // Apply DKIM signature if configured
+                    if (config.hasDkim()) {
+                        rawMessage = DkimSigner.sign(rawMessage, config.dkim());
+                    }
 
-    /**
-     * Create MIME message from email
-     */
-    private MimeMessage createMessage(Email email) throws MessagingException {
-        MimeMessage message = new MimeMessage(session);
+                    // Collect all recipients for RCPT TO
+                    List<String> allRecipients = collectRecipients(email);
 
-        // Set from address
-        String from = email.from() != null ? email.from() : config.defaultFrom();
-        String fromName = email.fromName() != null ? email.fromName() : config.defaultFromName();
+                    // Resolve sender address
+                    String sender = resolveSender(email);
 
-        if (from == null) {
-            throw new EmailConfigException("Sender email address is required");
-        }
-
-        try {
-            if (fromName != null && !fromName.isBlank()) {
-                message.setFrom(new InternetAddress(from, fromName, "UTF-8"));
-            } else {
-                message.setFrom(new InternetAddress(from));
-            }
-        } catch (UnsupportedEncodingException e) {
-            message.setFrom(new InternetAddress(from));
-        }
-
-        // Set recipients
-        addRecipients(message, Message.RecipientType.TO, email.to());
-        addRecipients(message, Message.RecipientType.CC, email.cc());
-        addRecipients(message, Message.RecipientType.BCC, email.bcc());
-
-        // Set reply-to
-        if (email.replyTo() != null && !email.replyTo().isBlank()) {
-            message.setReplyTo(new InternetAddress[]{new InternetAddress(email.replyTo())});
-        }
-
-        // Set subject (sanitized)
-        String subject = EmailSecurity.sanitizeHeader(email.subject());
-        message.setSubject(subject, "UTF-8");
-
-        // Set priority
-        if (email.priority() != null && email.priority() != Email.Priority.NORMAL) {
-            message.setHeader("X-Priority", String.valueOf(email.priority().getValue()));
-        }
-
-        // Set custom headers
-        if (email.headers() != null) {
-            for (var entry : email.headers().entrySet()) {
-                String headerName = EmailSecurity.sanitizeHeader(entry.getKey());
-                String headerValue = EmailSecurity.sanitizeHeader(entry.getValue());
-                message.setHeader(headerName, headerValue);
-            }
-        }
-
-        // Set date and message ID
-        message.setSentDate(new Date());
-        message.setHeader("Message-ID", generateMessageId());
-
-        // Set content
-        setContent(message, email);
-
-        return message;
-    }
-
-    /**
-     * Add recipients to message
-     */
-    private void addRecipients(MimeMessage message, Message.RecipientType type,
-                               java.util.List<String> addresses) throws MessagingException {
-        if (addresses == null || addresses.isEmpty()) {
-            return;
-        }
-        for (String address : addresses) {
-            if (address != null && !address.isBlank()) {
-                message.addRecipient(type, new InternetAddress(address));
-            }
-        }
-    }
-
-    /**
-     * Set message content
-     */
-    private void setContent(MimeMessage message, Email email) throws MessagingException {
-        boolean hasAttachments = email.hasAttachments();
-        boolean hasInlineAttachments = email.hasInlineAttachments();
-
-        if (!hasAttachments && !hasInlineAttachments) {
-            // Simple message
-            if (email.html()) {
-                message.setContent(email.content(), "text/html; charset=UTF-8");
-            } else {
-                message.setText(email.content(), "UTF-8");
-            }
-        } else if (hasInlineAttachments && email.html()) {
-            // HTML with inline images
-            MimeMultipart multipart = new MimeMultipart("related");
-
-            // Add HTML content
-            MimeBodyPart htmlPart = new MimeBodyPart();
-            htmlPart.setContent(email.content(), "text/html; charset=UTF-8");
-            multipart.addBodyPart(htmlPart);
-
-            // Add inline attachments
-            for (Attachment attachment : email.attachments()) {
-                if (attachment.isInline()) {
-                    MimeBodyPart attachmentPart = createAttachmentPart(attachment);
-                    attachmentPart.setDisposition(MimeBodyPart.INLINE);
-                    attachmentPart.setHeader("Content-ID", "<" + attachment.getContentId() + ">");
-                    multipart.addBodyPart(attachmentPart);
+                    smtp.sendMessage(sender, allRecipients, rawMessage);
+                    String messageId = MimeBuilder.getMessageId(rawMessage);
+                    results.add(BatchSendResult.ItemResult.success(email, messageId));
+                } catch (Exception e) {
+                    results.add(BatchSendResult.ItemResult.failure(email, e));
                 }
             }
 
-            // Wrap in mixed if there are regular attachments too
-            if (email.attachments().stream().anyMatch(a -> !a.isInline())) {
-                MimeMultipart mixedMultipart = new MimeMultipart("mixed");
-
-                // Add related part
-                MimeBodyPart relatedPart = new MimeBodyPart();
-                relatedPart.setContent(multipart);
-                mixedMultipart.addBodyPart(relatedPart);
-
-                // Add regular attachments
-                for (Attachment attachment : email.attachments()) {
-                    if (!attachment.isInline()) {
-                        mixedMultipart.addBodyPart(createAttachmentPart(attachment));
-                    }
-                }
-
-                message.setContent(mixedMultipart);
-            } else {
-                message.setContent(multipart);
+            smtp.quit();
+        } catch (ProtocolException e) {
+            // Connection-level failure: mark all remaining unsent as failed
+            for (int i = results.size(); i < emails.size(); i++) {
+                results.add(BatchSendResult.ItemResult.failure(emails.get(i), e));
             }
-        } else {
-            // Mixed content with attachments
-            MimeMultipart multipart = new MimeMultipart("mixed");
-
-            // Add body content
-            MimeBodyPart bodyPart = new MimeBodyPart();
-            if (email.html()) {
-                bodyPart.setContent(email.content(), "text/html; charset=UTF-8");
-            } else {
-                bodyPart.setText(email.content(), "UTF-8");
+        } catch (Exception e) {
+            // Connection-level failure: mark all remaining unsent as failed
+            for (int i = results.size(); i < emails.size(); i++) {
+                results.add(BatchSendResult.ItemResult.failure(emails.get(i), e));
             }
-            multipart.addBodyPart(bodyPart);
-
-            // Add attachments
-            for (Attachment attachment : email.attachments()) {
-                multipart.addBodyPart(createAttachmentPart(attachment));
-            }
-
-            message.setContent(multipart);
         }
+
+        Duration duration = Duration.between(startedAt, Instant.now());
+        return new BatchSendResult(List.copyOf(results), startedAt, duration);
     }
 
     /**
-     * Create attachment body part
+     * Test SMTP server connection and authentication
+     * 测试SMTP服务器连接和认证
+     *
+     * <p>Attempts to connect to the SMTP server and authenticate,
+     * then immediately disconnects. Useful for validating configuration.</p>
+     * <p>尝试连接SMTP服务器并认证，然后立即断开。用于验证配置。</p>
+     *
+     * @return the test result | 测试结果
      */
-    private MimeBodyPart createAttachmentPart(Attachment attachment) throws MessagingException {
-        MimeBodyPart part = new MimeBodyPart();
+    public ConnectionTestResult testConnection() {
+        long startNanos = System.nanoTime();
 
-        // Use data handler
-        part.setDataHandler(new jakarta.activation.DataHandler(
-                new jakarta.activation.DataSource() {
-                    @Override
-                    public java.io.InputStream getInputStream() {
-                        return attachment.getInputStream();
-                    }
+        try (SmtpClient smtp = createSmtpClient()) {
+            smtp.connect();
+            if (config.requiresAuth()) {
+                authenticate(smtp);
+            }
+            smtp.quit();
 
-                    @Override
-                    public java.io.OutputStream getOutputStream() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public String getContentType() {
-                        return attachment.getContentType();
-                    }
-
-                    @Override
-                    public String getName() {
-                        return attachment.getFileName();
-                    }
-                }
-        ));
-
-        try {
-            part.setFileName(MimeUtility.encodeText(attachment.getFileName(), "UTF-8", "B"));
-        } catch (UnsupportedEncodingException e) {
-            part.setFileName(attachment.getFileName());
+            long elapsedNanos = System.nanoTime() - startNanos;
+            Duration latency = Duration.ofNanos(elapsedNanos);
+            return ConnectionTestResult.success("Connected to " + config.host() + ":" + config.port(), latency);
+        } catch (Exception e) {
+            long elapsedNanos = System.nanoTime() - startNanos;
+            Duration latency = Duration.ofNanos(elapsedNanos);
+            return ConnectionTestResult.failure(e.getMessage(), e, latency);
         }
-
-        return part;
-    }
-
-    /**
-     * Generate message ID
-     */
-    private String generateMessageId() {
-        String domain = "localhost";
-        if (config.defaultFrom() != null && config.defaultFrom().contains("@")) {
-            domain = config.defaultFrom().substring(config.defaultFrom().indexOf('@') + 1);
-        }
-        return "<" + UUID.randomUUID() + "@" + domain + ">";
     }
 
     /**
@@ -395,13 +233,198 @@ public class SmtpEmailSender implements EmailSender {
         return config;
     }
 
+    // ========== Internal helpers ==========
+
     /**
-     * Get mail session
-     * 获取邮件会话
-     *
-     * @return the session | 会话
+     * Create a new SmtpClient from the current configuration
      */
-    public Session getSession() {
-        return session;
+    private SmtpClient createSmtpClient() {
+        return new SmtpClient(
+                config.host(),
+                config.port(),
+                config.ssl(),
+                config.starttls(),
+                config.connectionTimeout(),
+                config.timeout()
+        );
+    }
+
+    /**
+     * Authenticate with the SMTP server based on configuration
+     */
+    private void authenticate(SmtpClient smtp) throws ProtocolException {
+        if (!config.requiresAuth()) {
+            return;
+        }
+        if (config.hasOAuth2()) {
+            smtp.authXOAuth2(config.username(), config.oauth2Token());
+        } else {
+            smtp.authPlain(config.username(), config.password());
+        }
+    }
+
+    /**
+     * Build a raw MIME message string from an Email object
+     */
+    private String buildRawMessage(Email email) {
+        // Resolve sender address and name
+        String from = email.from() != null ? email.from() : config.defaultFrom();
+        String fromName = email.fromName() != null ? email.fromName() : config.defaultFromName();
+
+        if (from == null) {
+            throw new EmailConfigException("Sender email address is required");
+        }
+
+        // Sanitize subject and custom headers
+        String subject = EmailSecurity.sanitizeHeader(email.subject());
+        Map<String, String> sanitizedHeaders = null;
+        if (email.headers() != null && !email.headers().isEmpty()) {
+            sanitizedHeaders = new java.util.LinkedHashMap<>();
+            for (var entry : email.headers().entrySet()) {
+                String headerName = EmailSecurity.sanitizeHeader(entry.getKey());
+                String headerValue = EmailSecurity.sanitizeHeader(entry.getValue());
+                sanitizedHeaders.put(headerName, headerValue);
+            }
+        }
+
+        // Resolve content fields for MimeBuilder
+        String textContent = null;
+        String htmlContent = null;
+        boolean htmlFlag = email.html();
+        String content = email.content();
+
+        if (email.hasAlternativeContent()) {
+            // Both text and HTML content provided
+            textContent = email.textContent();
+            htmlContent = email.content();
+        }
+
+        // Build attachment data list
+        List<MimeBuilder.AttachmentData> attachments = null;
+        if (email.hasAttachments()) {
+            attachments = new ArrayList<>(email.attachments().size());
+            for (Attachment attachment : email.attachments()) {
+                byte[] data = readAttachmentData(attachment);
+                attachments.add(new MimeBuilder.AttachmentData(
+                        attachment.getFileName(),
+                        attachment.getContentType(),
+                        data,
+                        attachment.isInline(),
+                        attachment.getContentId()
+                ));
+            }
+        }
+
+        // Determine priority value
+        int priority = 3; // NORMAL
+        if (email.priority() != null && email.priority() != Email.Priority.NORMAL) {
+            priority = email.priority().getValue();
+        }
+
+        // Determine domain for Message-ID generation
+        String domain = "localhost";
+        if (from.contains("@")) {
+            domain = from.substring(from.indexOf('@') + 1);
+        }
+
+        // Build the raw MIME message
+        return MimeBuilder.buildMessage(
+                from,
+                fromName,
+                email.to(),
+                email.cc(),
+                email.bcc(),
+                email.replyTo(),
+                subject,
+                textContent,
+                htmlContent,
+                htmlFlag,
+                content,
+                attachments,
+                sanitizedHeaders,
+                priority,
+                domain
+        );
+    }
+
+    /**
+     * Read attachment data into a byte array
+     */
+    private static byte[] readAttachmentData(Attachment attachment) {
+        try (InputStream is = attachment.getInputStream()) {
+            int initialSize = attachment.getSize() > 0
+                    ? (int) Math.min(attachment.getSize(), Integer.MAX_VALUE)
+                    : 65536;
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(initialSize);
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = is.read(buffer)) != -1) {
+                baos.write(buffer, 0, len);
+            }
+            return baos.toByteArray();
+        } catch (IOException e) {
+            throw new EmailSendException("Failed to read attachment: " + attachment.getFileName(),
+                    e);
+        }
+    }
+
+    /**
+     * Resolve the sender address from Email or config defaults
+     */
+    private String resolveSender(Email email) {
+        String from = email.from() != null ? email.from() : config.defaultFrom();
+        if (from == null) {
+            throw new EmailConfigException("Sender email address is required");
+        }
+        return from;
+    }
+
+    /**
+     * Collect all recipients (to + cc + bcc) into a single list for RCPT TO
+     */
+    private static List<String> collectRecipients(Email email) {
+        int capacity = (email.to() != null ? email.to().size() : 0)
+                + (email.cc() != null ? email.cc().size() : 0)
+                + (email.bcc() != null ? email.bcc().size() : 0);
+        List<String> recipients = new ArrayList<>(capacity);
+        if (email.to() != null) {
+            for (String addr : email.to()) {
+                if (addr != null && !addr.isBlank()) {
+                    recipients.add(addr);
+                }
+            }
+        }
+        if (email.cc() != null) {
+            for (String addr : email.cc()) {
+                if (addr != null && !addr.isBlank()) {
+                    recipients.add(addr);
+                }
+            }
+        }
+        if (email.bcc() != null) {
+            for (String addr : email.bcc()) {
+                if (addr != null && !addr.isBlank()) {
+                    recipients.add(addr);
+                }
+            }
+        }
+        return recipients;
+    }
+
+    /**
+     * Convert a ProtocolException to the appropriate EmailSendException
+     */
+    private static EmailSendException convertProtocolException(ProtocolException e, Email email) {
+        if (e.isAuthenticationFailure()) {
+            return new EmailSendException("Authentication failed", e, email, EmailErrorCode.AUTH_FAILED);
+        }
+        if (e.isTimeout()) {
+            return new EmailSendException("Connection timeout", e, email, EmailErrorCode.CONNECTION_TIMEOUT);
+        }
+        if (e.isConnectionFailure()) {
+            return new EmailSendException("Connection failed", e, email, EmailErrorCode.CONNECTION_FAILED);
+        }
+        return new EmailSendException("Failed to send email: " + e.getMessage(), e, email,
+                EmailErrorCode.MESSAGE_REJECTED);
     }
 }

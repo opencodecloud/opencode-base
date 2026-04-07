@@ -1,5 +1,6 @@
 package cloud.opencode.base.captcha.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -24,7 +25,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException("captcha-123");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-123");
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA not found: captcha-123");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA not found: captcha-123");
         }
 
         @Test
@@ -32,8 +33,8 @@ class CaptchaNotFoundExceptionTest {
         void shouldIncludePrefixInMessage() {
             CaptchaNotFoundException ex = new CaptchaNotFoundException("xyz");
 
-            assertThat(ex.getMessage()).startsWith("CAPTCHA not found: ");
-            assertThat(ex.getMessage()).endsWith("xyz");
+            assertThat(ex.getRawMessage()).startsWith("CAPTCHA not found: ");
+            assertThat(ex.getRawMessage()).endsWith("xyz");
         }
 
         @Test
@@ -43,7 +44,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException(uuid);
 
             assertThat(ex.getCaptchaId()).isEqualTo(uuid);
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA not found: " + uuid);
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA not found: " + uuid);
         }
 
         @Test
@@ -52,7 +53,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException((String) null);
 
             assertThat(ex.getCaptchaId()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA not found: null");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA not found: null");
         }
 
         @Test
@@ -61,7 +62,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException("");
 
             assertThat(ex.getCaptchaId()).isEmpty();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA not found: ");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA not found: ");
         }
 
         @Test
@@ -70,7 +71,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException("   ");
 
             assertThat(ex.getCaptchaId()).isEqualTo("   ");
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA not found:    ");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA not found:    ");
         }
 
         @Test
@@ -93,7 +94,7 @@ class CaptchaNotFoundExceptionTest {
                 "Captcha was deleted", "captcha-456");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-456");
-            assertThat(ex.getMessage()).isEqualTo("Captcha was deleted");
+            assertThat(ex.getRawMessage()).isEqualTo("Captcha was deleted");
         }
 
         @Test
@@ -103,8 +104,8 @@ class CaptchaNotFoundExceptionTest {
                 "Storage lookup failed", "storage-789");
 
             assertThat(ex.getCaptchaId()).isEqualTo("storage-789");
-            assertThat(ex.getMessage()).isEqualTo("Storage lookup failed");
-            assertThat(ex.getMessage()).doesNotContain("storage-789");
+            assertThat(ex.getRawMessage()).isEqualTo("Storage lookup failed");
+            assertThat(ex.getRawMessage()).doesNotContain("storage-789");
         }
 
         @Test
@@ -113,7 +114,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException(null, "captcha-111");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-111");
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
         }
 
         @Test
@@ -122,7 +123,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException("", "captcha-222");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-222");
-            assertThat(ex.getMessage()).isEmpty();
+            assertThat(ex.getRawMessage()).isEmpty();
         }
 
         @Test
@@ -131,7 +132,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException(null, null);
 
             assertThat(ex.getCaptchaId()).isNull();
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
         }
 
         @Test
@@ -208,6 +209,14 @@ class CaptchaNotFoundExceptionTest {
     @Nested
     @DisplayName("Inheritance Tests")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            CaptchaNotFoundException ex = new CaptchaNotFoundException("id");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("should extend CaptchaException")
@@ -301,7 +310,7 @@ class CaptchaNotFoundExceptionTest {
         void shouldFormatDefaultMessage() {
             CaptchaNotFoundException ex = new CaptchaNotFoundException("my-id");
 
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA not found: my-id");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA not found: my-id");
         }
 
         @Test
@@ -310,7 +319,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException ex = new CaptchaNotFoundException(
                 "Custom not-found message", "id-99");
 
-            assertThat(ex.getMessage()).isEqualTo("Custom not-found message");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom not-found message");
         }
 
         @Test
@@ -320,7 +329,7 @@ class CaptchaNotFoundExceptionTest {
             CaptchaNotFoundException customEx = new CaptchaNotFoundException(
                 "Different message", "captcha-1");
 
-            assertThat(defaultEx.getMessage()).isNotEqualTo(customEx.getMessage());
+            assertThat(defaultEx.getRawMessage()).isNotEqualTo(customEx.getRawMessage());
             assertThat(defaultEx.getCaptchaId()).isEqualTo(customEx.getCaptchaId());
         }
     }

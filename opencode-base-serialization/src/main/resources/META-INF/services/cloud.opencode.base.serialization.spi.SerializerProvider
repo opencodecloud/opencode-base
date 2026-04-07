@@ -1,5 +1,2 @@
 cloud.opencode.base.serialization.json.JsonSerializerProvider
-cloud.opencode.base.serialization.xml.XmlSerializerProvider
 cloud.opencode.base.serialization.binary.JdkSerializerProvider
-cloud.opencode.base.serialization.binary.KryoSerializerProvider
-cloud.opencode.base.serialization.binary.ProtobufSerializerProvider

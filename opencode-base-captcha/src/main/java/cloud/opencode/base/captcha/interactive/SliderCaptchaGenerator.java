@@ -42,6 +42,9 @@ import java.util.UUID;
  * <ul>
  *   <li>Thread-safe: Yes (stateless) - 线程安全: 是（无状态）</li>
  *   <li>Null-safe: No (config must not be null) - 空值安全: 否（配置不能为null）</li>
+ *   <li>Low entropy: Slider position has ~width possible values. Must be used
+ *       with BehaviorAnalyzer and CaptchaRateLimiter for adequate protection.
+ *       低熵: 滑块位置约有 width 种可能值。必须配合 BehaviorAnalyzer 和 CaptchaRateLimiter 使用。</li>
  * </ul>
  *
  * @author Leon Soo

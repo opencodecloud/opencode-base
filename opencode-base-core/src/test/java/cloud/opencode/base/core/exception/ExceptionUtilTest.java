@@ -1,11 +1,14 @@
 package cloud.opencode.base.core.exception;
 
+import cloud.opencode.base.core.func.CheckedRunnable;
+import cloud.opencode.base.core.func.CheckedSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -370,13 +373,71 @@ class ExceptionUtilTest {
     }
 
     @Nested
+    @DisplayName("findCause 测试")
+    class FindCauseTests {
+
+        @Test
+        @DisplayName("找到指定类型返回 Optional 包含异常")
+        void testFound() {
+            IOException target = new IOException("Target");
+            Exception ex = new RuntimeException("Wrapper", target);
+
+            Optional<IOException> result = ExceptionUtil.findCause(ex, IOException.class);
+            assertThat(result).isPresent().containsSame(target);
+        }
+
+        @Test
+        @DisplayName("未找到返回空 Optional")
+        void testNotFound() {
+            Exception ex = new RuntimeException("Test");
+
+            Optional<IOException> result = ExceptionUtil.findCause(ex, IOException.class);
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("null 输入返回空 Optional")
+        void testNullInput() {
+            Optional<IOException> result = ExceptionUtil.findCause(null, IOException.class);
+            assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("isOrCausedBy 测试")
+    class IsOrCausedByTests {
+
+        @Test
+        @DisplayName("异常本身匹配返回 true")
+        void testDirectMatch() {
+            IOException ex = new IOException("Direct");
+            assertThat(ExceptionUtil.isOrCausedBy(ex, IOException.class)).isTrue();
+        }
+
+        @Test
+        @DisplayName("嵌套 cause 匹配返回 true")
+        void testNestedMatch() {
+            IOException root = new IOException("Root");
+            RuntimeException wrapper = new RuntimeException("Wrapper", root);
+            assertThat(ExceptionUtil.isOrCausedBy(wrapper, IOException.class)).isTrue();
+        }
+
+        @Test
+        @DisplayName("不匹配返回 false")
+        void testNoMatch() {
+            RuntimeException ex = new RuntimeException("Test");
+            assertThat(ExceptionUtil.isOrCausedBy(ex, IOException.class)).isFalse();
+        }
+    }
+
+    @Nested
     @DisplayName("函数式接口测试")
     class FunctionalInterfaceTests {
 
         @Test
         @DisplayName("CheckedRunnable 可作为 lambda")
         void testCheckedRunnable() {
-            ExceptionUtil.CheckedRunnable runnable = () -> {
+            CheckedRunnable runnable = () -> {
                 throw new IOException("Test");
             };
             assertThatThrownBy(runnable::run).isInstanceOf(IOException.class);
@@ -385,7 +446,7 @@ class ExceptionUtilTest {
         @Test
         @DisplayName("CheckedSupplier 可作为 lambda")
         void testCheckedSupplier() {
-            ExceptionUtil.CheckedSupplier<String> supplier = () -> {
+            CheckedSupplier<String> supplier = () -> {
                 throw new IOException("Test");
             };
             assertThatThrownBy(supplier::get).isInstanceOf(IOException.class);
@@ -394,7 +455,7 @@ class ExceptionUtilTest {
         @Test
         @DisplayName("CheckedSupplier 正常返回值")
         void testCheckedSupplierReturn() throws Exception {
-            ExceptionUtil.CheckedSupplier<String> supplier = () -> "Hello";
+            CheckedSupplier<String> supplier = () -> "Hello";
             assertThat(supplier.get()).isEqualTo("Hello");
         }
     }

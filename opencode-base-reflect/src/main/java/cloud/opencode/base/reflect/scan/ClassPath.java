@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -284,6 +285,9 @@ public final class ClassPath {
         }
     }
 
+    /** Maximum directory depth for scanning to prevent symlink-cycle StackOverflow. */
+    private static final int MAX_SCAN_DEPTH = 64;
+
     private static void scanUri(URI uri, ClassLoader classLoader, Set<ClassInfo> classes, Set<ResourceInfo> resources) throws IOException {
         File file = new File(uri);
         if (!file.exists()) {
@@ -291,14 +295,30 @@ public final class ClassPath {
         }
 
         if (file.isDirectory()) {
-            scanDirectory(file, "", classLoader, classes, resources);
+            Set<String> visitedPaths = new HashSet<>();
+            scanDirectory(file, "", classLoader, classes, resources, visitedPaths, 0);
         } else if (file.getName().endsWith(".jar")) {
             scanJar(file, classLoader, classes, resources);
         }
     }
 
     private static void scanDirectory(File directory, String packagePrefix, ClassLoader classLoader,
-                                       Set<ClassInfo> classes, Set<ResourceInfo> resources) {
+                                       Set<ClassInfo> classes, Set<ResourceInfo> resources,
+                                       Set<String> visitedPaths, int depth) {
+        if (depth > MAX_SCAN_DEPTH) {
+            return; // prevent stack overflow from deep/cyclic directory trees
+        }
+
+        // Symlink cycle detection via canonical path
+        try {
+            String canonical = directory.getCanonicalPath();
+            if (!visitedPaths.add(canonical)) {
+                return; // already scanned this directory (symlink cycle)
+            }
+        } catch (IOException e) {
+            return; // cannot resolve canonical path, skip
+        }
+
         File[] files = directory.listFiles();
         if (files == null) {
             return;
@@ -308,7 +328,18 @@ public final class ClassPath {
             String resourceName = packagePrefix.isEmpty() ? file.getName() : packagePrefix + "/" + file.getName();
 
             if (file.isDirectory()) {
-                scanDirectory(file, resourceName, classLoader, classes, resources);
+                // Skip symlinks pointing outside the scan root to prevent path traversal
+                try {
+                    if (Files.isSymbolicLink(file.toPath())) {
+                        String target = file.getCanonicalPath();
+                        if (visitedPaths.contains(target)) {
+                            continue; // cycle detected
+                        }
+                    }
+                } catch (IOException ignored) {
+                    continue;
+                }
+                scanDirectory(file, resourceName, classLoader, classes, resources, visitedPaths, depth + 1);
             } else if (file.getName().endsWith(".class")) {
                 classes.add(new ClassInfo(resourceName, classLoader));
             } else {

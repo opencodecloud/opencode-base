@@ -123,7 +123,17 @@ public final class RepeatableRandom {
      * @return random int | 随机整数
      */
     public int nextInt(int min, int max) {
-        return min + random.nextInt(max - min + 1);
+        if (min == max) {
+            return min;
+        }
+        // Use long arithmetic to avoid overflow when range spans large int ranges
+        long range = (long) max - (long) min + 1;
+        if (range <= Integer.MAX_VALUE) {
+            return min + random.nextInt((int) range);
+        }
+        // For very large ranges (e.g., MIN_VALUE to MAX_VALUE), use long modulo
+        long r = random.nextLong() >>> 1;
+        return (int) (min + (r % range));
     }
 
     // ==================== Long Generation | 长整数生成 ====================
@@ -146,7 +156,12 @@ public final class RepeatableRandom {
      * @return random long | 随机长整数
      */
     public long nextLong(long bound) {
-        return Math.abs(random.nextLong()) % bound;
+        if (bound <= 0) {
+            throw new IllegalArgumentException("bound must be positive");
+        }
+        // Use unsigned shift to avoid Math.abs(Long.MIN_VALUE) returning negative
+        long r = random.nextLong() >>> 1;
+        return r % bound;
     }
 
     // ==================== Double Generation | 双精度生成 ====================

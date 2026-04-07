@@ -136,6 +136,12 @@ public class SecureEventBus implements AutoCloseable {
      * @param <E>       the event type parameter | 事件类型参数
      */
     public <E extends Event> void on(Class<E> eventType, EventListener<E> listener) {
+        // Lambda listeners are anonymous - validate the declaring class if identifiable
+        Class<?> listenerClass = listener.getClass();
+        if (!isAllowedPackage(listenerClass)) {
+            throw new EventSecurityException(
+                    "Lambda listener not in allowed package: " + listenerClass.getName());
+        }
         eventBus.on(eventType, listener);
     }
 
@@ -186,7 +192,8 @@ public class SecureEventBus implements AutoCloseable {
         }
 
         String packageName = clazz.getPackageName();
-        return allowedPackages.stream().anyMatch(packageName::startsWith);
+        return allowedPackages.stream().anyMatch(pkg ->
+                packageName.equals(pkg) || packageName.startsWith(pkg + "."));
     }
 
 
@@ -200,9 +207,19 @@ public class SecureEventBus implements AutoCloseable {
     }
 
     /**
-     * Get the underlying event bus
-     * 获取底层事件总线
+     * Get the underlying event bus (CAUTION: bypasses ALL security checks)
+     * 获取底层事件总线（注意：绕过所有安全检查）
      *
+     * <p><strong>WARNING:</strong> Direct access to the underlying event bus bypasses
+     * all security policies (whitelist, rate limiting, signature verification).
+     * Use only for advanced integration scenarios where the caller manages its own security.
+     * Consider using {@link SecureEventBus} methods instead.</p>
+     * <p><strong>警告：</strong>直接访问底层事件总线将绕过所有安全策略（白名单、频率限制、签名验证）。
+     * 仅在调用者自行管理安全性的高级集成场景中使用。请优先使用 {@link SecureEventBus} 方法。</p>
+     *
+     * @apiNote This method exists for advanced integration scenarios only.
+     *          The caller is responsible for enforcing security on the returned instance.
+     *          此方法仅用于高级集成场景。调用者需自行对返回实例强制执行安全策略。
      * @return the underlying OpenEvent instance | 底层OpenEvent实例
      */
     public OpenEvent getEventBus() {

@@ -167,8 +167,8 @@ public class OpenConfigException extends OpenException {
      */
     public static OpenConfigException conversionFailed(String key, String value, Class<?> targetType) {
         return new OpenConfigException(key, null,
-            String.format("Failed to convert config '%s' value '%s' to type %s",
-                key, value, targetType.getName()));
+            String.format("Failed to convert config '%s' to type %s (value redacted for security)",
+                key, targetType.getName()));
     }
 
     /**
@@ -183,8 +183,8 @@ public class OpenConfigException extends OpenException {
      */
     public static OpenConfigException conversionFailed(String key, String value, Class<?> targetType, Throwable cause) {
         return new OpenConfigException(key, null,
-            String.format("Failed to convert config '%s' value '%s' to type %s",
-                key, value, targetType.getName()), cause);
+            String.format("Failed to convert config '%s' to type %s (value redacted for security)",
+                key, targetType.getName()), cause);
     }
 
     /**

@@ -2,6 +2,7 @@ package cloud.opencode.base.captcha.validator;
 
 import cloud.opencode.base.captcha.ValidationResult;
 import cloud.opencode.base.captcha.store.CaptchaStore;
+import cloud.opencode.base.captcha.store.HashedCaptchaStore;
 
 /**
  * Captcha Validator - Interface for CAPTCHA validation
@@ -76,5 +77,39 @@ public interface CaptchaValidator {
      */
     static CaptchaValidator timeBased(CaptchaStore store) {
         return new TimeBasedCaptchaValidator(store);
+    }
+
+    /**
+     * Creates a Proof-of-Work validator.
+     * 创建工作量证明验证器。
+     *
+     * @param store the CAPTCHA store | 验证码存储
+     * @return the validator | 验证器
+     */
+    static CaptchaValidator pow(CaptchaStore store) {
+        return new PowCaptchaValidator(store);
+    }
+
+    /**
+     * Creates a composite validator that chains multiple validators.
+     * 创建串联多个验证器的组合验证器。
+     *
+     * @param first the first (primary) validator | 第一个（主要）验证器
+     * @param rest  additional validators | 附加验证器
+     * @return the composite validator | 组合验证器
+     */
+    static CaptchaValidator composite(CaptchaValidator first, CaptchaValidator... rest) {
+        return CompositeValidator.of(first, rest);
+    }
+
+    /**
+     * Creates a validator for hashed stores.
+     * 创建用于哈希存储的验证器。
+     *
+     * @param store the hashed CAPTCHA store | 哈希验证码存储
+     * @return the validator | 验证器
+     */
+    static CaptchaValidator hashed(HashedCaptchaStore store) {
+        return new HashedCaptchaValidator(store);
     }
 }

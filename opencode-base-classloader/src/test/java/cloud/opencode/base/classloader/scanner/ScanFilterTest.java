@@ -337,6 +337,125 @@ class ScanFilterTest {
         }
     }
 
+    // ==================== Test helpers for sealed classes ====================
+
+    sealed interface TestSealed permits TestSealedImpl {}
+
+    static final class TestSealedImpl implements TestSealed {}
+
+    @Nested
+    @DisplayName("Sealed Filter Tests")
+    class SealedFilterTests {
+
+        @Test
+        @DisplayName("Should filter sealed classes")
+        void shouldFilterSealedClasses() {
+            ScanFilter filter = ScanFilter.isSealed();
+
+            assertThat(filter.test(TestSealed.class)).isTrue();
+            assertThat(filter.test(String.class)).isFalse();
+            assertThat(filter.test(Serializable.class)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should filter sealed classes with permitted subclasses")
+        void shouldFilterSealedWithPermittedSubclasses() {
+            ScanFilter filter = ScanFilter.hasPermittedSubclass();
+
+            assertThat(filter.test(TestSealed.class)).isTrue();
+            assertThat(filter.test(String.class)).isFalse();
+            assertThat(filter.test(Serializable.class)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("Parameter Count Filter Tests")
+    class ParameterCountFilterTests {
+
+        @Test
+        @DisplayName("Should filter classes with no-arg constructor")
+        void shouldFilterNoArgConstructor() {
+            ScanFilter filter = ScanFilter.hasConstructorWithParameterCount(0);
+
+            // Object has a no-arg constructor
+            assertThat(filter.test(Object.class)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should filter classes with two-arg constructor")
+        void shouldFilterTwoArgConstructor() {
+            // String has a constructor with 2 params (e.g., String(byte[], Charset))
+            ScanFilter filter = ScanFilter.hasConstructorWithParameterCount(2);
+
+            assertThat(filter.test(String.class)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should return false when no constructor matches")
+        void shouldReturnFalseWhenNoConstructorMatches() {
+            ScanFilter filter = ScanFilter.hasConstructorWithParameterCount(100);
+
+            assertThat(filter.test(String.class)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should filter classes with method having specified parameter count")
+        void shouldFilterMethodWithParameterCount() {
+            ScanFilter filter = ScanFilter.hasMethodWithParameterCount(1);
+
+            // String has many methods with 1 parameter (e.g., charAt, indexOf, etc.)
+            assertThat(filter.test(String.class)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should return false when no method matches parameter count")
+        void shouldReturnFalseWhenNoMethodMatchesParameterCount() {
+            ScanFilter filter = ScanFilter.hasMethodWithParameterCount(100);
+
+            assertThat(filter.test(String.class)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("Return Type Filter Tests")
+    class ReturnTypeFilterTests {
+
+        @Test
+        @DisplayName("Should filter classes with method returning String")
+        void shouldFilterMethodReturningString() {
+            ScanFilter filter = ScanFilter.hasMethodWithReturnType(String.class);
+
+            // String has methods returning String (e.g., toString, substring, etc.)
+            assertThat(filter.test(String.class)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should filter classes with void methods")
+        void shouldFilterVoidMethods() {
+            ScanFilter filter = ScanFilter.hasMethodWithReturnType(void.class);
+
+            // java.util.ArrayList has void methods (e.g., clear, add)
+            assertThat(filter.test(java.util.ArrayList.class)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should return false when no method matches return type")
+        void shouldReturnFalseWhenNoMethodMatchesReturnType() {
+            // Serializable declares no methods, so no return type can match
+            ScanFilter filter = ScanFilter.hasMethodWithReturnType(Thread.class);
+
+            assertThat(filter.test(Serializable.class)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should throw on null return type")
+        void shouldThrowOnNullReturnType() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> ScanFilter.hasMethodWithReturnType(null))
+                    .withMessageContaining("Return type must not be null");
+        }
+    }
+
     @Nested
     @DisplayName("Null Safety Tests")
     class NullSafetyTests {
@@ -406,6 +525,114 @@ class ScanFilterTest {
         void shouldThrowOnNullPackageName() {
             assertThatNullPointerException()
                     .isThrownBy(() -> ScanFilter.inPackage(null));
+        }
+    }
+
+    @Nested
+    @DisplayName("PreTest Tests")
+    class PreTestTests {
+
+        @Test
+        @DisplayName("Default preTest should always return true")
+        void defaultPreTestShouldReturnTrue() {
+            ScanFilter filter = ScanFilter.isConcrete();
+            assertThat(filter.preTest("any.class.Name")).isTrue();
+            assertThat(filter.preTest("")).isTrue();
+        }
+
+        @Test
+        @DisplayName("nameStartsWith preTest should filter by class name")
+        void nameStartsWithPreTest() {
+            ScanFilter filter = ScanFilter.nameStartsWith("java.lang");
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+            assertThat(filter.preTest("java.util.List")).isFalse();
+        }
+
+        @Test
+        @DisplayName("nameEndsWith preTest should filter by class name")
+        void nameEndsWithPreTest() {
+            ScanFilter filter = ScanFilter.nameEndsWith("String");
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+            assertThat(filter.preTest("java.lang.Integer")).isFalse();
+        }
+
+        @Test
+        @DisplayName("nameMatches preTest should filter by regex")
+        void nameMatchesPreTest() {
+            ScanFilter filter = ScanFilter.nameMatches("java\\.lang\\..*");
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+            assertThat(filter.preTest("java.util.List")).isFalse();
+        }
+
+        @Test
+        @DisplayName("inPackage preTest should filter by package prefix")
+        void inPackagePreTest() {
+            ScanFilter filter = ScanFilter.inPackage("java.lang");
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+            assertThat(filter.preTest("java.util.List")).isFalse();
+        }
+
+        @Test
+        @DisplayName("isTopLevel preTest should reject inner class names")
+        void isTopLevelPreTest() {
+            ScanFilter filter = ScanFilter.isTopLevel();
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+            assertThat(filter.preTest("java.util.Map$Entry")).isFalse();
+        }
+
+        @Test
+        @DisplayName("isInnerClass preTest should accept inner class names")
+        void isInnerClassPreTest() {
+            ScanFilter filter = ScanFilter.isInnerClass();
+            assertThat(filter.preTest("java.util.Map$Entry")).isTrue();
+            assertThat(filter.preTest("java.lang.String")).isFalse();
+        }
+
+        @Test
+        @DisplayName("AND combination should propagate preTest")
+        void andShouldPropagatePreTest() {
+            ScanFilter filter = ScanFilter.and(
+                    ScanFilter.nameStartsWith("java.lang"),
+                    ScanFilter.nameEndsWith("String")
+            );
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+            assertThat(filter.preTest("java.util.String")).isFalse();
+            assertThat(filter.preTest("java.lang.Integer")).isFalse();
+        }
+
+        @Test
+        @DisplayName("OR combination should propagate preTest")
+        void orShouldPropagatePreTest() {
+            ScanFilter filter = ScanFilter.or(
+                    ScanFilter.nameStartsWith("java.lang"),
+                    ScanFilter.nameStartsWith("java.util")
+            );
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+            assertThat(filter.preTest("java.util.List")).isTrue();
+            assertThat(filter.preTest("com.example.Foo")).isFalse();
+        }
+
+        @Test
+        @DisplayName("OR with default preTest should be conservative")
+        void orWithDefaultPreTestShouldBeConservative() {
+            // isConcrete has default preTest (always true), so OR must also return true
+            ScanFilter filter = ScanFilter.or(
+                    ScanFilter.nameStartsWith("com.nonexistent"),
+                    ScanFilter.isConcrete()
+            );
+            assertThat(filter.preTest("java.lang.String")).isTrue();
+        }
+
+        @Test
+        @DisplayName("AND with default preTest should still apply name filter")
+        void andWithDefaultPreTestShouldStillApplyNameFilter() {
+            ScanFilter filter = ScanFilter.and(
+                    ScanFilter.nameStartsWith("java.lang"),
+                    ScanFilter.isConcrete()
+            );
+            // nameStartsWith preTest rejects, isConcrete preTest accepts — AND → false
+            assertThat(filter.preTest("java.util.List")).isFalse();
+            assertThat(filter.preTest("java.lang.String")).isTrue();
         }
     }
 }

@@ -1,5 +1,6 @@
 package cloud.opencode.base.web.crypto;
 
+import cloud.opencode.base.json.TypeReference;
 import cloud.opencode.base.web.Result;
 import org.junit.jupiter.api.*;
 
@@ -36,6 +37,11 @@ class ResultEncryptorTest {
                 }
 
                 @Override
+                public <T> Result<T> decrypt(EncryptedResult encrypted, TypeReference<T> typeReference) {
+                    return null;
+                }
+
+                @Override
                 public String getAlgorithm() {
                     return "TEST-ALGO";
                 }
@@ -58,11 +64,16 @@ class ResultEncryptorTest {
             ResultEncryptor encryptor = new ResultEncryptor() {
                 @Override
                 public <T> EncryptedResult encrypt(Result<T> result) {
-                    return EncryptedResult.of(result.code(), "encrypted", getAlgorithm());
+                    return EncryptedResult.of(result.code(), result.message(), "encrypted", getAlgorithm());
                 }
 
                 @Override
                 public <T> Result<T> decrypt(EncryptedResult encrypted, Class<T> dataType) {
+                    return Result.ok();
+                }
+
+                @Override
+                public <T> Result<T> decrypt(EncryptedResult encrypted, TypeReference<T> typeReference) {
                     return Result.ok();
                 }
 

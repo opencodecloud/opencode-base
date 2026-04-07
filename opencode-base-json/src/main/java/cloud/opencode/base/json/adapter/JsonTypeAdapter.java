@@ -181,6 +181,18 @@ public interface JsonTypeAdapter<T> {
     }
 
     /**
+     * Placeholder class used as default value for annotation attributes
+     * that reference a {@link JsonTypeAdapter}.
+     * 占位符类，用作引用 {@link JsonTypeAdapter} 的注解属性的默认值。
+     *
+     * <p>This class should never be instantiated. It serves only as a
+     * sentinel value indicating "no adapter specified".</p>
+     * <p>此类不应被实例化。它仅作为"未指定适配器"的哨兵值。</p>
+     */
+    abstract class None implements JsonTypeAdapter<Object> {
+    }
+
+    /**
      * Creates an adapter for simple string conversion.
      * 创建简单字符串转换的适配器。
      *

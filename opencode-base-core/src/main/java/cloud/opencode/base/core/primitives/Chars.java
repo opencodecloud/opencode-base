@@ -52,7 +52,7 @@ public final class Chars {
     }
 
     public static char fromByteArray(byte[] bytes) {
-        return (char) ((bytes[0] << 8) | (bytes[1] & 0xFF));
+        return (char) (((bytes[0] & 0xFF) << 8) | (bytes[1] & 0xFF));
     }
 
     public static char[] concat(char[]... arrays) {
@@ -121,6 +121,9 @@ public final class Chars {
     }
 
     public static char constrainToRange(char value, char min, char max) {
+        if (min > max) {
+            throw new IllegalArgumentException("min (" + (int) min + ") > max (" + (int) max + ")");
+        }
         return value < min ? min : (value > max ? max : value);
     }
 

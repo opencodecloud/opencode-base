@@ -138,7 +138,7 @@ public final class FormBody implements RequestBody {
 
     @Override
     public String toString() {
-        return "FormBody{entries=" + entries.size() + ", encoded=" + encoded + "}";
+        return "FormBody{entries=" + entries.size() + "}";
     }
 
     public static final class Builder {

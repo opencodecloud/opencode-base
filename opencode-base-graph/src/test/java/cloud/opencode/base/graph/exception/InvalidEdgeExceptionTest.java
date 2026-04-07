@@ -26,8 +26,8 @@ class InvalidEdgeExceptionTest {
         void testMessageConstructor() {
             InvalidEdgeException ex = new InvalidEdgeException("Invalid edge weight");
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid edge weight");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.INVALID_EDGE);
+            assertThat(ex.getMessage()).contains("Invalid edge weight");
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.INVALID_EDGE);
         }
     }
 
@@ -61,8 +61,8 @@ class InvalidEdgeExceptionTest {
         void testErrorCode() {
             InvalidEdgeException ex = new InvalidEdgeException("test");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.INVALID_EDGE);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(3002);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.INVALID_EDGE);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(3002);
         }
     }
 }

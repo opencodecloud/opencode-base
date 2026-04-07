@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -546,6 +547,149 @@ class StopwatchTest {
         void zeroElapsedTimeString() {
             Stopwatch sw = Stopwatch.createUnstarted();
             assertEquals("0 ns", sw.toString());
+        }
+    }
+
+    // ==================== Suspend and Resume Tests ====================
+
+    @Nested
+    @DisplayName("suspend and resume")
+    class SuspendResumeTests {
+
+        @Test
+        @DisplayName("suspend stops running")
+        void suspendStopsRunning() {
+            Stopwatch sw = Stopwatch.createStarted();
+            sw.suspend();
+            assertThat(sw.isRunning()).isFalse();
+        }
+
+        @Test
+        @DisplayName("resume restarts after suspend")
+        void resumeRestartsAfterSuspend() {
+            Stopwatch sw = Stopwatch.createStarted();
+            sw.suspend();
+            sw.resume();
+            assertThat(sw.isRunning()).isTrue();
+        }
+
+        @Test
+        @DisplayName("suspended time is not counted")
+        void suspendedTimeNotCounted() throws InterruptedException {
+            Stopwatch sw = Stopwatch.createStarted();
+            Thread.sleep(50);
+            sw.suspend();
+            Thread.sleep(100);
+            sw.resume();
+            Thread.sleep(50);
+            sw.stop();
+            long elapsedMs = sw.elapsedMillis();
+            // Should be ~100ms (two 50ms active periods), not ~200ms
+            assertThat(elapsedMs).isGreaterThanOrEqualTo(80).isLessThan(180);
+        }
+
+        @Test
+        @DisplayName("suspend when not running throws")
+        void suspendWhenNotRunningThrows() {
+            Stopwatch sw = Stopwatch.createUnstarted();
+            assertThatThrownBy(sw::suspend)
+                    .isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
+        @DisplayName("resume when running throws")
+        void resumeWhenRunningThrows() {
+            Stopwatch sw = Stopwatch.createStarted();
+            assertThatThrownBy(sw::resume)
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    // ==================== Split and Laps Tests ====================
+
+    @Nested
+    @DisplayName("split and getLaps")
+    class SplitLapsTests {
+
+        @Test
+        @DisplayName("split returns lap duration greater than zero")
+        void splitReturnsLapDuration() throws InterruptedException {
+            Stopwatch sw = Stopwatch.createStarted();
+            Thread.sleep(10);
+            Duration lap = sw.split();
+            assertThat(lap.toNanos()).isGreaterThan(0);
+        }
+
+        @Test
+        @DisplayName("multiple splits are recorded")
+        void multipleSplitsRecorded() throws InterruptedException {
+            Stopwatch sw = Stopwatch.createStarted();
+            Thread.sleep(5);
+            sw.split();
+            Thread.sleep(5);
+            sw.split();
+            Thread.sleep(5);
+            sw.split();
+            assertThat(sw.getLaps()).hasSize(3);
+        }
+
+        @Test
+        @DisplayName("getLaps returns unmodifiable list")
+        void getLapsIsUnmodifiable() {
+            Stopwatch sw = Stopwatch.createStarted();
+            sw.split();
+            java.util.List<Duration> laps = sw.getLaps();
+            assertThatThrownBy(() -> laps.add(Duration.ZERO))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+
+        @Test
+        @DisplayName("reset clears laps")
+        void resetClearsLaps() {
+            Stopwatch sw = Stopwatch.createStarted();
+            sw.split();
+            sw.split();
+            sw.reset();
+            assertThat(sw.getLaps()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("split when not running throws")
+        void splitWhenNotRunningThrows() {
+            Stopwatch sw = Stopwatch.createUnstarted();
+            assertThatThrownBy(sw::split)
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    // ==================== Time Convenience Methods Tests ====================
+
+    @Nested
+    @DisplayName("time convenience methods")
+    class TimeTests {
+
+        @Test
+        @DisplayName("time callable returns result and duration")
+        void timeCallable() throws Exception {
+            var result = Stopwatch.time(() -> "hello");
+            assertThat(result.left()).isEqualTo("hello");
+            assertThat(result.right().toNanos()).isGreaterThan(0);
+        }
+
+        @Test
+        @DisplayName("time runnable returns elapsed duration")
+        void timeRunnable() {
+            Duration elapsed = Stopwatch.time(() -> {
+                try { Thread.sleep(10); } catch (InterruptedException ignored) { }
+            });
+            assertThat(elapsed.toMillis()).isGreaterThanOrEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("time callable propagates exception")
+        void timeCallableException() {
+            assertThatThrownBy(() -> Stopwatch.time(() -> { throw new java.io.IOException("fail"); }))
+                    .isInstanceOf(java.io.IOException.class);
         }
     }
 }

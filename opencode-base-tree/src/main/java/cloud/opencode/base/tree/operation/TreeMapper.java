@@ -1,23 +1,25 @@
 package cloud.opencode.base.tree.operation;
 
 import cloud.opencode.base.tree.Treeable;
+import cloud.opencode.base.tree.exception.TreeException;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
 /**
- * Tree Mapper
- * 树映射器
+ * Tree Mapper - Maps tree nodes to different types
+ * 树映射器 - 将树节点映射为不同类型
  *
- * <p>Maps tree nodes to different types.</p>
- * <p>将树节点映射为不同类型。</p>
+ * <p>Maps tree nodes to different types while preserving tree structure.</p>
+ * <p>将树节点映射为不同类型同时保持树结构。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>Map tree nodes to different types - 将树节点映射为不同类型</li>
  *   <li>Custom children setter support - 自定义子节点设置器支持</li>
  *   <li>Value extraction from tree - 从树中提取值</li>
+ *   <li>Max depth protection (1000) - 最大深度保护（1000）</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -41,6 +43,8 @@ import java.util.function.Function;
  */
 public final class TreeMapper {
 
+    private static final int MAX_DEPTH = 1000;
+
     private TreeMapper() {
         // Utility class
     }
@@ -55,25 +59,29 @@ public final class TreeMapper {
      * @param <T> the target type | 目标类型
      * @param <ID> the ID type | ID类型
      * @return the mapped roots | 映射后的根节点
+     * @throws TreeException if tree depth exceeds 1000 | 如果树深度超过1000
      */
     public static <S extends Treeable<S, ID>, T extends Treeable<T, ID>, ID> List<T> map(
             List<S> roots, Function<S, T> mapper) {
         List<T> result = new ArrayList<>();
         for (S root : roots) {
-            result.add(mapNode(root, mapper));
+            result.add(mapNode(root, mapper, 0));
         }
         return result;
     }
 
     private static <S extends Treeable<S, ID>, T extends Treeable<T, ID>, ID> T mapNode(
-            S source, Function<S, T> mapper) {
+            S source, Function<S, T> mapper, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         T target = mapper.apply(source);
 
         List<S> children = source.getChildren();
         if (children != null && !children.isEmpty()) {
             List<T> mappedChildren = new ArrayList<>();
             for (S child : children) {
-                mappedChildren.add(mapNode(child, mapper));
+                mappedChildren.add(mapNode(child, mapper, depth + 1));
             }
             target.setChildren(mappedChildren);
         }
@@ -92,6 +100,7 @@ public final class TreeMapper {
      * @param <T> the target type | 目标类型
      * @param <ID> the ID type | ID类型
      * @return the mapped list | 映射后的列表
+     * @throws TreeException if tree depth exceeds 1000 | 如果树深度超过1000
      */
     public static <S extends Treeable<S, ID>, T, ID> List<T> mapToAny(
             List<S> roots,
@@ -99,7 +108,7 @@ public final class TreeMapper {
             java.util.function.BiConsumer<T, List<T>> childrenSetter) {
         List<T> result = new ArrayList<>();
         for (S root : roots) {
-            result.add(mapToAnyNode(root, nodeMapper, childrenSetter));
+            result.add(mapToAnyNode(root, nodeMapper, childrenSetter, 0));
         }
         return result;
     }
@@ -107,14 +116,18 @@ public final class TreeMapper {
     private static <S extends Treeable<S, ID>, T, ID> T mapToAnyNode(
             S source,
             Function<S, T> nodeMapper,
-            java.util.function.BiConsumer<T, List<T>> childrenSetter) {
+            java.util.function.BiConsumer<T, List<T>> childrenSetter,
+            int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         T target = nodeMapper.apply(source);
 
         List<S> children = source.getChildren();
         if (children != null && !children.isEmpty()) {
             List<T> mappedChildren = new ArrayList<>();
             for (S child : children) {
-                mappedChildren.add(mapToAnyNode(child, nodeMapper, childrenSetter));
+                mappedChildren.add(mapToAnyNode(child, nodeMapper, childrenSetter, depth + 1));
             }
             childrenSetter.accept(target, mappedChildren);
         }
@@ -132,24 +145,28 @@ public final class TreeMapper {
      * @param <ID> the ID type | ID类型
      * @param <R> the result type | 结果类型
      * @return the extracted values | 提取的值
+     * @throws TreeException if tree depth exceeds 1000 | 如果树深度超过1000
      */
     public static <T extends Treeable<T, ID>, ID, R> List<R> extractAll(
             List<T> roots, Function<T, R> extractor) {
         List<R> result = new ArrayList<>();
         for (T root : roots) {
-            extractFromNode(root, extractor, result);
+            extractFromNode(root, extractor, result, 0);
         }
         return result;
     }
 
     private static <T extends Treeable<T, ID>, ID, R> void extractFromNode(
-            T node, Function<T, R> extractor, List<R> result) {
+            T node, Function<T, R> extractor, List<R> result, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         result.add(extractor.apply(node));
 
         List<T> children = node.getChildren();
         if (children != null) {
             for (T child : children) {
-                extractFromNode(child, extractor, result);
+                extractFromNode(child, extractor, result, depth + 1);
             }
         }
     }

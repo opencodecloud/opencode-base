@@ -2,6 +2,7 @@ package cloud.opencode.base.web.page;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -105,11 +106,18 @@ public record Sort(List<Order> orders) {
         if (!IDENTIFIER_PATTERN.matcher(identifier).matches()) {
             throw new IllegalArgumentException("Invalid SQL identifier: " + identifier);
         }
-        // Check each part of qualified name against SQL keywords
-        for (String part : identifier.toUpperCase().split("\\.")) {
+        // Check each dot-separated segment against SQL keywords without split() allocation
+        int start = 0;
+        int len = identifier.length();
+        while (start <= len) {
+            int dot = identifier.indexOf('.', start);
+            int end = dot < 0 ? len : dot;
+            String part = identifier.substring(start, end).toUpperCase(Locale.ROOT);
             if (SQL_KEYWORDS.contains(part)) {
                 throw new IllegalArgumentException("SQL keyword cannot be used as identifier: " + part);
             }
+            if (dot < 0) break;
+            start = dot + 1;
         }
     }
 
@@ -347,9 +355,8 @@ public record Sort(List<Order> orders) {
         for (int i = 0; i < orders.size(); i++) {
             if (i > 0) sb.append(", ");
             Order order = orders.get(i);
-            // Defense in depth: validate even though Order constructor validates
-            validateIdentifier(order.property());
-            sb.append(order.property()).append(" ").append(order.direction().name());
+            // Property already validated in Order compact constructor; no re-validation needed
+            sb.append(order.property()).append(' ').append(order.direction().name());
         }
         return sb.toString();
     }

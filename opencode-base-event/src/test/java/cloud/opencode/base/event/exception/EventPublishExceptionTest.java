@@ -29,9 +29,9 @@ class EventPublishExceptionTest {
         void testMessageOnlyConstructor() {
             EventPublishException ex = new EventPublishException("Publish error");
 
-            assertThat(ex.getMessage()).isEqualTo("Publish error");
+            assertThat(ex.getRawMessage()).isEqualTo("Publish error");
             assertThat(ex.getCause()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.PUBLISH_FAILED);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.PUBLISH_FAILED);
         }
 
         @Test
@@ -41,9 +41,9 @@ class EventPublishExceptionTest {
 
             EventPublishException ex = new EventPublishException("Publish error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Publish error");
+            assertThat(ex.getRawMessage()).isEqualTo("Publish error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.PUBLISH_FAILED);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.PUBLISH_FAILED);
         }
 
         @Test
@@ -55,10 +55,10 @@ class EventPublishExceptionTest {
             EventPublishException ex = new EventPublishException(
                     "Publish error", cause, event, EventErrorCode.EVENT_CANCELLED);
 
-            assertThat(ex.getMessage()).isEqualTo("Publish error");
+            assertThat(ex.getRawMessage()).isEqualTo("Publish error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getEvent()).isEqualTo(event);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.EVENT_CANCELLED);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.EVENT_CANCELLED);
         }
     }
 

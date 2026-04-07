@@ -38,7 +38,7 @@ class LockConfigTest {
             assertThat(config.fair()).isFalse();
             assertThat(config.reentrant()).isTrue();
             assertThat(config.spinCount()).isEqualTo(1000);
-            assertThat(config.enableMetrics()).isTrue();
+            assertThat(config.enableMetrics()).isFalse();
             assertThat(config.lockType()).isEqualTo(LockType.REENTRANT);
         }
     }

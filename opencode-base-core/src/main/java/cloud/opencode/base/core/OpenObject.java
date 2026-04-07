@@ -580,7 +580,8 @@ public final class OpenObject {
         }
         if (obj instanceof Cloneable) {
             try {
-                var method = obj.getClass().getMethod("clone");
+                var method = obj.getClass().getDeclaredMethod("clone");
+                method.setAccessible(true);
                 return (T) method.invoke(obj);
             } catch (Exception e) {
                 return null;
@@ -634,6 +635,10 @@ public final class OpenObject {
      * @return deserialized object | 反序列化后的对象
      * @throws IllegalStateException if deserialization fails | 如果反序列化失败
      */
+    private static final long DESERIALIZE_MAX_BYTES = 10_000_000L; // 10 MB
+    private static final long DESERIALIZE_MAX_DEPTH = 20;
+    private static final long DESERIALIZE_MAX_REFERENCES = 100_000;
+
     @SuppressWarnings("unchecked")
     public static <T> T deserialize(byte[] bytes) {
         if (bytes == null || bytes.length == 0) {
@@ -641,6 +646,10 @@ public final class OpenObject {
         }
         try (ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
              ObjectInputStream ois = new ObjectInputStream(bis)) {
+            ois.setObjectInputFilter(ObjectInputFilter.Config.createFilter(
+                    "maxbytes=" + DESERIALIZE_MAX_BYTES
+                    + ";maxdepth=" + DESERIALIZE_MAX_DEPTH
+                    + ";maxrefs=" + DESERIALIZE_MAX_REFERENCES));
             return (T) ois.readObject();
         } catch (IOException | ClassNotFoundException e) {
             throw new IllegalStateException("Deserialization failed", e);

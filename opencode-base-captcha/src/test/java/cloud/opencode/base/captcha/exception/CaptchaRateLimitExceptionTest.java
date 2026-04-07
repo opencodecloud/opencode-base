@@ -1,5 +1,6 @@
 package cloud.opencode.base.captcha.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import java.time.Duration;
@@ -27,7 +28,7 @@ class CaptchaRateLimitExceptionTest {
 
             assertThat(ex.getClientId()).isEqualTo("client-123");
             assertThat(ex.getRetryAfter()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("Rate limit exceeded for client: client-123");
+            assertThat(ex.getRawMessage()).isEqualTo("Rate limit exceeded for client: client-123");
         }
 
         @Test
@@ -47,7 +48,7 @@ class CaptchaRateLimitExceptionTest {
 
             assertThat(ex.getClientId()).isNull();
             assertThat(ex.getRetryAfter()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("Rate limit exceeded for client: null");
+            assertThat(ex.getRawMessage()).isEqualTo("Rate limit exceeded for client: null");
         }
 
         @Test
@@ -57,7 +58,7 @@ class CaptchaRateLimitExceptionTest {
 
             assertThat(ex.getClientId()).isEmpty();
             assertThat(ex.getRetryAfter()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("Rate limit exceeded for client: ");
+            assertThat(ex.getRawMessage()).isEqualTo("Rate limit exceeded for client: ");
         }
 
         @Test
@@ -90,7 +91,7 @@ class CaptchaRateLimitExceptionTest {
 
             assertThat(ex.getClientId()).isEqualTo("client-456");
             assertThat(ex.getRetryAfter()).isEqualTo(retryAfter);
-            assertThat(ex.getMessage()).isEqualTo(
+            assertThat(ex.getRawMessage()).isEqualTo(
                 "Rate limit exceeded for client: client-456. Retry after: 30 seconds");
         }
 
@@ -177,7 +178,7 @@ class CaptchaRateLimitExceptionTest {
             CaptchaRateLimitException ex = new CaptchaRateLimitException(
                 "test-client", Duration.ofSeconds(120));
 
-            assertThat(ex.getMessage())
+            assertThat(ex.getRawMessage())
                 .isEqualTo("Rate limit exceeded for client: test-client. Retry after: 120 seconds");
         }
     }
@@ -307,7 +308,7 @@ class CaptchaRateLimitExceptionTest {
         void shouldFormatMessageWithoutRetryDuration() {
             CaptchaRateLimitException ex = new CaptchaRateLimitException("test-client");
 
-            assertThat(ex.getMessage()).isEqualTo("Rate limit exceeded for client: test-client");
+            assertThat(ex.getRawMessage()).isEqualTo("Rate limit exceeded for client: test-client");
         }
 
         @Test
@@ -316,7 +317,7 @@ class CaptchaRateLimitExceptionTest {
             CaptchaRateLimitException ex = new CaptchaRateLimitException(
                 "test-client", Duration.ofSeconds(120));
 
-            assertThat(ex.getMessage())
+            assertThat(ex.getRawMessage())
                 .isEqualTo("Rate limit exceeded for client: test-client. Retry after: 120 seconds");
         }
 
@@ -341,6 +342,14 @@ class CaptchaRateLimitExceptionTest {
     @Nested
     @DisplayName("Inheritance Tests")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            CaptchaRateLimitException ex = new CaptchaRateLimitException("client");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("should extend CaptchaException")

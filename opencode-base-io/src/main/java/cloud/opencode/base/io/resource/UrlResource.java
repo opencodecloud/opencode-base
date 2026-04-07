@@ -11,6 +11,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * URL Resource Implementation
@@ -41,6 +42,12 @@ import java.util.Objects;
  */
 public final class UrlResource implements Resource {
 
+    /**
+     * Allowed URL protocols to mitigate SSRF risk
+     * 允许的URL协议，用于降低SSRF风险
+     */
+    private static final Set<String> ALLOWED_PROTOCOLS = Set.of("http", "https", "file", "jar");
+
     private final URL url;
     private final URI uri;
 
@@ -52,6 +59,7 @@ public final class UrlResource implements Resource {
      */
     public UrlResource(URL url) {
         Objects.requireNonNull(url, "URL must not be null");
+        validateProtocol(url.getProtocol());
         this.url = url;
         this.uri = toURI(url);
     }
@@ -64,6 +72,9 @@ public final class UrlResource implements Resource {
      */
     public UrlResource(URI uri) {
         Objects.requireNonNull(uri, "URI must not be null");
+        if (uri.getScheme() != null) {
+            validateProtocol(uri.getScheme());
+        }
         try {
             this.url = uri.toURL();
             this.uri = uri;
@@ -82,9 +93,19 @@ public final class UrlResource implements Resource {
         Objects.requireNonNull(urlString, "URL string must not be null");
         try {
             this.uri = URI.create(urlString);
+            if (this.uri.getScheme() != null) {
+                validateProtocol(this.uri.getScheme());
+            }
             this.url = this.uri.toURL();
         } catch (MalformedURLException e) {
             throw new OpenIOOperationException("Invalid URL: " + urlString, e);
+        }
+    }
+
+    private static void validateProtocol(String protocol) {
+        if (protocol != null && !ALLOWED_PROTOCOLS.contains(protocol.toLowerCase())) {
+            throw new OpenIOOperationException("Unsupported URL protocol (SSRF protection): " + protocol
+                    + ". Allowed: " + ALLOWED_PROTOCOLS, null);
         }
     }
 

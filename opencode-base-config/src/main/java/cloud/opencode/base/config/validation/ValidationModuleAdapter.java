@@ -240,13 +240,10 @@ public final class ValidationModuleAdapter {
     @SuppressWarnings("unchecked")
     private static <T> T bindConfig(Config config, Class<T> clazz, String prefix) {
         try {
-            // Try to use RecordConfigBinder if available
-            Class<?> binderClass = Class.forName("cloud.opencode.base.config.bind.RecordConfigBinder");
-            MethodHandles.Lookup lookup = MethodHandles.publicLookup();
-            MethodHandle bindHandle = lookup.findStatic(binderClass, "bind",
-                    MethodType.methodType(Object.class, Config.class, Class.class, String.class));
-            return (T) bindHandle.invokeWithArguments(config, clazz, prefix);
-        } catch (Throwable e) {
+            // Use Config.bind() directly - it delegates to the appropriate binder internally
+            return config.bind(prefix, clazz);
+        } catch (Exception e) {
+            // Fallback: return null so the caller can report a binding failure
             return null;
         }
     }

@@ -139,7 +139,7 @@ class JsonSerializerTest {
         @Test
         @DisplayName("Should deserialize null data to null")
         void shouldDeserializeNullDataToNull() {
-            String result = serializer.deserialize(null, String.class);
+            String result = serializer.deserialize((byte[]) null, String.class);
 
             assertThat(result).isNull();
         }
@@ -186,7 +186,7 @@ class JsonSerializerTest {
         void shouldReturnNullForNullDataWithTypeReference() {
             TypeReference<List<String>> typeRef = new TypeReference<>() {};
 
-            List<String> result = serializer.deserialize(null, typeRef);
+            List<String> result = serializer.deserialize((byte[]) null, typeRef);
 
             assertThat(result).isNull();
         }

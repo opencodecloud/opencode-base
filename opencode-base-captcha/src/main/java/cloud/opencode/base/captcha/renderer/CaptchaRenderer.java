@@ -102,4 +102,14 @@ public interface CaptchaRenderer {
     static CaptchaRenderer base64() {
         return new Base64CaptchaRenderer();
     }
+
+    /**
+     * Creates an audio renderer.
+     * 创建音频渲染器。
+     *
+     * @return the renderer | 渲染器
+     */
+    static CaptchaRenderer audio() {
+        return new AudioCaptchaRenderer();
+    }
 }

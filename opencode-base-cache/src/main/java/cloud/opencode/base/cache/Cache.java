@@ -247,7 +247,7 @@ public interface Cache<K, V> {
      *
      * @param key the key | 键
      * @return Optional containing the value, or empty if key not present | 包含值的 Optional，键不存在则返回空
-     * @since V2.0.2
+     * @since V1.0.0
      */
     default java.util.Optional<V> getOptional(K key) {
         if (containsKey(key)) {
@@ -265,8 +265,10 @@ public interface Cache<K, V> {
      *
      * @param key the key | 键
      * @return Optional containing the value, or empty if not present | 包含值的 Optional，不存在则返回空
-     * @since V2.0.2
+     * @since V1.0.0
+     * @deprecated Use {@link #getOptional(Object)} instead.
      */
+    @Deprecated(since = "1.0.3", forRemoval = true)
     default java.util.Optional<V> getIfPresent(K key) {
         return getOptional(key);
     }
@@ -279,11 +281,15 @@ public interface Cache<K, V> {
      * the merge function is called with the old and new values.</p>
      * <p>如果键不存在，使用提供的值。如果键存在，使用旧值和新值调用合并函数。</p>
      *
+     * @apiNote This operation is NOT atomic — it consists of a get followed by put/invalidate,
+     * which is subject to TOCTOU race conditions under concurrent access.
+     * | 此操作非原子性 — 由 get 和 put/invalidate 组成，在并发访问下存在 TOCTOU 竞态。
+     *
      * @param key           the key | 键
      * @param value         the value to merge | 要合并的值
      * @param mergeFunction the function to merge values | 合并函数
      * @return the new value | 新值
-     * @since V2.0.2
+     * @since V1.0.0
      */
     default V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> mergeFunction) {
         V oldValue = get(key);
@@ -303,7 +309,7 @@ public interface Cache<K, V> {
      * @param key             the key | 键
      * @param mappingFunction the function to compute value | 计算值的函数
      * @return the value | 值
-     * @since V2.0.2
+     * @since V1.0.0
      */
     default V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction) {
         return get(key, mappingFunction);
@@ -317,10 +323,14 @@ public interface Cache<K, V> {
      * if the key is not present.</p>
      * <p>与 {@link #put(Object, Object)} 不同，如果键不存在则不创建新条目。</p>
      *
+     * @apiNote This operation is NOT atomic — it consists of a containsKey check followed by
+     * put, which is subject to TOCTOU race conditions under concurrent access.
+     * | 此操作非原子性 — 由 containsKey 检查和 put 组成，在并发访问下存在 TOCTOU 竞态。
+     *
      * @param key   the key | 键
      * @param value the value | 值
      * @return true if updated, false if key was not present | 更新成功返回 true，键不存在返回 false
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default boolean putIfPresent(K key, V value) {
         if (containsKey(key)) {
@@ -337,9 +347,12 @@ public interface Cache<K, V> {
      * <p>Warning: This operation is O(n) as it scans all values.</p>
      * <p>警告：此操作为 O(n)，因为它扫描所有值。</p>
      *
+     * @apiNote This operation requires O(n) scan of all cached values and may be slow for large caches.
+     * | 此操作需要 O(n) 扫描所有缓存值，大缓存场景下可能较慢。
+     *
      * @param value the value to check | 要检查的值
      * @return true if value exists | 值存在返回 true
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default boolean containsValue(V value) {
         if (value == null) {
@@ -363,8 +376,10 @@ public interface Cache<K, V> {
      *
      * @param key the key | 键
      * @return the value or null | 值或 null
-     * @since V2.0.3
+     * @since V1.0.0
+     * @deprecated Use {@link #get(Object)} instead.
      */
+    @Deprecated(since = "1.0.3", forRemoval = true)
     default V getOrNull(K key) {
         return get(key);
     }
@@ -375,7 +390,7 @@ public interface Cache<K, V> {
      *
      * @param function the function to transform values | 转换值的函数
      * @return count of replaced entries | 替换的条目数
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default int replaceAll(BiFunction<? super K, ? super V, ? extends V> function) {
         int count = 0;
@@ -397,7 +412,7 @@ public interface Cache<K, V> {
      * 使用消费者遍历所有值
      *
      * @param action the action to perform on each value | 对每个值执行的操作
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default void forEachValue(java.util.function.Consumer<? super V> action) {
         for (V value : values()) {
@@ -410,7 +425,7 @@ public interface Cache<K, V> {
      * 使用消费者遍历所有键
      *
      * @param action the action to perform on each key | 对每个键执行的操作
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default void forEachKey(java.util.function.Consumer<? super K> action) {
         for (K key : keys()) {
@@ -422,9 +437,13 @@ public interface Cache<K, V> {
      * Remove entry only if key is present and return success status
      * 仅在键存在时移除条目，并返回成功状态
      *
+     * @apiNote This operation is NOT atomic — it consists of a containsKey check followed by
+     * invalidate, which is subject to TOCTOU race conditions under concurrent access.
+     * | 此操作非原子性 — 由 containsKey 检查和 invalidate 组成，在并发访问下存在 TOCTOU 竞态。
+     *
      * @param key the key | 键
      * @return true if removed, false if key was not present | 移除成功返回 true，键不存在返回 false
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default boolean removeIfPresent(K key) {
         if (containsKey(key)) {
@@ -438,10 +457,14 @@ public interface Cache<K, V> {
      * Remove entry only if value matches the expected value
      * 仅在值与期望值匹配时移除条目
      *
+     * @apiNote This operation is NOT atomic — it consists of a containsKey check followed by
+     * invalidate, which is subject to TOCTOU race conditions under concurrent access.
+     * | 此操作非原子性 — 由 containsKey 检查和 invalidate 组成，在并发访问下存在 TOCTOU 竞态。
+     *
      * @param key   the key | 键
      * @param value the expected value | 期望的值
      * @return true if removed | 移除成功返回 true
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default boolean removeIfEquals(K key, V value) {
         V current = get(key);
@@ -466,7 +489,7 @@ public interface Cache<K, V> {
      *
      * @param pattern the pattern to match | 匹配模式
      * @return map of matching entries | 匹配的条目 Map
-     * @since V2.0.2
+     * @since V1.0.0
      */
     default Map<K, V> getByPattern(String pattern) {
         if (pattern == null || pattern.isEmpty()) {
@@ -489,7 +512,7 @@ public interface Cache<K, V> {
      *
      * @param map the entries to put | 要放入的条目
      * @return count of entries actually put | 实际放入的条目数
-     * @since V2.0.2
+     * @since V1.0.0
      */
     default int putAllIfAbsent(Map<? extends K, ? extends V> map) {
         int count = 0;
@@ -507,7 +530,7 @@ public interface Cache<K, V> {
      *
      * @param map the entries to update | 要更新的条目
      * @return count of entries actually updated | 实际更新的条目数
-     * @since V2.0.2
+     * @since V1.0.0
      */
     default int updateAll(Map<? extends K, ? extends V> map) {
         int count = 0;
@@ -548,7 +571,7 @@ public interface Cache<K, V> {
      * Clear all entries (alias for invalidateAll, for Map API compatibility)
      * 清空所有条目（invalidateAll 的别名，兼容 Map API）
      *
-     * @since V2.0.1
+     * @since V1.0.0
      */
     default void clear() {
         invalidateAll();
@@ -573,7 +596,7 @@ public interface Cache<K, V> {
      *
      * @param pattern the pattern to match (supports * and ? wildcards) | 匹配模式
      * @return count of invalidated entries | 失效的条目数
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default long invalidateByPattern(String pattern) {
         if (pattern == null || pattern.isEmpty()) {
@@ -609,7 +632,7 @@ public interface Cache<K, V> {
      *
      * @param predicate the predicate to test keys | 键测试条件
      * @return count of invalidated entries | 失效的条目数
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default long invalidateIf(java.util.function.Predicate<K> predicate) {
         if (predicate == null) {
@@ -632,7 +655,7 @@ public interface Cache<K, V> {
      *
      * @param predicate the predicate to test values | 值测试条件
      * @return count of invalidated entries | 失效的条目数
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default long invalidateByValue(java.util.function.Predicate<V> predicate) {
         if (predicate == null) {
@@ -659,11 +682,8 @@ public interface Cache<K, V> {
             char c = glob.charAt(i);
             switch (c) {
                 case '*' -> regex.append(".*");
-                case '?' -> regex.append(".");
-                case '.' -> regex.append("\\.");
-                case '\\' -> regex.append("\\\\");
-                case '[', ']', '(', ')', '{', '}', '^', '$', '|', '+' -> regex.append("\\").append(c);
-                default -> regex.append(c);
+                case '?' -> regex.append('.');
+                default -> regex.append(java.util.regex.Pattern.quote(String.valueOf(c)));
             }
         }
         regex.append("$");
@@ -702,7 +722,7 @@ public interface Cache<K, V> {
      * 检查缓存是否为空
      *
      * @return true if empty | 为空返回 true
-     * @since V2.0.1
+     * @since V1.0.0
      */
     default boolean isEmpty() {
         return estimatedSize() == 0;
@@ -750,7 +770,7 @@ public interface Cache<K, V> {
      * <p>与 {@link #keys()} 不同，这不会创建快照副本。</p>
      *
      * @return lazy iterator over keys | 键的惰性迭代器
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default java.util.Iterator<K> keyIterator() {
         return asMap().keySet().iterator();
@@ -761,7 +781,7 @@ public interface Cache<K, V> {
      * 获取条目的惰性迭代器（内存高效）
      *
      * @return lazy iterator over entries | 条目的惰性迭代器
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default java.util.Iterator<Map.Entry<K, V>> entryIterator() {
         return asMap().entrySet().iterator();
@@ -772,7 +792,7 @@ public interface Cache<K, V> {
      * 使用消费者遍历所有条目（内存高效）
      *
      * @param action the action to perform | 要执行的操作
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default void forEach(java.util.function.BiConsumer<? super K, ? super V> action) {
         asMap().forEach(action);
@@ -789,7 +809,7 @@ public interface Cache<K, V> {
      * <p>直接从底层映射创建流，不创建中间集合。适用于收集所有键成本较高的大型缓存。</p>
      *
      * @return lazy stream over keys | 键的惰性流
-     * @since V2.0.0
+     * @since V1.0.0
      */
     default java.util.stream.Stream<K> keyStream() {
         return java.util.stream.StreamSupport.stream(
@@ -803,7 +823,7 @@ public interface Cache<K, V> {
      * 获取值的惰性流（内存高效）
      *
      * @return lazy stream over values | 值的惰性流
-     * @since V2.0.0
+     * @since V1.0.0
      */
     default java.util.stream.Stream<V> valueStream() {
         return entryStream().map(Map.Entry::getValue);
@@ -814,7 +834,7 @@ public interface Cache<K, V> {
      * 获取条目的惰性流（内存高效）
      *
      * @return lazy stream over entries | 条目的惰性流
-     * @since V2.0.0
+     * @since V1.0.0
      */
     default java.util.stream.Stream<Map.Entry<K, V>> entryStream() {
         return java.util.stream.StreamSupport.stream(
@@ -831,7 +851,7 @@ public interface Cache<K, V> {
      * <p>用于大型缓存上的 CPU 密集型操作。</p>
      *
      * @return parallel stream over keys | 键的并行流
-     * @since V2.0.0
+     * @since V1.0.0
      */
     default java.util.stream.Stream<K> keyParallelStream() {
         return keyStream().parallel();
@@ -842,7 +862,7 @@ public interface Cache<K, V> {
      * 获取值的并行流
      *
      * @return parallel stream over values | 值的并行流
-     * @since V2.0.0
+     * @since V1.0.0
      */
     default java.util.stream.Stream<V> valueParallelStream() {
         return valueStream().parallel();
@@ -853,7 +873,7 @@ public interface Cache<K, V> {
      * 获取条目的并行流
      *
      * @return parallel stream over entries | 条目的并行流
-     * @since V2.0.0
+     * @since V1.0.0
      */
     default java.util.stream.Stream<Map.Entry<K, V>> entryParallelStream() {
         return entryStream().parallel();
@@ -871,7 +891,7 @@ public interface Cache<K, V> {
      * @param predicate condition for keys to update | 要更新的键条件
      * @param ttl       new TTL | 新的 TTL
      * @return count of updated entries | 更新的条目数
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default long updateTtl(java.util.function.Predicate<K> predicate, java.time.Duration ttl) {
         long count = 0;
@@ -890,7 +910,7 @@ public interface Cache<K, V> {
      *
      * @param ttl new TTL | 新的 TTL
      * @return count of updated entries | 更新的条目数
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default long updateTtlAll(java.time.Duration ttl) {
         return updateTtl(k -> true, ttl);
@@ -903,7 +923,7 @@ public interface Cache<K, V> {
      * @param keys keys to update | 要更新的键
      * @param ttl  new TTL | 新的 TTL
      * @return count of updated entries | 更新的条目数
-     * @since V1.9.0
+     * @since V1.0.0
      */
     default long updateTtl(Iterable<? extends K> keys, java.time.Duration ttl) {
         long count = 0;
@@ -915,6 +935,74 @@ public interface Cache<K, V> {
             }
         }
         return count;
+    }
+
+    // ==================== CAS Operations | CAS 操作 ====================
+
+    /**
+     * Replace value if current value matches the condition.
+     * 如果当前值满足条件则替换。
+     *
+     * <p>Atomically checks the condition and replaces the value.
+     * Returns true if the replacement was made.</p>
+     * <p>原子地检查条件并替换值。如果替换成功则返回 true。</p>
+     *
+     * <p><strong>Note | 注意:</strong> The default implementation is NOT atomic —
+     * there is a gap between {@code get} and {@code put}. Concrete implementations
+     * (e.g. {@code DefaultCache}) may override this to provide true atomicity
+     * via {@code ConcurrentHashMap.compute}.</p>
+     * <p>默认实现非原子性 — {@code get} 和 {@code put} 之间存在间隙。
+     * 具体实现（如 {@code DefaultCache}）可覆盖此方法，
+     * 通过 {@code ConcurrentHashMap.compute} 提供真正的原子保证。</p>
+     *
+     * @param key       the key | 键
+     * @param condition the condition to check against current value | 对当前值的检查条件
+     * @param newValue  the new value | 新值
+     * @return true if replaced | 是否替换成功
+     * @since V1.0.3
+     */
+    default boolean replaceIf(K key, java.util.function.Predicate<V> condition, V newValue) {
+        V current = get(key);
+        if (current != null && condition.test(current)) {
+            put(key, newValue);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Compute new value if current value matches the condition.
+     * 如果当前值满足条件则计算新值。
+     *
+     * <p>Checks the condition and applies the remapping function.
+     * Returns the new value if computed, empty otherwise.</p>
+     * <p>检查条件并应用映射函数。如果计算成功则返回新值，否则返回空。</p>
+     *
+     * <p><strong>Note | 注意:</strong> The default implementation is NOT atomic —
+     * there is a gap between {@code get} and {@code put}. Concrete implementations
+     * (e.g. {@code DefaultCache}) may override this to provide true atomicity
+     * via {@code ConcurrentHashMap.compute}.</p>
+     * <p>默认实现非原子性 — {@code get} 和 {@code put} 之间存在间隙。
+     * 具体实现（如 {@code DefaultCache}）可覆盖此方法，
+     * 通过 {@code ConcurrentHashMap.compute} 提供真正的原子保证。</p>
+     *
+     * @param key       the key | 键
+     * @param condition the condition to check | 检查条件
+     * @param remapper  the remapping function | 映射函数
+     * @return the new value if computed | 计算出的新值（未计算则为空）
+     * @since V1.0.3
+     */
+    default java.util.Optional<V> computeIfMatch(K key, java.util.function.Predicate<V> condition,
+                                                  java.util.function.Function<V, V> remapper) {
+        V current = get(key);
+        if (current != null && condition.test(current)) {
+            V newValue = remapper.apply(current);
+            if (newValue != null) {
+                put(key, newValue);
+                return java.util.Optional.of(newValue);
+            }
+        }
+        return java.util.Optional.empty();
     }
 
     // ==================== Statistics & Management | 统计与管理 ====================
@@ -945,7 +1033,7 @@ public interface Cache<K, V> {
      * Also resets metrics if enabled.</p>
      * <p>将所有命中、未命中、加载和淘汰计数器清零。如果启用，也重置指标。</p>
      *
-     * @since V2.0.3
+     * @since V1.0.0
      */
     default void resetStats() {
         // Default no-op - implementations should override

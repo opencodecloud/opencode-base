@@ -8,9 +8,14 @@ import cloud.opencode.base.geo.distance.VincentyCalculator;
 import cloud.opencode.base.geo.fence.GeoFence;
 import cloud.opencode.base.geo.fence.PolygonFence;
 import cloud.opencode.base.geo.fence.RectangleFence;
+import cloud.opencode.base.geo.geohash.GeoHashPrecision;
+import cloud.opencode.base.geo.geohash.GeoHashSearch;
 import cloud.opencode.base.geo.geohash.GeoHashUtil;
+import cloud.opencode.base.geo.polyline.PolylineCodec;
+import cloud.opencode.base.geo.polyline.TrackSimplifier;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * OpenGeo - Facade Entry Point
@@ -492,5 +497,170 @@ public final class OpenGeo {
             && lat >= -90 && lat <= 90
             && !Double.isNaN(lng) && !Double.isNaN(lat)
             && !Double.isInfinite(lng) && !Double.isInfinite(lat);
+    }
+
+    // ============ BoundingBox | 边界框 ============
+
+    /**
+     * Create a bounding box from coordinates
+     * 从坐标集合创建边界框
+     *
+     * @param coordinates list of coordinates | 坐标列表
+     * @return bounding box | 边界框
+     */
+    public static BoundingBox boundingBox(java.util.Collection<Coordinate> coordinates) {
+        return BoundingBox.fromCoordinates(coordinates);
+    }
+
+    /**
+     * Create a bounding box from center and radius
+     * 从中心点和半径创建边界框
+     *
+     * @param center center coordinate | 中心坐标
+     * @param radiusMeters radius in meters | 半径（米）
+     * @return bounding box | 边界框
+     */
+    public static BoundingBox boundingBox(Coordinate center, double radiusMeters) {
+        return BoundingBox.fromCenter(center, radiusMeters);
+    }
+
+    // ============ GeoHash Search | GeoHash搜索 ============
+
+    /**
+     * Search GeoHash cells covering a circular area
+     * 搜索覆盖圆形区域的GeoHash格子
+     *
+     * @param lat latitude | 纬度
+     * @param lng longitude | 经度
+     * @param radiusMeters search radius in meters | 搜索半径（米）
+     * @return set of GeoHash strings | GeoHash字符串集合
+     */
+    public static Set<String> geoHashSearch(double lat, double lng, double radiusMeters) {
+        return GeoHashSearch.searchHashes(lat, lng, radiusMeters);
+    }
+
+    /**
+     * Search GeoHash cells covering a circular area with specified precision
+     * 使用指定精度搜索覆盖圆形区域的GeoHash格子
+     *
+     * @param lat latitude | 纬度
+     * @param lng longitude | 经度
+     * @param radiusMeters search radius in meters | 搜索半径（米）
+     * @param precision GeoHash precision | GeoHash精度
+     * @return set of GeoHash strings | GeoHash字符串集合
+     */
+    public static Set<String> geoHashSearch(double lat, double lng, double radiusMeters, int precision) {
+        return GeoHashSearch.searchHashes(lat, lng, radiusMeters, precision);
+    }
+
+    // ============ Polyline | 折线编解码 ============
+
+    /**
+     * Encode coordinates to Google Encoded Polyline format
+     * 将坐标编码为Google Encoded Polyline格式
+     *
+     * @param coordinates list of coordinates | 坐标列表
+     * @return encoded polyline string | 编码后的折线字符串
+     */
+    public static String encodePolyline(List<Coordinate> coordinates) {
+        return PolylineCodec.encode(coordinates);
+    }
+
+    /**
+     * Decode Google Encoded Polyline to coordinates
+     * 将Google Encoded Polyline解码为坐标
+     *
+     * @param encoded encoded polyline string | 编码后的折线字符串
+     * @return list of coordinates | 坐标列表
+     */
+    public static List<Coordinate> decodePolyline(String encoded) {
+        return PolylineCodec.decode(encoded);
+    }
+
+    // ============ Track Operations | 轨迹操作 ============
+
+    /**
+     * Simplify a GPS track using Ramer-Douglas-Peucker algorithm
+     * 使用Ramer-Douglas-Peucker算法简化GPS轨迹
+     *
+     * @param track list of track coordinates | 轨迹坐标列表
+     * @param toleranceMeters simplification tolerance in meters | 简化容差（米）
+     * @return simplified track | 简化后的轨迹
+     */
+    public static List<Coordinate> simplifyTrack(List<Coordinate> track, double toleranceMeters) {
+        return TrackSimplifier.simplify(track, toleranceMeters);
+    }
+
+    /**
+     * Calculate total distance of a track in meters
+     * 计算轨迹总距离（米）
+     *
+     * @param track list of track coordinates | 轨迹坐标列表
+     * @return total distance in meters | 总距离（米）
+     */
+    public static double trackDistance(List<Coordinate> track) {
+        return GeoUtil.totalDistance(track);
+    }
+
+    // ============ Geometry | 几何计算 ============
+
+    /**
+     * Calculate centroid of a set of coordinates
+     * 计算坐标集合的质心
+     *
+     * @param coordinates list of coordinates | 坐标列表
+     * @return centroid coordinate (WGS84) | 质心坐标（WGS84）
+     */
+    public static Coordinate centroid(List<Coordinate> coordinates) {
+        return GeoUtil.centroid(coordinates);
+    }
+
+    /**
+     * Interpolate a point along the great-circle path between two coordinates
+     * 沿两个坐标之间的大圆路径插值
+     *
+     * @param c1 start coordinate | 起始坐标
+     * @param c2 end coordinate | 终止坐标
+     * @param fraction fraction along the path (0.0-1.0) | 路径分数（0.0-1.0）
+     * @return interpolated coordinate (WGS84) | 插值坐标（WGS84）
+     */
+    public static Coordinate interpolate(Coordinate c1, Coordinate c2, double fraction) {
+        return GeoUtil.interpolate(c1, c2, fraction);
+    }
+
+    /**
+     * Get compass direction from bearing
+     * 获取方位角对应的罗盘方向
+     *
+     * @param bearing bearing in degrees (0-360) | 方位角（0-360度）
+     * @return compass direction (e.g., "N", "NE", "SSW") | 罗盘方向
+     */
+    public static String compassDirection(double bearing) {
+        return GeoUtil.compassDirection(bearing);
+    }
+
+    /**
+     * Calculate distance from a point to a line segment in meters
+     * 计算点到线段的距离（米）
+     *
+     * @param point the point | 点
+     * @param start segment start | 线段起点
+     * @param end segment end | 线段终点
+     * @return distance in meters | 距离（米）
+     */
+    public static double distanceToSegment(Coordinate point, Coordinate start, Coordinate end) {
+        return GeoUtil.distanceToSegment(point, start, end);
+    }
+
+    /**
+     * Calculate distance from a point to a polyline in meters
+     * 计算点到折线的距离（米）
+     *
+     * @param point the point | 点
+     * @param polyline the polyline vertices | 折线顶点
+     * @return distance in meters | 距离（米）
+     */
+    public static double distanceToPolyline(Coordinate point, List<Coordinate> polyline) {
+        return GeoUtil.distanceToPolyline(point, polyline);
     }
 }

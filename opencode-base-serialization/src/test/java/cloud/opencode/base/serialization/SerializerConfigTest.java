@@ -60,14 +60,14 @@ class SerializerConfigTest {
             SerializerConfig config = SerializerConfig.builder()
                     .includeTypeInfo(true)
                     .enableCompression(true)
-                    .compressionAlgorithm(CompressionAlgorithm.LZ4)
+                    .compressionAlgorithm(CompressionAlgorithm.DEFLATE)
                     .compressionThreshold(2048)
                     .failOnUnknownProperties(true)
                     .build();
 
             assertThat(config.isIncludeTypeInfo()).isTrue();
             assertThat(config.isCompressionEnabled()).isTrue();
-            assertThat(config.getCompressionAlgorithm()).isEqualTo(CompressionAlgorithm.LZ4);
+            assertThat(config.getCompressionAlgorithm()).isEqualTo(CompressionAlgorithm.DEFLATE);
             assertThat(config.getCompressionThreshold()).isEqualTo(2048);
             assertThat(config.isFailOnUnknownProperties()).isTrue();
         }
@@ -109,7 +109,7 @@ class SerializerConfigTest {
             SerializerConfig original = SerializerConfig.builder()
                     .includeTypeInfo(true)
                     .enableCompression(true)
-                    .compressionAlgorithm(CompressionAlgorithm.SNAPPY)
+                    .compressionAlgorithm(CompressionAlgorithm.DEFLATE)
                     .compressionThreshold(4096)
                     .failOnUnknownProperties(true)
                     .build();
@@ -214,7 +214,7 @@ class SerializerConfigTest {
             SerializerConfig config = SerializerConfig.builder()
                     .includeTypeInfo(true)
                     .enableCompression(true)
-                    .compressionAlgorithm(CompressionAlgorithm.ZSTD)
+                    .compressionAlgorithm(CompressionAlgorithm.DEFLATE)
                     .compressionThreshold(512)
                     .failOnUnknownProperties(true)
                     .build();
@@ -224,7 +224,7 @@ class SerializerConfigTest {
             assertThat(str).contains("SerializerConfig");
             assertThat(str).contains("includeTypeInfo=true");
             assertThat(str).contains("compressionEnabled=true");
-            assertThat(str).contains("compressionAlgorithm=ZSTD");
+            assertThat(str).contains("compressionAlgorithm=DEFLATE");
             assertThat(str).contains("compressionThreshold=512");
             assertThat(str).contains("failOnUnknownProperties=true");
         }

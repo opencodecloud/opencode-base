@@ -85,12 +85,13 @@ class ResultTest {
         }
 
         @Test
-        @DisplayName("fail with exception should create failure result")
+        @DisplayName("fail with exception should create failure result with generic message")
         void failWithExceptionShouldCreateFailureResult() {
             Result<String> result = Result.fail(new RuntimeException("Test error"));
 
             assertThat(result.success()).isFalse();
-            assertThat(result.message()).contains("Test error");
+            // Generic message to prevent internal info leakage
+            assertThat(result.message()).isEqualTo("Internal server error");
         }
     }
 

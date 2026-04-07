@@ -7,6 +7,8 @@ import cloud.opencode.base.feature.strategy.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import cloud.opencode.base.feature.lifecycle.FeatureLifecycle;
+
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -161,9 +163,13 @@ public class FileFeatureStore implements FeatureStore {
 
                 EnableStrategy enableStrategy = parseStrategy(strategy, props, prefix, key);
 
+                String group = props.getProperty(prefix + "group");
+                Instant expiresAt = parseInstant(props.getProperty(prefix + "expiresAt"));
+                FeatureLifecycle lifecycle = parseLifecycle(props.getProperty(prefix + "lifecycle"));
+
                 Feature feature = new Feature(
                     key, name, description, defaultEnabled, enableStrategy,
-                    Map.of(), Instant.now(), Instant.now()
+                    Map.of(), group, expiresAt, lifecycle, Instant.now(), Instant.now()
                 );
                 cache.put(key, feature);
             }
@@ -190,6 +196,17 @@ public class FileFeatureStore implements FeatureStore {
 
                 String strategyName = getStrategyName(feature.strategy(), feature.key());
                 props.setProperty(prefix + "strategy", strategyName);
+
+                // Save new lifecycle fields
+                if (feature.group() != null) {
+                    props.setProperty(prefix + "group", feature.group());
+                }
+                if (feature.expiresAt() != null) {
+                    props.setProperty(prefix + "expiresAt", feature.expiresAt().toString());
+                }
+                if (feature.lifecycle() != null) {
+                    props.setProperty(prefix + "lifecycle", feature.lifecycle().name());
+                }
 
                 // Save strategy-specific properties
                 saveStrategyProperties(feature.strategy(), props, prefix, feature.key());
@@ -251,11 +268,11 @@ public class FileFeatureStore implements FeatureStore {
             case "always-on" -> AlwaysOnStrategy.INSTANCE;
             case "always-off" -> AlwaysOffStrategy.INSTANCE;
             case "percentage" -> {
-                int percent = Integer.parseInt(props.getProperty(prefix + "percentage", "0"));
+                int percent = parseIntSafe(props.getProperty(prefix + "percentage", "0"), featureKey, "percentage");
                 yield new PercentageStrategy(percent);
             }
             case "consistent-percentage" -> {
-                int percent = Integer.parseInt(props.getProperty(prefix + "percentage", "0"));
+                int percent = parseIntSafe(props.getProperty(prefix + "percentage", "0"), featureKey, "percentage");
                 yield new ConsistentPercentageStrategy(percent);
             }
             case "user-list" -> {
@@ -277,6 +294,29 @@ public class FileFeatureStore implements FeatureStore {
                 yield null; // Use defaultEnabled field
             }
         };
+    }
+
+    private FeatureLifecycle parseLifecycle(String value) {
+        if (value == null || value.isEmpty()) {
+            return FeatureLifecycle.ACTIVE;
+        }
+        try {
+            return FeatureLifecycle.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.WARNING, "Failed to parse lifecycle: {0}, defaulting to ACTIVE", value);
+            return FeatureLifecycle.ACTIVE;
+        }
+    }
+
+    private int parseIntSafe(String value, String featureKey, String propertyName) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            LOGGER.log(Level.WARNING,
+                "Feature ''{0}'': Invalid {1} value ''{2}'', defaulting to 0",
+                new Object[]{featureKey, propertyName, value});
+            return 0;
+        }
     }
 
     private Instant parseInstant(String value) {

@@ -29,10 +29,10 @@ class EventExceptionTest {
         void testMessageOnlyConstructor() {
             EventException ex = new EventException("Test error");
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCause()).isNull();
             assertThat(ex.getEvent()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.UNKNOWN);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.UNKNOWN);
         }
 
         @Test
@@ -42,10 +42,10 @@ class EventExceptionTest {
 
             EventException ex = new EventException("Test error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getEvent()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.UNKNOWN);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.UNKNOWN);
         }
 
         @Test
@@ -55,7 +55,7 @@ class EventExceptionTest {
 
             EventException ex = new EventException("Test error", cause);
 
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.TIMEOUT);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.TIMEOUT);
         }
 
         @Test
@@ -63,10 +63,10 @@ class EventExceptionTest {
         void testMessageAndErrorCodeConstructor() {
             EventException ex = new EventException("Publish failed", EventErrorCode.PUBLISH_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("Publish failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Publish failed");
             assertThat(ex.getCause()).isNull();
             assertThat(ex.getEvent()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.PUBLISH_FAILED);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.PUBLISH_FAILED);
         }
 
         @Test
@@ -77,10 +77,10 @@ class EventExceptionTest {
 
             EventException ex = new EventException("Test error", cause, event, EventErrorCode.LISTENER_ERROR);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getEvent()).isEqualTo(event);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.LISTENER_ERROR);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.LISTENER_ERROR);
         }
 
         @Test
@@ -88,12 +88,12 @@ class EventExceptionTest {
         void testNullErrorCodeUsesUnknown() {
             EventException ex = new EventException("Test error", null, null, null);
 
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.UNKNOWN);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.UNKNOWN);
         }
     }
 
     @Nested
-    @DisplayName("getErrorCode() 测试")
+    @DisplayName("getEventErrorCode() 测试")
     class GetErrorCodeTests {
 
         @Test
@@ -101,7 +101,7 @@ class EventExceptionTest {
         void testReturnsSetErrorCode() {
             EventException ex = new EventException("Error", EventErrorCode.STORE_ERROR);
 
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.STORE_ERROR);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.STORE_ERROR);
         }
     }
 

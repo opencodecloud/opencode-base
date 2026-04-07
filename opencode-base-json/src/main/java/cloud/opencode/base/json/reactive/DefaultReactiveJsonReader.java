@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <ul>
  *   <li>Reactive Streams compatible JSON reading - 兼容响应式流的JSON读取</li>
  *   <li>Virtual Thread-based non-blocking I/O - 基于虚拟线程的非阻塞I/O</li>
- *   <li>Bounded input size limit (64 MB) for security - 有界输入大小限制（64 MB）确保安全</li>
+ *   <li>Bounded input size limit (16 MB) for security - 有界输入大小限制（16 MB）确保安全</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -48,7 +48,7 @@ final class DefaultReactiveJsonReader implements ReactiveJsonReader {
 
     private static final int DEFAULT_BUFFER_SIZE = 8192;
     private static final int DEFAULT_BATCH_SIZE = 64;
-    private static final long DEFAULT_MAX_INPUT_SIZE = 64L * 1024 * 1024; // 64 MB
+    private static final long DEFAULT_MAX_INPUT_SIZE = 16L * 1024 * 1024; // 16 MB
 
     private final InputStream input;
     private final int bufferSize;

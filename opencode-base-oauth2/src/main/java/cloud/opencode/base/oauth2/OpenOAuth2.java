@@ -1,15 +1,26 @@
 package cloud.opencode.base.oauth2;
 
+import cloud.opencode.base.oauth2.discovery.DiscoveryDocument;
+import cloud.opencode.base.oauth2.discovery.OidcDiscovery;
+import cloud.opencode.base.oauth2.http.OAuth2HttpClient;
+import cloud.opencode.base.oauth2.introspection.IntrospectionResult;
+import cloud.opencode.base.oauth2.introspection.TokenIntrospection;
 import cloud.opencode.base.oauth2.oidc.JwtClaims;
+import cloud.opencode.base.oauth2.par.ParResponse;
+import cloud.opencode.base.oauth2.par.PushedAuthorizationRequest;
 import cloud.opencode.base.oauth2.pkce.PkceChallenge;
 import cloud.opencode.base.oauth2.provider.OAuth2Provider;
 import cloud.opencode.base.oauth2.provider.Providers;
+import cloud.opencode.base.oauth2.security.StateParameter;
+import cloud.opencode.base.oauth2.token.DefaultTokenManager;
 import cloud.opencode.base.oauth2.token.FileTokenStore;
 import cloud.opencode.base.oauth2.token.InMemoryTokenStore;
+import cloud.opencode.base.oauth2.token.TokenManager;
 import cloud.opencode.base.oauth2.token.TokenStore;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * OAuth2 Facade Class
@@ -25,6 +36,11 @@ import java.time.Duration;
  *   <li>PKCE challenge generation - PKCE 挑战生成</li>
  *   <li>JWT parsing - JWT 解析</li>
  *   <li>Token store factories - Token 存储工厂</li>
+ *   <li>State parameter generation (CSRF protection) - State 参数生成（CSRF 防护）</li>
+ *   <li>OIDC Discovery - OIDC 自动发现</li>
+ *   <li>Token Introspection (RFC 7662) - Token 内省</li>
+ *   <li>Pushed Authorization Requests (RFC 9126) - 推送授权请求</li>
+ *   <li>Token lifecycle management - Token 生命周期管理</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -333,6 +349,112 @@ public final class OpenOAuth2 {
         Path homeDir = Path.of(System.getProperty("user.home"));
         Path tokenDir = homeDir.resolve("." + appName).resolve("tokens");
         return new FileTokenStore(tokenDir);
+    }
+
+    // ==================== State Parameter ====================
+
+    /**
+     * Generate a cryptographically secure state parameter for CSRF protection
+     * 生成用于 CSRF 防护的加密安全 state 参数
+     *
+     * @return the state parameter string | state 参数字符串
+     */
+    public static String generateState() {
+        return StateParameter.generate();
+    }
+
+    /**
+     * Validate a state parameter using constant-time comparison
+     * 使用常量时间比较验证 state 参数
+     *
+     * @param expected the expected state | 期望的 state
+     * @param actual   the actual state from callback | 回调中的实际 state
+     * @return true if valid | 有效返回 true
+     */
+    public static boolean validateState(String expected, String actual) {
+        return StateParameter.validate(expected, actual);
+    }
+
+    // ==================== OIDC Discovery ====================
+
+    /**
+     * Discover OIDC endpoints from an issuer URL
+     * 从 issuer URL 发现 OIDC 端点
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>{@code
+     * DiscoveryDocument doc = OpenOAuth2.discover("https://accounts.google.com");
+     * String tokenEndpoint = doc.tokenEndpoint();
+     * }</pre>
+     *
+     * @param issuerUrl the OIDC issuer URL | OIDC 颁发者 URL
+     * @return the discovery document | 发现文档
+     */
+    public static DiscoveryDocument discover(String issuerUrl) {
+        return OidcDiscovery.discover(issuerUrl);
+    }
+
+    /**
+     * Discover OIDC endpoints using a custom HTTP client
+     * 使用自定义 HTTP 客户端发现 OIDC 端点
+     *
+     * @param issuerUrl  the OIDC issuer URL | OIDC 颁发者 URL
+     * @param httpClient the HTTP client | HTTP 客户端
+     * @return the discovery document | 发现文档
+     */
+    public static DiscoveryDocument discover(String issuerUrl, OAuth2HttpClient httpClient) {
+        return OidcDiscovery.discover(issuerUrl, httpClient);
+    }
+
+    // ==================== Token Introspection ====================
+
+    /**
+     * Create a token introspection client
+     * 创建 Token 内省客户端
+     *
+     * @param introspectionEndpoint the introspection endpoint URL | 内省端点 URL
+     * @param clientId              the client ID | 客户端 ID
+     * @param clientSecret          the client secret | 客户端密钥
+     * @return the token introspection client | Token 内省客户端
+     */
+    public static TokenIntrospection tokenIntrospection(String introspectionEndpoint,
+                                                         String clientId, String clientSecret) {
+        return new TokenIntrospection(introspectionEndpoint, clientId, clientSecret, new OAuth2HttpClient());
+    }
+
+    // ==================== PAR ====================
+
+    /**
+     * Create a pushed authorization request client
+     * 创建推送授权请求客户端
+     *
+     * @param parEndpoint  the PAR endpoint URL | PAR 端点 URL
+     * @param clientId     the client ID | 客户端 ID
+     * @param clientSecret the client secret | 客户端密钥
+     * @return the PAR client | PAR 客户端
+     */
+    public static PushedAuthorizationRequest par(String parEndpoint,
+                                                  String clientId, String clientSecret) {
+        return new PushedAuthorizationRequest(parEndpoint, clientId, clientSecret, new OAuth2HttpClient());
+    }
+
+    // ==================== Token Manager ====================
+
+    /**
+     * Create a default token manager builder
+     * 创建默认 Token 管理器构建器
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>{@code
+     * TokenManager manager = OpenOAuth2.tokenManager()
+     *     .tokenStore(OpenOAuth2.inMemoryTokenStore())
+     *     .build();
+     * }</pre>
+     *
+     * @return the token manager builder | Token 管理器构建器
+     */
+    public static DefaultTokenManager.Builder tokenManager() {
+        return DefaultTokenManager.builder();
     }
 
     // ==================== Configuration Builder ====================

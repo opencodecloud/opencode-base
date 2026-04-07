@@ -314,6 +314,45 @@ class OpenCaptchaTest {
     }
 
     @Nested
+    @DisplayName("Sprint 2 Static Factory Tests")
+    class Sprint2StaticFactoryTests {
+
+        @Test
+        @DisplayName("should create audio CAPTCHA via static method")
+        void should_createAudioCaptcha_viaStaticMethod() {
+            Captcha captcha = OpenCaptcha.audio();
+
+            assertThat(captcha).isNotNull();
+            assertThat(captcha.type()).isEqualTo(CaptchaType.AUDIO);
+            assertThat(captcha.imageData()).isNotNull().isNotEmpty();
+            assertThat(captcha.answer()).isNotNull().isNotEmpty();
+        }
+
+        @Test
+        @DisplayName("should create jigsaw CAPTCHA via static method")
+        void should_createJigsawCaptcha_viaStaticMethod() {
+            Captcha captcha = OpenCaptcha.jigsaw();
+
+            assertThat(captcha).isNotNull();
+            assertThat(captcha.type()).isEqualTo(CaptchaType.JIGSAW);
+            assertThat(captcha.imageData()).isNotNull().isNotEmpty();
+            assertThat(captcha.answer()).isNotNull().isNotEmpty();
+        }
+
+        @Test
+        @DisplayName("should create PoW CAPTCHA via static method")
+        void should_createPowCaptcha_viaStaticMethod() {
+            Captcha captcha = OpenCaptcha.pow();
+
+            assertThat(captcha).isNotNull();
+            assertThat(captcha.type()).isEqualTo(CaptchaType.POW);
+            assertThat(captcha.imageData()).hasSize(0);
+            assertThat(captcha.answer()).isNotNull().isNotEmpty();
+            assertThat(captcha.metadata()).containsKey("challenge");
+        }
+    }
+
+    @Nested
     @DisplayName("Accessor Tests")
     class AccessorTests {
 

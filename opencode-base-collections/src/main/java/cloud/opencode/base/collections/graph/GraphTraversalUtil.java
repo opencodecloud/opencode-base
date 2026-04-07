@@ -1,5 +1,7 @@
 package cloud.opencode.base.collections.graph;
 
+import cloud.opencode.base.collections.exception.OpenCollectionException;
+
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -63,6 +65,12 @@ import java.util.function.Predicate;
  * @since JDK 25, opencode-base-collections V1.0.0
  */
 public final class GraphTraversalUtil {
+
+    /**
+     * Maximum recursion depth for recursive graph traversal methods.
+     * 递归图遍历方法的最大递归深度。
+     */
+    private static final int MAX_RECURSION_DEPTH = 10_000;
 
     private GraphTraversalUtil() {
         throw new AssertionError("No instances");
@@ -209,17 +217,20 @@ public final class GraphTraversalUtil {
 
         List<N> result = new ArrayList<>();
         Set<N> visited = new HashSet<>();
-        dfsRecursive(graph, startNode, visited, result);
+        dfsRecursive(graph, startNode, visited, result, 0);
         return result;
     }
 
-    private static <N> void dfsRecursive(Graph<N> graph, N node, Set<N> visited, List<N> result) {
+    private static <N> void dfsRecursive(Graph<N> graph, N node, Set<N> visited, List<N> result, int depth) {
+        if (depth >= MAX_RECURSION_DEPTH) {
+            throw new OpenCollectionException("Graph recursion depth exceeded");
+        }
         visited.add(node);
         result.add(node);
 
         for (N neighbor : graph.successors(node)) {
             if (!visited.contains(neighbor)) {
-                dfsRecursive(graph, neighbor, visited, result);
+                dfsRecursive(graph, neighbor, visited, result, depth + 1);
             }
         }
     }
@@ -286,16 +297,19 @@ public final class GraphTraversalUtil {
         }
 
         Set<N> visited = new HashSet<>();
-        dfsWithVisitor(graph, startNode, visited, visitor);
+        dfsWithVisitor(graph, startNode, visited, visitor, 0);
     }
 
-    private static <N> void dfsWithVisitor(Graph<N> graph, N node, Set<N> visited, Consumer<N> visitor) {
+    private static <N> void dfsWithVisitor(Graph<N> graph, N node, Set<N> visited, Consumer<N> visitor, int depth) {
+        if (depth >= MAX_RECURSION_DEPTH) {
+            throw new OpenCollectionException("Graph recursion depth exceeded");
+        }
         visited.add(node);
         visitor.accept(node);
 
         for (N neighbor : graph.successors(node)) {
             if (!visited.contains(neighbor)) {
-                dfsWithVisitor(graph, neighbor, visited, visitor);
+                dfsWithVisitor(graph, neighbor, visited, visitor, depth + 1);
             }
         }
     }
@@ -324,7 +338,7 @@ public final class GraphTraversalUtil {
 
         for (N node : graph.nodes()) {
             if (!visited.contains(node)) {
-                topologicalSortDfs(graph, node, visited, inProgress, result);
+                topologicalSortDfs(graph, node, visited, inProgress, result, 0);
             }
         }
 
@@ -332,7 +346,10 @@ public final class GraphTraversalUtil {
     }
 
     private static <N> void topologicalSortDfs(Graph<N> graph, N node, Set<N> visited,
-                                               Set<N> inProgress, Deque<N> result) {
+                                               Set<N> inProgress, Deque<N> result, int depth) {
+        if (depth >= MAX_RECURSION_DEPTH) {
+            throw new OpenCollectionException("Graph recursion depth exceeded");
+        }
         if (inProgress.contains(node)) {
             throw new IllegalArgumentException("Graph has a cycle, topological sort not possible");
         }
@@ -342,7 +359,7 @@ public final class GraphTraversalUtil {
 
         inProgress.add(node);
         for (N neighbor : graph.successors(node)) {
-            topologicalSortDfs(graph, neighbor, visited, inProgress, result);
+            topologicalSortDfs(graph, neighbor, visited, inProgress, result, depth + 1);
         }
         inProgress.remove(node);
         visited.add(node);
@@ -425,7 +442,7 @@ public final class GraphTraversalUtil {
 
         for (N node : graph.nodes()) {
             if (!visited.contains(node)) {
-                if (hasCycleDirectedDfs(graph, node, visited, inProgress)) {
+                if (hasCycleDirectedDfs(graph, node, visited, inProgress, 0)) {
                     return true;
                 }
             }
@@ -434,7 +451,10 @@ public final class GraphTraversalUtil {
     }
 
     private static <N> boolean hasCycleDirectedDfs(Graph<N> graph, N node,
-                                                   Set<N> visited, Set<N> inProgress) {
+                                                   Set<N> visited, Set<N> inProgress, int depth) {
+        if (depth >= MAX_RECURSION_DEPTH) {
+            throw new OpenCollectionException("Graph recursion depth exceeded");
+        }
         inProgress.add(node);
 
         for (N neighbor : graph.successors(node)) {
@@ -442,7 +462,7 @@ public final class GraphTraversalUtil {
                 return true;
             }
             if (!visited.contains(neighbor)) {
-                if (hasCycleDirectedDfs(graph, neighbor, visited, inProgress)) {
+                if (hasCycleDirectedDfs(graph, neighbor, visited, inProgress, depth + 1)) {
                     return true;
                 }
             }
@@ -458,7 +478,7 @@ public final class GraphTraversalUtil {
 
         for (N node : graph.nodes()) {
             if (!visited.contains(node)) {
-                if (hasCycleUndirectedDfs(graph, node, null, visited)) {
+                if (hasCycleUndirectedDfs(graph, node, null, visited, 0)) {
                     return true;
                 }
             }
@@ -466,12 +486,15 @@ public final class GraphTraversalUtil {
         return false;
     }
 
-    private static <N> boolean hasCycleUndirectedDfs(Graph<N> graph, N node, N parent, Set<N> visited) {
+    private static <N> boolean hasCycleUndirectedDfs(Graph<N> graph, N node, N parent, Set<N> visited, int depth) {
+        if (depth >= MAX_RECURSION_DEPTH) {
+            throw new OpenCollectionException("Graph recursion depth exceeded");
+        }
         visited.add(node);
 
         for (N neighbor : graph.adjacentNodes(node)) {
             if (!visited.contains(neighbor)) {
-                if (hasCycleUndirectedDfs(graph, neighbor, node, visited)) {
+                if (hasCycleUndirectedDfs(graph, neighbor, node, visited, depth + 1)) {
                     return true;
                 }
             } else if (!neighbor.equals(parent)) {
@@ -713,7 +736,7 @@ public final class GraphTraversalUtil {
 
         for (N node : graph.nodes()) {
             if (!visited.contains(node)) {
-                sccFirstDfs(graph, node, visited, finishOrder);
+                sccFirstDfs(graph, node, visited, finishOrder, 0);
             }
         }
 
@@ -725,7 +748,7 @@ public final class GraphTraversalUtil {
             N node = finishOrder.pollFirst();
             if (!visited.contains(node)) {
                 Set<N> component = new HashSet<>();
-                sccSecondDfs(graph, node, visited, component);
+                sccSecondDfs(graph, node, visited, component, 0);
                 components.add(component);
             }
         }
@@ -733,23 +756,29 @@ public final class GraphTraversalUtil {
         return components;
     }
 
-    private static <N> void sccFirstDfs(Graph<N> graph, N node, Set<N> visited, Deque<N> finishOrder) {
+    private static <N> void sccFirstDfs(Graph<N> graph, N node, Set<N> visited, Deque<N> finishOrder, int depth) {
+        if (depth >= MAX_RECURSION_DEPTH) {
+            throw new OpenCollectionException("Graph recursion depth exceeded");
+        }
         visited.add(node);
         for (N neighbor : graph.successors(node)) {
             if (!visited.contains(neighbor)) {
-                sccFirstDfs(graph, neighbor, visited, finishOrder);
+                sccFirstDfs(graph, neighbor, visited, finishOrder, depth + 1);
             }
         }
         finishOrder.addFirst(node);
     }
 
-    private static <N> void sccSecondDfs(Graph<N> graph, N node, Set<N> visited, Set<N> component) {
+    private static <N> void sccSecondDfs(Graph<N> graph, N node, Set<N> visited, Set<N> component, int depth) {
+        if (depth >= MAX_RECURSION_DEPTH) {
+            throw new OpenCollectionException("Graph recursion depth exceeded");
+        }
         visited.add(node);
         component.add(node);
         // Use predecessors (reverse edges)
         for (N neighbor : graph.predecessors(node)) {
             if (!visited.contains(neighbor)) {
-                sccSecondDfs(graph, neighbor, visited, component);
+                sccSecondDfs(graph, neighbor, visited, component, depth + 1);
             }
         }
     }
@@ -832,5 +861,176 @@ public final class GraphTraversalUtil {
         }
 
         return !hasCycle(graph);
+    }
+
+    // ==================== Dijkstra 最短路径 | Dijkstra Shortest Path ====================
+
+    /**
+     * Computes shortest distances from source to all reachable nodes using Dijkstra's algorithm.
+     * 使用 Dijkstra 算法计算从源节点到所有可达节点的最短距离。
+     *
+     * <p>The graph edge values must be non-negative numbers. If a negative weight edge
+     * is encountered, an {@link IllegalArgumentException} is thrown.</p>
+     * <p>图的边值必须为非负数。如果遇到负权边，将抛出 {@link IllegalArgumentException}。</p>
+     *
+     * @param <N>    node type | 节点类型
+     * @param graph  the value graph | 值图
+     * @param source the source node | 源节点
+     * @return map of node to shortest distance from source | 节点到源节点最短距离的映射
+     * @throws IllegalArgumentException if a negative weight edge is found | 如果发现负权边则抛出异常
+     * @since JDK 25, opencode-base-collections V1.0.3
+     */
+    public static <N> Map<N, Double> dijkstra(ValueGraph<N, ? extends Number> graph, N source) {
+        Objects.requireNonNull(graph, "Graph cannot be null");
+        Objects.requireNonNull(source, "Source cannot be null");
+
+        if (!graph.nodes().contains(source)) {
+            return Collections.emptyMap();
+        }
+
+        Map<N, Double> dist = new HashMap<>();
+        Set<N> visited = new HashSet<>();
+        PriorityQueue<Map.Entry<N, Double>> pq = new PriorityQueue<>(
+                Comparator.comparingDouble(Map.Entry::getValue)
+        );
+
+        // Initialize
+        for (N node : graph.nodes()) {
+            dist.put(node, Double.MAX_VALUE);
+        }
+        dist.put(source, 0.0);
+        pq.offer(Map.entry(source, 0.0));
+
+        while (!pq.isEmpty()) {
+            Map.Entry<N, Double> current = pq.poll();
+            N u = current.getKey();
+            double distU = current.getValue();
+
+            if (visited.contains(u)) {
+                continue;
+            }
+            visited.add(u);
+
+            for (N v : graph.successors(u)) {
+                final N edgeU = u;
+                final N edgeV = v;
+                double weight = graph.edgeValue(u, v)
+                        .map(Number::doubleValue)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Edge value missing for edge " + edgeU + " -> " + edgeV));
+
+                if (weight < 0) {
+                    throw new IllegalArgumentException(
+                            "Negative edge weight not allowed in Dijkstra's algorithm: "
+                                    + u + " -> " + v + " = " + weight);
+                }
+
+                double newDist = distU + weight;
+                if (newDist < dist.get(v)) {
+                    dist.put(v, newDist);
+                    pq.offer(Map.entry(v, newDist));
+                }
+            }
+        }
+
+        // Remove unreachable nodes (those still at MAX_VALUE)
+        dist.entrySet().removeIf(e -> e.getValue() >= Double.MAX_VALUE);
+
+        return dist;
+    }
+
+    /**
+     * Finds the shortest path from source to target using Dijkstra's algorithm.
+     * 使用 Dijkstra 算法查找从源到目标的最短路径。
+     *
+     * <p>Returns the path as a list of nodes from source to target (inclusive).
+     * Returns an empty list if the target is unreachable.</p>
+     * <p>返回从源到目标的节点列表（包含两端）。如果目标不可达则返回空列表。</p>
+     *
+     * @param <N>    node type | 节点类型
+     * @param graph  the value graph | 值图
+     * @param source the source node | 源节点
+     * @param target the target node | 目标节点
+     * @return path as list of nodes, or empty list if unreachable | 节点路径列表，不可达则返回空列表
+     * @throws IllegalArgumentException if a negative weight edge is found | 如果发现负权边则抛出异常
+     * @since JDK 25, opencode-base-collections V1.0.3
+     */
+    public static <N> List<N> shortestWeightedPath(ValueGraph<N, ? extends Number> graph, N source, N target) {
+        Objects.requireNonNull(graph, "Graph cannot be null");
+        Objects.requireNonNull(source, "Source cannot be null");
+        Objects.requireNonNull(target, "Target cannot be null");
+
+        if (!graph.nodes().contains(source) || !graph.nodes().contains(target)) {
+            return Collections.emptyList();
+        }
+
+        if (source.equals(target)) {
+            return Collections.singletonList(source);
+        }
+
+        Map<N, Double> dist = new HashMap<>();
+        Map<N, N> prev = new HashMap<>();
+        Set<N> visited = new HashSet<>();
+        PriorityQueue<Map.Entry<N, Double>> pq = new PriorityQueue<>(
+                Comparator.comparingDouble(Map.Entry::getValue)
+        );
+
+        // Initialize
+        for (N node : graph.nodes()) {
+            dist.put(node, Double.MAX_VALUE);
+        }
+        dist.put(source, 0.0);
+        pq.offer(Map.entry(source, 0.0));
+
+        while (!pq.isEmpty()) {
+            Map.Entry<N, Double> current = pq.poll();
+            N u = current.getKey();
+            double distU = current.getValue();
+
+            if (visited.contains(u)) {
+                continue;
+            }
+            visited.add(u);
+
+            if (u.equals(target)) {
+                break;
+            }
+
+            for (N v : graph.successors(u)) {
+                final N edgeU = u;
+                final N edgeV = v;
+                double weight = graph.edgeValue(u, v)
+                        .map(Number::doubleValue)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Edge value missing for edge " + edgeU + " -> " + edgeV));
+
+                if (weight < 0) {
+                    throw new IllegalArgumentException(
+                            "Negative edge weight not allowed in Dijkstra's algorithm: "
+                                    + u + " -> " + v + " = " + weight);
+                }
+
+                double newDist = distU + weight;
+                if (newDist < dist.get(v)) {
+                    dist.put(v, newDist);
+                    prev.put(v, u);
+                    pq.offer(Map.entry(v, newDist));
+                }
+            }
+        }
+
+        // Reconstruct path
+        if (dist.get(target) >= Double.MAX_VALUE) {
+            return Collections.emptyList();
+        }
+
+        LinkedList<N> path = new LinkedList<>();
+        N current = target;
+        while (current != null) {
+            path.addFirst(current);
+            current = prev.get(current);
+        }
+
+        return path;
     }
 }

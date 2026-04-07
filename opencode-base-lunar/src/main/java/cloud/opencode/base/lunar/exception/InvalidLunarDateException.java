@@ -1,5 +1,7 @@
 package cloud.opencode.base.lunar.exception;
 
+import java.io.Serial;
+
 /**
  * Invalid Lunar Date Exception
  * 无效农历日期异常
@@ -31,6 +33,9 @@ package cloud.opencode.base.lunar.exception;
  * @since JDK 25, opencode-base-lunar V1.0.0
  */
 public class InvalidLunarDateException extends LunarException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final int year;
     private final int month;

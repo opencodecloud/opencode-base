@@ -26,8 +26,8 @@ class EmailConfigExceptionTest {
         void testConstructorWithMessage() {
             EmailConfigException exception = new EmailConfigException("Invalid SMTP host");
 
-            assertThat(exception.getMessage()).isEqualTo("Invalid SMTP host");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.CONFIG_INVALID);
+            assertThat(exception.getRawMessage()).isEqualTo("Invalid SMTP host");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.CONFIG_INVALID);
             assertThat(exception.getCause()).isNull();
         }
 
@@ -37,9 +37,9 @@ class EmailConfigExceptionTest {
             Throwable cause = new IllegalArgumentException("Port out of range");
             EmailConfigException exception = new EmailConfigException("Invalid port", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Invalid port");
+            assertThat(exception.getRawMessage()).isEqualTo("Invalid port");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.CONFIG_INVALID);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.CONFIG_INVALID);
         }
     }
 
@@ -68,7 +68,7 @@ class EmailConfigExceptionTest {
                 throw new EmailConfigException("Config error");
             } catch (EmailException e) {
                 assertThat(e).isInstanceOf(EmailConfigException.class);
-                assertThat(e.getErrorCode()).isEqualTo(EmailErrorCode.CONFIG_INVALID);
+                assertThat(e.getEmailErrorCode()).isEqualTo(EmailErrorCode.CONFIG_INVALID);
             }
         }
     }

@@ -353,8 +353,28 @@ public class TenantCache<K, V> {
 
     // ==================== Private Methods | 私有方法 ====================
 
+    /** Maximum allowed length for a tenant identifier | 租户标识最大允许长度 */
+    private static final int MAX_TENANT_ID_LENGTH = 256;
+
+    /** Maximum number of tenants allowed | 最大允许的租户数量 */
+    private static final int MAX_TENANTS = 10_000;
+
     private Cache<K, V> getOrCreateTenantCache(String tenantId) {
-        return tenantCaches.computeIfAbsent(tenantId, this::createTenantCache);
+        Objects.requireNonNull(tenantId, "tenantId cannot be null");
+        if (tenantId.length() > MAX_TENANT_ID_LENGTH) {
+            throw new IllegalArgumentException(
+                    "tenantId length exceeds maximum of " + MAX_TENANT_ID_LENGTH + ": " + tenantId.length());
+        }
+        return tenantCaches.computeIfAbsent(tenantId, id -> {
+            // Check tenant quota inside computeIfAbsent to avoid TOCTOU race.
+            // ConcurrentHashMap.size() is approximate but sufficient to prevent
+            // significant over-provisioning.
+            if (tenantCaches.size() >= MAX_TENANTS) {
+                throw new IllegalStateException(
+                        "Maximum tenant count exceeded: " + MAX_TENANTS);
+            }
+            return createTenantCache(id);
+        });
     }
 
     private Cache<K, V> createTenantCache(String tenantId) {

@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Behavior Analyzer - Analyzes user behavior for bot detection
@@ -44,6 +45,12 @@ public final class BehaviorAnalyzer {
     private static final int MAX_FAILURES_PER_WINDOW = 5;
     private static final Duration FAILURE_WINDOW = Duration.ofMinutes(5);
 
+    /**
+     * Maximum number of tracked clients to prevent unbounded map growth (OOM).
+     * 最大跟踪客户端数量，防止无限制的 Map 增长（OOM）。
+     */
+    private static final int MAX_TRACKED_CLIENTS = 100_000;
+
     private final Map<String, ClientBehavior> behaviors = new ConcurrentHashMap<>();
 
     /**
@@ -56,6 +63,15 @@ public final class BehaviorAnalyzer {
      * @return the analysis result | 分析结果
      */
     public AnalysisResult analyze(String clientId, Duration responseTime, boolean success) {
+        // Prevent unbounded map growth — evict stale entries first, then degrade gracefully
+        // 防止无限制的 Map 增长 — 先淘汰过期条目，然后优雅降级
+        if (behaviors.size() >= MAX_TRACKED_CLIENTS) {
+            clearOld();
+            if (behaviors.size() >= MAX_TRACKED_CLIENTS) {
+                return AnalysisResult.TOO_MANY_FAILURES;
+            }
+        }
+
         ClientBehavior behavior = behaviors.computeIfAbsent(clientId, k -> new ClientBehavior());
 
         behavior.recordAttempt(responseTime, success);
@@ -133,21 +149,35 @@ public final class BehaviorAnalyzer {
         private volatile long lastResponseTimeMs = 0;
         private final AtomicInteger consistentTimingCount = new AtomicInteger(0);
 
+        /**
+         * Lock protecting the failure window check-and-reset sequence to prevent TOCTOU races.
+         * 保护失败窗口检查和重置序列的锁，防止 TOCTOU 竞态条件。
+         */
+        private final ReentrantLock failureWindowLock = new ReentrantLock();
+
         void recordAttempt(Duration responseTime, boolean success) {
             lastActivity = Instant.now();
             totalAttempts.incrementAndGet();
 
-            // Check failure window
-            if (Instant.now().isAfter(failureWindowStart.plus(FAILURE_WINDOW))) {
-                failureWindowStart = Instant.now();
-                recentFailures.set(0);
+            // Check failure window — lock protects the check-reset-increment sequence atomically
+            // 检查失败窗口 — 锁保护检查-重置-递增序列的原子性
+            failureWindowLock.lock();
+            try {
+                if (Instant.now().isAfter(failureWindowStart.plus(FAILURE_WINDOW))) {
+                    failureWindowStart = Instant.now();
+                    recentFailures.set(0);
+                }
+
+                if (!success) {
+                    recentFailures.incrementAndGet();
+                }
+            } finally {
+                failureWindowLock.unlock();
             }
 
-            if (!success) {
-                recentFailures.incrementAndGet();
-            }
-
-            // Check timing consistency
+            // Check timing consistency (read-then-write on lastResponseTimeMs is intentionally
+            // not locked — this is a heuristic indicator, not a security-critical counter)
+            // 检查时间一致性（lastResponseTimeMs 的读后写未加锁 — 这是启发式指标，非安全关键计数器）
             long currentMs = responseTime.toMillis();
             if (lastResponseTimeMs > 0 && Math.abs(currentMs - lastResponseTimeMs) < 100) {
                 consistentTimingCount.incrementAndGet();

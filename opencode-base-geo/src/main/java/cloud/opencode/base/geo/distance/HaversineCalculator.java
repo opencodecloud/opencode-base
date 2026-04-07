@@ -54,7 +54,7 @@ public class HaversineCalculator implements DistanceCalculator {
     public double calculate(Coordinate c1, Coordinate c2) {
         double lat1 = Math.toRadians(c1.latitude());
         double lat2 = Math.toRadians(c2.latitude());
-        double dLat = Math.toRadians(c2.latitude() - c1.latitude());
+        double dLat = lat2 - lat1;
         double dLng = Math.toRadians(c2.longitude() - c1.longitude());
 
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)

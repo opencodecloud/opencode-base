@@ -49,7 +49,7 @@ public final class Convert {
     // ==================== 基本类型转换 ====================
 
     /**
-     * Converts
+     * Converts the given value to Integer.
      * 转换为 Integer
      */
     public static Integer toInt(Object value) {
@@ -57,7 +57,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Integer, returning the default value if conversion fails.
      * 转换为 Integer，带默认值
      */
     public static Integer toInt(Object value, Integer defaultValue) {
@@ -66,7 +66,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Long.
      * 转换为 Long
      */
     public static Long toLong(Object value) {
@@ -74,7 +74,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Long, returning the default value if conversion fails.
      * 转换为 Long，带默认值
      */
     public static Long toLong(Object value, Long defaultValue) {
@@ -83,7 +83,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Double.
      * 转换为 Double
      */
     public static Double toDouble(Object value) {
@@ -91,7 +91,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Double, returning the default value if conversion fails.
      * 转换为 Double，带默认值
      */
     public static Double toDouble(Object value, Double defaultValue) {
@@ -100,7 +100,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Float.
      * 转换为 Float
      */
     public static Float toFloat(Object value) {
@@ -108,7 +108,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Float, returning the default value if conversion fails.
      * 转换为 Float，带默认值
      */
     public static Float toFloat(Object value, Float defaultValue) {
@@ -117,7 +117,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Short.
      * 转换为 Short
      */
     public static Short toShort(Object value) {
@@ -125,7 +125,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Short, returning the default value if conversion fails.
      * 转换为 Short，带默认值
      */
     public static Short toShort(Object value, Short defaultValue) {
@@ -134,7 +134,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Byte.
      * 转换为 Byte
      */
     public static Byte toByte(Object value) {
@@ -142,7 +142,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Byte, returning the default value if conversion fails.
      * 转换为 Byte，带默认值
      */
     public static Byte toByte(Object value, Byte defaultValue) {
@@ -151,7 +151,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Boolean.
      * 转换为 Boolean
      */
     public static Boolean toBool(Object value) {
@@ -159,7 +159,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Boolean, returning the default value if conversion fails.
      * 转换为 Boolean，带默认值
      */
     public static Boolean toBool(Object value, Boolean defaultValue) {
@@ -168,7 +168,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Character.
      * 转换为 Character
      */
     public static Character toChar(Object value) {
@@ -176,7 +176,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to Character, returning the default value if conversion fails.
      * 转换为 Character，带默认值
      */
     public static Character toChar(Object value, Character defaultValue) {
@@ -185,7 +185,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to String.
      * 转换为 String
      */
     public static String toStr(Object value) {
@@ -193,18 +193,19 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to String, returning the default value if conversion fails.
      * 转换为 String，带默认值
      */
     public static String toStr(Object value, String defaultValue) {
         if (value == null) return defaultValue;
-        return value.toString();
+        Converter<String> converter = ConverterRegistry.getConverter(String.class);
+        return converter != null ? converter.convert(value, defaultValue) : value.toString();
     }
 
     // ==================== 数组转换 ====================
 
     /**
-     * Converts
+     * Converts the given value to an int array.
      * 转换为 int 数组
      */
     public static int[] toIntArray(Object value) {
@@ -236,7 +237,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to a long array.
      * 转换为 long 数组
      */
     public static long[] toLongArray(Object value) {
@@ -268,7 +269,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to a String array.
      * 转换为 String 数组
      */
     public static String[] toStrArray(Object value) {
@@ -299,7 +300,7 @@ public final class Convert {
     // ==================== 集合转换 ====================
 
     /**
-     * Converts
+     * Converts the given value to a List of the specified element type.
      * 转换为 List
      */
     public static <T> List<T> toList(Object value, Class<T> elementType) {
@@ -340,7 +341,7 @@ public final class Convert {
     }
 
     /**
-     * Converts
+     * Converts the given value to a Set of the specified element type.
      * 转换为 Set
      */
     public static <T> Set<T> toSet(Object value, Class<T> elementType) {

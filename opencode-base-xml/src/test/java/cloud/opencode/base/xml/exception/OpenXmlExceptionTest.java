@@ -1,5 +1,6 @@
 package cloud.opencode.base.xml.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 @DisplayName("OpenXmlException Tests")
 class OpenXmlExceptionTest {
@@ -25,7 +26,8 @@ class OpenXmlExceptionTest {
         void constructorWithMessageShouldSetMessage() {
             OpenXmlException exception = new OpenXmlException("Test message");
 
-            assertThat(exception.getMessage()).isEqualTo("Test message");
+            assertThat(exception.getMessage()).contains("Test message");
+            assertThat(exception.getRawMessage()).isEqualTo("Test message");
         }
 
         @Test
@@ -34,7 +36,7 @@ class OpenXmlExceptionTest {
             Throwable cause = new RuntimeException("cause");
             OpenXmlException exception = new OpenXmlException("Test message", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Test message");
+            assertThat(exception.getMessage()).contains("Test message");
             assertThat(exception.getCause()).isEqualTo(cause);
         }
 
@@ -52,7 +54,7 @@ class OpenXmlExceptionTest {
         void constructorWithMessageLineAndColumnShouldSetLocation() {
             OpenXmlException exception = new OpenXmlException("Test message", 10, 5);
 
-            assertThat(exception.getMessage()).isEqualTo("[Line 10, Column 5] Test message");
+            assertThat(exception.getMessage()).contains("[Line 10, Column 5] Test message");
             assertThat(exception.getLine()).isEqualTo(10);
             assertThat(exception.getColumn()).isEqualTo(5);
         }
@@ -63,7 +65,7 @@ class OpenXmlExceptionTest {
             Throwable cause = new RuntimeException("cause");
             OpenXmlException exception = new OpenXmlException("Test message", 10, 5, cause);
 
-            assertThat(exception.getMessage()).isEqualTo("[Line 10, Column 5] Test message");
+            assertThat(exception.getMessage()).contains("[Line 10, Column 5] Test message");
             assertThat(exception.getCause()).isEqualTo(cause);
             assertThat(exception.getLine()).isEqualTo(10);
             assertThat(exception.getColumn()).isEqualTo(5);
@@ -169,7 +171,7 @@ class OpenXmlExceptionTest {
             OpenXmlException exception = OpenXmlException.validationError("Validation failed");
 
             assertThat(exception).isInstanceOf(XmlValidationException.class);
-            assertThat(exception.getMessage()).isEqualTo("Validation failed");
+            assertThat(exception.getMessage()).contains("Validation failed");
         }
 
         @Test
@@ -181,6 +183,43 @@ class OpenXmlExceptionTest {
             assertThat(exception).isInstanceOf(XmlTransformException.class);
             assertThat(exception.getCause()).isEqualTo(cause);
             assertThat(exception.getMessage()).contains("transformation failed");
+        }
+    }
+
+    @Nested
+    @DisplayName("OpenException Inheritance Tests")
+    class OpenExceptionInheritanceTests {
+
+        @Test
+        @DisplayName("should be instance of OpenException")
+        void shouldBeInstanceOfOpenException() {
+            OpenXmlException exception = new OpenXmlException("error");
+
+            assertThat(exception).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("should have XML component")
+        void shouldHaveXmlComponent() {
+            OpenXmlException exception = new OpenXmlException("error");
+
+            assertThat(exception.getComponent()).isEqualTo("XML");
+        }
+
+        @Test
+        @DisplayName("getMessage should include component prefix")
+        void getMessageShouldIncludeComponentPrefix() {
+            OpenXmlException exception = new OpenXmlException("error");
+
+            assertThat(exception.getMessage()).startsWith("[XML]");
+        }
+
+        @Test
+        @DisplayName("getRawMessage should return raw message without prefix")
+        void getRawMessageShouldReturnRawMessageWithoutPrefix() {
+            OpenXmlException exception = new OpenXmlException("error");
+
+            assertThat(exception.getRawMessage()).isEqualTo("error");
         }
     }
 }

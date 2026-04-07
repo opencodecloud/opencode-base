@@ -218,4 +218,14 @@ public interface Graph<V> {
      * 清空图
      */
     void clear();
+
+    /**
+     * Create an immutable snapshot of this graph
+     * 创建此图的不可变快照
+     *
+     * @return an immutable copy of this graph | 此图的不可变副本
+     */
+    default Graph<V> snapshot() {
+        return ImmutableGraph.copyOf(this);
+    }
 }

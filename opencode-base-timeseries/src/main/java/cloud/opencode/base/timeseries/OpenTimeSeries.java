@@ -1,7 +1,14 @@
 package cloud.opencode.base.timeseries;
 
+import cloud.opencode.base.timeseries.alignment.AlignmentUtil;
+import cloud.opencode.base.timeseries.sampling.FillStrategy;
 import cloud.opencode.base.timeseries.detection.AnomalyDetectorUtil;
 import cloud.opencode.base.timeseries.forecast.ForecastUtil;
+import cloud.opencode.base.timeseries.interpolation.InterpolationUtil;
+import cloud.opencode.base.timeseries.math.MathUtil;
+import cloud.opencode.base.timeseries.quality.Gap;
+import cloud.opencode.base.timeseries.quality.GapDetector;
+import cloud.opencode.base.timeseries.rate.RateUtil;
 import cloud.opencode.base.timeseries.sampling.AggregationType;
 import cloud.opencode.base.timeseries.sampling.DownsamplingUtil;
 import cloud.opencode.base.timeseries.sampling.SamplerUtil;
@@ -332,36 +339,25 @@ public final class OpenTimeSeries {
     }
 
     /**
-     * Normalize series to 0-1 range
-     * 归一化序列到0-1范围
+     * Min-max normalize series to [0,1]
+     * 最小-最大归一化到[0,1]
      *
      * @param series the series | 序列
      * @return the normalized series | 归一化后的序列
      */
     public static TimeSeries normalize(TimeSeries series) {
-        double min = series.min().orElse(0);
-        double max = series.max().orElse(1);
-        double range = max - min;
-        if (range == 0) {
-            return series.map(v -> 0.5);
-        }
-        return series.map(v -> (v - min) / range);
+        return MathUtil.normalize(series);
     }
 
     /**
-     * Standardize series (z-score normalization)
-     * 标准化序列（Z分数归一化）
+     * Z-score standardize series
+     * Z-score标准化
      *
      * @param series the series | 序列
      * @return the standardized series | 标准化后的序列
      */
     public static TimeSeries standardize(TimeSeries series) {
-        double mean = series.average().orElse(0);
-        double std = series.stdDev();
-        if (std == 0) {
-            return series.map(v -> 0);
-        }
-        return series.map(v -> (v - mean) / std);
+        return MathUtil.zScore(series);
     }
 
     // ==================== Forecast shortcuts | 预测快捷方法 ====================
@@ -494,5 +490,101 @@ public final class OpenTimeSeries {
      */
     public static TimeSeries thresholdDownsample(TimeSeries series, double threshold) {
         return DownsamplingUtil.threshold(series, threshold);
+    }
+
+    // ==================== Alignment shortcuts | 对齐快捷方法 ====================
+
+    /**
+     * Align two series to common time grid
+     * 对齐两个序列到共同时间网格
+     *
+     * @param a the first series | 第一个序列
+     * @param b the second series | 第二个序列
+     * @param interval the interval | 间隔
+     * @param fill the fill strategy | 填充策略
+     * @return the aligned series pair | 对齐后的序列对
+     */
+    public static TimeSeries[] align(TimeSeries a, TimeSeries b, Duration interval, FillStrategy fill) {
+        return AlignmentUtil.align(a, b, interval, fill);
+    }
+
+    /**
+     * Resample series to regular intervals
+     * 重采样序列到规则间隔
+     *
+     * @param ts the series | 序列
+     * @param interval the interval | 间隔
+     * @param fill the fill strategy | 填充策略
+     * @return the resampled series | 重采样后的序列
+     */
+    public static TimeSeries resample(TimeSeries ts, Duration interval, FillStrategy fill) {
+        return AlignmentUtil.resample(ts, interval, fill);
+    }
+
+    // ==================== Rate shortcuts | 速率快捷方法 ====================
+
+    /**
+     * Calculate per-second rate from counter
+     * 从计数器计算每秒速率
+     *
+     * @param counter the counter series | 计数器序列
+     * @param window the window duration | 窗口时长
+     * @return the rate series | 速率序列
+     */
+    public static TimeSeries rate(TimeSeries counter, Duration window) {
+        return RateUtil.rate(counter, window);
+    }
+
+    /**
+     * Calculate instantaneous rate from counter
+     * 计算瞬时速率
+     *
+     * @param counter the counter series | 计数器序列
+     * @return the instantaneous rate series | 瞬时速率序列
+     */
+    public static TimeSeries irate(TimeSeries counter) {
+        return RateUtil.irate(counter);
+    }
+
+    // ==================== Interpolation shortcuts | 插值快捷方法 ====================
+
+    /**
+     * Linear interpolation at regular intervals
+     * 等间隔线性插值
+     *
+     * @param ts the series | 序列
+     * @param interval the interval | 间隔
+     * @return the interpolated series | 插值后的序列
+     */
+    public static TimeSeries interpolate(TimeSeries ts, Duration interval) {
+        return InterpolationUtil.linear(ts, interval);
+    }
+
+    // ==================== Quality shortcuts | 质量快捷方法 ====================
+
+    /**
+     * Detect gaps in time series data
+     * 检测时间序列数据中的缺口
+     *
+     * @param ts the series | 序列
+     * @param expectedInterval the expected interval | 期望间隔
+     * @return the list of gaps | 缺口列表
+     */
+    public static List<Gap> detectGaps(TimeSeries ts, Duration expectedInterval) {
+        return GapDetector.detectGaps(ts, expectedInterval);
+    }
+
+    /**
+     * Calculate data completeness percentage
+     * 计算数据完整性百分比
+     *
+     * @param ts the series | 序列
+     * @param expectedInterval the expected interval | 期望间隔
+     * @param from the start time | 开始时间
+     * @param to the end time | 结束时间
+     * @return the completeness percentage (0-1) | 完整性百分比（0-1）
+     */
+    public static double dataCompleteness(TimeSeries ts, Duration expectedInterval, Instant from, Instant to) {
+        return GapDetector.dataCompleteness(ts, expectedInterval, from, to);
     }
 }

@@ -357,12 +357,12 @@ class CaptchaGeneratorTest {
         }
 
         @Test
-        @DisplayName("CaptchaGenerator permits exactly 9 implementations")
+        @DisplayName("CaptchaGenerator permits exactly 13 implementations")
         void captchaGeneratorPermitsCorrectImplementations() {
             Class<?>[] permittedSubclasses = CaptchaGenerator.class.getPermittedSubclasses();
 
             assertThat(permittedSubclasses).isNotNull();
-            assertThat(permittedSubclasses).hasSize(9);
+            assertThat(permittedSubclasses).hasSize(13);
         }
     }
 

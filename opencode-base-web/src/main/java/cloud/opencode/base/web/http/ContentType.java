@@ -189,7 +189,7 @@ public final class ContentType {
 
         for (int i = 1; i < parts.length; i++) {
             String part = parts[i].trim();
-            if (part.toLowerCase().startsWith("charset=")) {
+            if (startsWithIgnoreCase(part, "charset=")) {
                 String charsetName = part.substring(8).trim();
                 if (charsetName.startsWith("\"") && charsetName.endsWith("\"")) {
                     charsetName = charsetName.substring(1, charsetName.length() - 1);
@@ -199,7 +199,7 @@ public final class ContentType {
                 } catch (Exception ignored) {
                     // Use default
                 }
-            } else if (part.toLowerCase().startsWith("boundary=")) {
+            } else if (startsWithIgnoreCase(part, "boundary=")) {
                 boundary = part.substring(9).trim();
                 if (boundary.startsWith("\"") && boundary.endsWith("\"")) {
                     boundary = boundary.substring(1, boundary.length() - 1);
@@ -305,6 +305,12 @@ public final class ContentType {
      */
     public boolean isForm() {
         return APPLICATION_FORM_URLENCODED.equals(mimeType);
+    }
+
+    // ==================== Internal ====================
+
+    private static boolean startsWithIgnoreCase(String s, String prefix) {
+        return s.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     // ==================== Object Methods ====================

@@ -392,19 +392,15 @@ class TokenizerTest {
         }
 
         @Test
-        @DisplayName("Single ampersand throws | 单个 & 抛出异常")
-        void testSingleAmpersandThrows() {
-            assertThatThrownBy(() -> Tokenizer.tokenize("&"))
-                    .isInstanceOf(OpenExpressionException.class)
-                    .hasMessageContaining("Unexpected character '&'");
+        @DisplayName("Single ampersand is bitwise AND | 单个 & 是位与运算符")
+        void testSingleAmpersandIsBitwiseAnd() {
+            assertThat(Tokenizer.tokenize("&").getFirst().type()).isEqualTo(TokenType.BIT_AND);
         }
 
         @Test
-        @DisplayName("Single pipe throws | 单个 | 抛出异常")
-        void testSinglePipeThrows() {
-            assertThatThrownBy(() -> Tokenizer.tokenize("|"))
-                    .isInstanceOf(OpenExpressionException.class)
-                    .hasMessageContaining("Unexpected character '|'");
+        @DisplayName("Single pipe is bitwise OR | 单个 | 是位或运算符")
+        void testSinglePipeIsBitwiseOr() {
+            assertThat(Tokenizer.tokenize("|").getFirst().type()).isEqualTo(TokenType.BIT_OR);
         }
     }
 

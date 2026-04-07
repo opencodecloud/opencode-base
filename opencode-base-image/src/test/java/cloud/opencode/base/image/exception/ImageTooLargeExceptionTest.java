@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageTooLargeException 异常测试")
 class ImageTooLargeExceptionTest {
@@ -30,7 +31,7 @@ class ImageTooLargeExceptionTest {
             assertThat(ex.getHeight()).isEqualTo(4000);
             assertThat(ex.getMaxWidth()).isEqualTo(4000);
             assertThat(ex.getMaxHeight()).isEqualTo(3000);
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.IMAGE_TOO_LARGE);
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.IMAGE_TOO_LARGE);
         }
 
         @Test
@@ -38,8 +39,8 @@ class ImageTooLargeExceptionTest {
         void testDimensionsMessage() {
             ImageTooLargeException ex = new ImageTooLargeException(5000, 4000, 4000, 3000);
 
-            assertThat(ex.getMessage()).contains("5000");
-            assertThat(ex.getMessage()).contains("4000");
+            assertThat(ex.getRawMessage()).contains("5000");
+            assertThat(ex.getRawMessage()).contains("4000");
         }
 
         @Test
@@ -63,7 +64,7 @@ class ImageTooLargeExceptionTest {
 
             assertThat(ex.getFileSize()).isEqualTo(15_000_000L);
             assertThat(ex.getMaxFileSize()).isEqualTo(10_000_000L);
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.FILE_TOO_LARGE);
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.FILE_TOO_LARGE);
         }
 
         @Test
@@ -71,8 +72,8 @@ class ImageTooLargeExceptionTest {
         void testFileSizeMessage() {
             ImageTooLargeException ex = new ImageTooLargeException(15_000_000L, 10_000_000L);
 
-            assertThat(ex.getMessage()).contains("15000000");
-            assertThat(ex.getMessage()).contains("10000000");
+            assertThat(ex.getRawMessage()).contains("15000000");
+            assertThat(ex.getRawMessage()).contains("10000000");
         }
 
         @Test
@@ -96,8 +97,8 @@ class ImageTooLargeExceptionTest {
         void testMessageConstructor() {
             ImageTooLargeException ex = new ImageTooLargeException("Custom message");
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.IMAGE_TOO_LARGE);
+            assertThat(ex.getRawMessage()).isEqualTo("Custom message");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.IMAGE_TOO_LARGE);
             assertThat(ex.getWidth()).isEqualTo(0);
             assertThat(ex.getFileSize()).isEqualTo(0);
         }
@@ -160,6 +161,22 @@ class ImageTooLargeExceptionTest {
             ImageTooLargeException ex = new ImageTooLargeException("Test");
 
             assertThat(ex).isInstanceOf(ImageValidationException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageTooLargeException ex = new ImageTooLargeException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageTooLargeException ex = new ImageTooLargeException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

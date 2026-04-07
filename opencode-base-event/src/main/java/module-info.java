@@ -40,4 +40,6 @@ module cloud.opencode.base.event {
     exports cloud.opencode.base.event.serialization;
     exports cloud.opencode.base.event.store;
     exports cloud.opencode.base.event.monitor;
+    exports cloud.opencode.base.event.interceptor;
+    exports cloud.opencode.base.event.testing;
 }

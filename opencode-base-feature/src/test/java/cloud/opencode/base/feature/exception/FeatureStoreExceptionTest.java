@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 @DisplayName("FeatureStoreException 测试")
 class FeatureStoreExceptionTest {
@@ -26,8 +26,9 @@ class FeatureStoreExceptionTest {
         void testMessageConstructor() {
             FeatureStoreException ex = new FeatureStoreException("Store error");
 
-            assertThat(ex.getMessage()).isEqualTo("Store error");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.STORE_ERROR);
+            assertThat(ex.getRawMessage()).isEqualTo("Store error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (3001) Store error");
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.STORE_ERROR);
         }
 
         @Test
@@ -36,9 +37,10 @@ class FeatureStoreExceptionTest {
             Throwable cause = new RuntimeException("cause");
             FeatureStoreException ex = new FeatureStoreException("Store error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Store error");
+            assertThat(ex.getRawMessage()).isEqualTo("Store error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (3001) Store error");
             assertThat(ex.getCause()).isSameAs(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.STORE_ERROR);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.STORE_ERROR);
         }
 
         @Test
@@ -49,10 +51,11 @@ class FeatureStoreExceptionTest {
                     "Error", cause, "feature-key", FeatureErrorCode.PERSIST_FAILED
             );
 
-            assertThat(ex.getMessage()).isEqualTo("Error");
+            assertThat(ex.getRawMessage()).isEqualTo("Error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (3002) Error");
             assertThat(ex.getCause()).isSameAs(cause);
             assertThat(ex.getFeatureKey()).isEqualTo("feature-key");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.PERSIST_FAILED);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.PERSIST_FAILED);
         }
     }
 

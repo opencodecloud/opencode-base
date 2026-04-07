@@ -26,8 +26,8 @@ class EmailTemplateExceptionTest {
         void testConstructorWithMessage() {
             EmailTemplateException exception = new EmailTemplateException("Template not found");
 
-            assertThat(exception.getMessage()).isEqualTo("Template not found");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
+            assertThat(exception.getRawMessage()).isEqualTo("Template not found");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
             assertThat(exception.getCause()).isNull();
         }
 
@@ -37,9 +37,9 @@ class EmailTemplateExceptionTest {
             Throwable cause = new RuntimeException("Parse error");
             EmailTemplateException exception = new EmailTemplateException("Invalid template syntax", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Invalid template syntax");
+            assertThat(exception.getRawMessage()).isEqualTo("Invalid template syntax");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
         }
     }
 
@@ -68,7 +68,7 @@ class EmailTemplateExceptionTest {
                 throw new EmailTemplateException("Template error");
             } catch (EmailException e) {
                 assertThat(e).isInstanceOf(EmailTemplateException.class);
-                assertThat(e.getErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
+                assertThat(e.getEmailErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
             }
         }
     }
@@ -95,7 +95,7 @@ class EmailTemplateExceptionTest {
             EmailTemplateException exception = new EmailTemplateException("Template not found: welcome.html");
 
             assertThat(exception.getMessage()).contains("welcome.html");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
         }
 
         @Test
@@ -114,7 +114,7 @@ class EmailTemplateExceptionTest {
             EmailTemplateException exception = new EmailTemplateException("Missing required variable: userName");
 
             assertThat(exception.getMessage()).contains("userName");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
         }
 
         @Test
@@ -123,7 +123,7 @@ class EmailTemplateExceptionTest {
             EmailTemplateException exception = new EmailTemplateException("Variable type mismatch: expected String, got Integer for 'count'");
 
             assertThat(exception.getMessage()).contains("type mismatch");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.TEMPLATE_ERROR);
         }
     }
 

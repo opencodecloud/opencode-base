@@ -4,9 +4,15 @@ import cloud.opencode.base.core.convert.Convert;
 import cloud.opencode.base.core.reflect.RecordUtil;
 import cloud.opencode.base.core.reflect.ReflectUtil;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
+import java.net.URL;
+import java.time.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -182,12 +188,278 @@ public final class OpenBean {
     }
 
     /**
-     * Deep copies properties including nested objects
-     * 深度复制属性（包括嵌套对象）
+     * Deep copies properties including nested objects.
+     * Uses recursive deep copy for arrays, collections, maps, and nested beans.
+     * Handles circular references via IdentityHashMap tracking.
+     *
+     * <p>Note: If a nested bean cannot be instantiated (e.g., abstract class, no default constructor),
+     * the original reference is used as a fallback. Modifying such nested objects in the copy will affect the original.</p>
+     *
+     * 深度复制属性（包括嵌套对象）。
+     * 对数组、集合、Map 和嵌套 Bean 进行递归深拷贝。
+     * 通过 IdentityHashMap 处理循环引用。
+     *
+     * <p>注意：如果嵌套 Bean 无法实例化（如抽象类、无默认构造函数），将回退使用原始引用。修改拷贝中此类嵌套对象会影响原对象。</p>
+     *
+     * @param source the source object - 源对象
+     * @param target the target object - 目标对象
      */
     public static void deepCopyProperties(Object source, Object target) {
-        // 简化实现：使用浅拷贝
-        copyProperties(source, target);
+        if (source == null || target == null) return;
+
+        IdentityHashMap<Object, Object> visited = new IdentityHashMap<>();
+        visited.put(source, target);
+
+        List<PropertyDescriptor> sourceProps = getPropertyDescriptors(source.getClass());
+        Map<String, PropertyDescriptor> targetMap = getPropertyDescriptorMap(target.getClass());
+
+        for (PropertyDescriptor sourcePd : sourceProps) {
+            if (!sourcePd.isReadable()) continue;
+
+            PropertyDescriptor targetPd = targetMap.get(sourcePd.name());
+            if (targetPd == null || !targetPd.isWritable()) continue;
+
+            try {
+                Object value = sourcePd.getValue(source);
+                Object deepCopy = deepCopyValue(value, visited);
+                if (deepCopy != null && targetPd.type().isAssignableFrom(deepCopy.getClass())) {
+                    targetPd.setValue(target, deepCopy);
+                } else if (deepCopy == null) {
+                    targetPd.setValue(target, null);
+                } else {
+                    Object converted = Convert.convert(deepCopy, targetPd.type());
+                    targetPd.setValue(target, converted);
+                }
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Failed to deep copy property '" + sourcePd.name() +
+                    "' from " + source.getClass().getSimpleName() + " to " + target.getClass().getSimpleName(), e);
+            }
+        }
+    }
+
+    /**
+     * Maximum recursion depth for deep copy to prevent stack overflow.
+     * 深拷贝最大递归深度，防止栈溢出。
+     */
+    private static final int MAX_DEEP_COPY_DEPTH = 64;
+
+    /**
+     * Set of immutable types that do not need deep copying.
+     * 不需要深拷贝的不可变类型集合。
+     */
+    private static final Set<Class<?>> IMMUTABLE_TYPES = Set.of(
+        String.class, Boolean.class, Byte.class, Short.class, Integer.class,
+        Long.class, Float.class, Double.class, Character.class,
+        BigDecimal.class, BigInteger.class,
+        LocalDate.class, LocalTime.class, LocalDateTime.class,
+        Instant.class, ZonedDateTime.class, OffsetDateTime.class, OffsetTime.class,
+        Duration.class, Period.class, Year.class, YearMonth.class, MonthDay.class,
+        ZoneId.class, ZoneOffset.class,
+        UUID.class, URI.class
+    );
+
+    /**
+     * Recursively deep copies a value.
+     * 递归深拷贝一个值。
+     *
+     * @param value   the value to deep copy - 待深拷贝的值
+     * @param visited identity map tracking already-copied objects to handle circular references - 已复制对象的跟踪映射（用于处理循环引用）
+     * @return the deep-copied value - 深拷贝后的值
+     */
+    private static Object deepCopyValue(Object value, IdentityHashMap<Object, Object> visited) {
+        return deepCopyValue(value, visited, 0);
+    }
+
+    /**
+     * Recursively deep copies a value with depth tracking.
+     * 带深度跟踪的递归深拷贝。
+     *
+     * @param value   the value to deep copy - 待深拷贝的值
+     * @param visited identity map tracking already-copied objects - 已复制对象的跟踪映射
+     * @param depth   current recursion depth - 当前递归深度
+     * @return the deep-copied value - 深拷贝后的值
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object deepCopyValue(Object value, IdentityHashMap<Object, Object> visited, int depth) {
+        if (value == null) return null;
+
+        // Immutable types: direct return
+        // 不可变类型：直接返回
+        Class<?> clazz = value.getClass();
+        if (clazz.isPrimitive() || IMMUTABLE_TYPES.contains(clazz) || clazz.isEnum()) {
+            return value;
+        }
+
+        // URL is immutable but may throw in Set.of() equality checks, handle separately
+        // URL 是不可变类型但不能放入 Set.of()，单独处理
+        if (value instanceof URL) {
+            return value;
+        }
+
+        // Circular reference check
+        // 循环引用检查
+        Object existing = visited.get(value);
+        if (existing != null) {
+            return existing;
+        }
+
+        // Depth guard
+        // 深度保护
+        if (depth >= MAX_DEEP_COPY_DEPTH) {
+            logger.log(System.Logger.Level.WARNING,
+                "Deep copy exceeded max depth " + MAX_DEEP_COPY_DEPTH + " for type " + clazz.getName() +
+                "; falling back to shallow copy | 深拷贝超过最大深度，回退为浅拷贝");
+            return value;
+        }
+
+        // Array: create new array and deep copy each element
+        // 数组：创建新数组并递归深拷贝每个元素
+        if (clazz.isArray()) {
+            return deepCopyArray(value, visited, depth);
+        }
+
+        // Collection: create same-type collection and deep copy each element
+        // 集合：创建同类型集合并递归深拷贝每个元素
+        if (value instanceof Collection<?> collection) {
+            return deepCopyCollection(collection, visited, depth);
+        }
+
+        // Map: create same-type map and deep copy each value
+        // Map：创建同类型 Map 并递归深拷贝每个值
+        if (value instanceof Map<?, ?> map) {
+            return deepCopyMap(map, visited, depth);
+        }
+
+        // Date types (mutable, need copy)
+        // 可变日期类型，需要复制
+        if (value instanceof Date date) {
+            return new Date(date.getTime());
+        }
+        if (value instanceof Calendar calendar) {
+            return calendar.clone();
+        }
+
+        // General Java Bean: reflective deep copy
+        // 普通 Java Bean：反射递归深拷贝
+        return deepCopyBean(value, clazz, visited, depth);
+    }
+
+    /**
+     * Deep copies an array by recursively deep copying each element.
+     * 递归深拷贝数组中的每个元素。
+     */
+    private static Object deepCopyArray(Object array, IdentityHashMap<Object, Object> visited, int depth) {
+        Class<?> componentType = array.getClass().getComponentType();
+        int length = Array.getLength(array);
+        Object copy = Array.newInstance(componentType, length);
+        visited.put(array, copy);
+
+        if (componentType.isPrimitive()) {
+            // Primitive arrays: bulk copy
+            // 基本类型数组：批量复制
+            System.arraycopy(array, 0, copy, 0, length);
+        } else {
+            for (int i = 0; i < length; i++) {
+                Array.set(copy, i, deepCopyValue(Array.get(array, i), visited, depth + 1));
+            }
+        }
+        return copy;
+    }
+
+    /**
+     * Deep copies a Collection by creating a same-type collection and recursively copying elements.
+     * 创建同类型集合并递归深拷贝每个元素。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object deepCopyCollection(Collection<?> collection, IdentityHashMap<Object, Object> visited, int depth) {
+        Collection<Object> copy;
+        if (collection instanceof LinkedHashSet) {
+            copy = new LinkedHashSet<>();
+        } else if (collection instanceof TreeSet treeSet) {
+            copy = new TreeSet<>(treeSet.comparator());
+        } else if (collection instanceof SortedSet sortedSet) {
+            copy = new TreeSet<>(sortedSet.comparator());
+        } else if (collection instanceof Set) {
+            copy = new HashSet<>();
+        } else if (collection instanceof LinkedList) {
+            copy = new LinkedList<>();
+        } else if (collection instanceof ArrayDeque) {
+            copy = new ArrayDeque<>();
+        } else if (collection instanceof Deque) {
+            copy = new ArrayDeque<>();
+        } else {
+            // Default: ArrayList for List and other Collection types
+            // 默认：ArrayList 用于 List 和其他集合类型
+            copy = new ArrayList<>();
+        }
+        visited.put(collection, copy);
+
+        for (Object element : collection) {
+            copy.add(deepCopyValue(element, visited, depth + 1));
+        }
+        return copy;
+    }
+
+    /**
+     * Deep copies a Map by creating a same-type map and recursively copying keys and values.
+     * 创建同类型 Map 并递归深拷贝键和值。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object deepCopyMap(Map<?, ?> map, IdentityHashMap<Object, Object> visited, int depth) {
+        Map<Object, Object> copy;
+        if (map instanceof LinkedHashMap) {
+            copy = new LinkedHashMap<>();
+        } else if (map instanceof TreeMap treeMap) {
+            copy = new TreeMap<>(treeMap.comparator());
+        } else if (map instanceof SortedMap sortedMap) {
+            copy = new TreeMap<>(sortedMap.comparator());
+        } else if (map instanceof ConcurrentHashMap) {
+            copy = new ConcurrentHashMap<>();
+        } else if (map instanceof IdentityHashMap) {
+            copy = new IdentityHashMap<>();
+        } else {
+            copy = new HashMap<>();
+        }
+        visited.put(map, copy);
+
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            Object keyCopy = deepCopyValue(entry.getKey(), visited, depth + 1);
+            Object valCopy = deepCopyValue(entry.getValue(), visited, depth + 1);
+            copy.put(keyCopy, valCopy);
+        }
+        return copy;
+    }
+
+    /**
+     * Deep copies a Java Bean by reflectively creating a new instance and recursively copying properties.
+     * 反射创建新实例并递归深拷贝每个属性。
+     */
+    private static Object deepCopyBean(Object bean, Class<?> clazz, IdentityHashMap<Object, Object> visited, int depth) {
+        try {
+            Object copy = ReflectUtil.newInstance(clazz);
+            visited.put(bean, copy);
+
+            List<PropertyDescriptor> props = getPropertyDescriptors(clazz);
+            for (PropertyDescriptor pd : props) {
+                if (!pd.isReadable() || !pd.isWritable()) continue;
+                try {
+                    Object propValue = pd.getValue(bean);
+                    Object propCopy = deepCopyValue(propValue, visited, depth + 1);
+                    pd.setValue(copy, propCopy);
+                } catch (Exception e) {
+                    logger.log(System.Logger.Level.DEBUG,
+                        "Failed to deep copy bean property '" + pd.name() + "' of type " + clazz.getSimpleName(), e);
+                }
+            }
+            return copy;
+        } catch (Exception e) {
+            // Cannot instantiate (no default constructor, abstract, etc.): fall back to original reference
+            // 无法实例化（无默认构造函数、抽象类等）：回退为原始引用
+            logger.log(System.Logger.Level.WARNING,
+                "Cannot deep copy bean of type " + clazz.getName() + "; returning original reference | " +
+                "无法深拷贝类型 " + clazz.getName() + "；返回原始引用", e);
+            return bean;
+        }
     }
 
     // ==================== Bean 转换 ====================
@@ -695,7 +967,7 @@ public final class OpenBean {
             }
         }
 
-        return descriptors;
+        return Collections.unmodifiableList(descriptors);
     }
 
     private static Map<String, PropertyDescriptor> getPropertyDescriptorMap(Class<?> beanClass) {

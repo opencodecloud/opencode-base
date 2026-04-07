@@ -26,8 +26,8 @@ class EmailSecurityExceptionTest {
         void testConstructorWithMessage() {
             EmailSecurityException exception = new EmailSecurityException("Header injection detected");
 
-            assertThat(exception.getMessage()).isEqualTo("Header injection detected");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.HEADER_INJECTION);
+            assertThat(exception.getRawMessage()).isEqualTo("Header injection detected");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.HEADER_INJECTION);
             assertThat(exception.getCause()).isNull();
         }
 
@@ -36,8 +36,8 @@ class EmailSecurityExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             EmailSecurityException exception = new EmailSecurityException("Invalid attachment", EmailErrorCode.INVALID_ATTACHMENT);
 
-            assertThat(exception.getMessage()).isEqualTo("Invalid attachment");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.INVALID_ATTACHMENT);
+            assertThat(exception.getRawMessage()).isEqualTo("Invalid attachment");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.INVALID_ATTACHMENT);
         }
 
         @Test
@@ -46,9 +46,9 @@ class EmailSecurityExceptionTest {
             Throwable cause = new RuntimeException("Malicious content");
             EmailSecurityException exception = new EmailSecurityException("Security violation", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Security violation");
+            assertThat(exception.getRawMessage()).isEqualTo("Security violation");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.HEADER_INJECTION);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.HEADER_INJECTION);
         }
     }
 
@@ -113,7 +113,7 @@ class EmailSecurityExceptionTest {
             );
 
             assertThat(exception.getMessage()).contains("Header injection");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.HEADER_INJECTION);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.HEADER_INJECTION);
         }
 
         @Test
@@ -125,7 +125,7 @@ class EmailSecurityExceptionTest {
             );
 
             assertThat(exception.getMessage()).contains("virus.exe");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.INVALID_ATTACHMENT);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.INVALID_ATTACHMENT);
         }
 
         @Test
@@ -137,7 +137,7 @@ class EmailSecurityExceptionTest {
             );
 
             assertThat(exception.getMessage()).contains("100MB");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.INVALID_ATTACHMENT);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.INVALID_ATTACHMENT);
         }
     }
 

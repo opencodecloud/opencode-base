@@ -1,5 +1,6 @@
 package cloud.opencode.base.web.crypto;
 
+import cloud.opencode.base.json.TypeReference;
 import cloud.opencode.base.web.Result;
 
 /**
@@ -67,6 +68,17 @@ public interface ResultEncryptor {
      * @return the algorithm name | 算法名称
      */
     String getAlgorithm();
+
+    /**
+     * Decrypt to result with generic type support
+     * 解密为带泛型类型的响应
+     *
+     * @param encrypted the encrypted result | 加密的响应
+     * @param typeReference the type reference for generic types | 泛型类型引用
+     * @param <T> the data type | 数据类型
+     * @return the decrypted result | 解密后的响应
+     */
+    <T> Result<T> decrypt(EncryptedResult encrypted, TypeReference<T> typeReference);
 
     /**
      * Check if this encryptor supports the algorithm

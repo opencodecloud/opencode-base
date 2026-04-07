@@ -102,7 +102,7 @@ public final class CompareUtil {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static int compare(Object first, Object second) {
-        if (first instanceof Comparable c) {
+        if (first instanceof Comparable c && first.getClass().isInstance(second)) {
             return c.compareTo(second);
         }
         return String.valueOf(first).compareTo(String.valueOf(second));

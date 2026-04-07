@@ -69,6 +69,15 @@ public final class GifEncoder {
     private int sample = 10;
 
     /**
+     * Cached NeuQuant quantizer from the first frame, reused for subsequent frames to avoid
+     * redundant neural network training. All frames in a GIF captcha share similar colors,
+     * so a single palette is sufficient.
+     * 缓存第一帧的 NeuQuant 量化器，后续帧复用以避免重复神经网络训练。
+     * GIF 验证码的所有帧使用相似颜色，因此单个调色板即可满足需求。
+     */
+    private NeuQuantEncoder cachedQuantizer;
+
+    /**
      * Sets the delay time between frames.
      * 设置帧之间的延迟时间。
      *
@@ -127,6 +136,7 @@ public final class GifEncoder {
             return false;
         }
         this.out = os;
+        this.cachedQuantizer = null; // reset palette cache for new GIF sequence
         try {
             writeString("GIF89a");
         } catch (IOException e) {
@@ -218,13 +228,27 @@ public final class GifEncoder {
 
     /**
      * Analyzes pixels and builds color palette.
+     * For the first frame, runs NeuQuant neural network to build the palette and caches the
+     * quantizer. Subsequent frames reuse the cached palette, skipping the expensive training step.
+     * 分析像素并构建调色板。
+     * 第一帧运行 NeuQuant 神经网络构建调色板并缓存量化器。后续帧复用缓存的调色板，跳过昂贵的训练步骤。
      */
     private void analyzePixels() {
         int len = width * height;
         byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
 
-        NeuQuantEncoder nq = new NeuQuantEncoder(pixels, len, sample);
-        colorTab = nq.process();
+        NeuQuantEncoder nq;
+        if (cachedQuantizer == null) {
+            // First frame: run NeuQuant training and cache the result
+            // 第一帧：运行 NeuQuant 训练并缓存结果
+            nq = new NeuQuantEncoder(pixels, len, sample);
+            colorTab = nq.process();
+            cachedQuantizer = nq;
+        } else {
+            // Subsequent frames: reuse palette from first frame
+            // 后续帧：复用第一帧的调色板
+            nq = cachedQuantizer;
+        }
 
         // Map pixels to palette indices
         indexedPixels = new byte[len];

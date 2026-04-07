@@ -288,28 +288,39 @@ public final class StructuredLog {
             return joiner.toString();
         }
 
+        /**
+         * Pre-computed escape strings for control characters 0x00-0x1F.
+         * 预计算的控制字符 0x00-0x1F 转义字符串，避免 String.format() 调用。
+         */
+        private static final String[] CONTROL_CHAR_ESCAPES = new String[0x20];
+
+        static {
+            for (int i = 0; i < 0x20; i++) {
+                CONTROL_CHAR_ESCAPES[i] = switch (i) {
+                    case '\b' -> "\\b";
+                    case '\t' -> "\\t";
+                    case '\n' -> "\\n";
+                    case '\f' -> "\\f";
+                    case '\r' -> "\\r";
+                    default -> String.format("\\u%04x", i);
+                };
+            }
+        }
+
         private String escapeJson(String value) {
             if (value == null) return "";
 
             StringBuilder sb = new StringBuilder(value.length());
             for (int i = 0; i < value.length(); i++) {
                 char ch = value.charAt(i);
-                switch (ch) {
-                    case '\\' -> sb.append("\\\\");
-                    case '\"' -> sb.append("\\\"");
-                    case '\b' -> sb.append("\\b");
-                    case '\f' -> sb.append("\\f");
-                    case '\n' -> sb.append("\\n");
-                    case '\r' -> sb.append("\\r");
-                    case '\t' -> sb.append("\\t");
-                    default -> {
-                        if (ch < 0x20) {
-                            // Escape other control characters
-                            sb.append(String.format("\\u%04x", (int) ch));
-                        } else {
-                            sb.append(ch);
-                        }
-                    }
+                if (ch == '\\') {
+                    sb.append("\\\\");
+                } else if (ch == '\"') {
+                    sb.append("\\\"");
+                } else if (ch < 0x20) {
+                    sb.append(CONTROL_CHAR_ESCAPES[ch]);
+                } else {
+                    sb.append(ch);
                 }
             }
             return sb.toString();

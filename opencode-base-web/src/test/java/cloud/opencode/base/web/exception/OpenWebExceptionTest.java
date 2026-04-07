@@ -1,5 +1,6 @@
 package cloud.opencode.base.web.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.web.CommonResultCode;
 import cloud.opencode.base.web.ResultCode;
 import org.junit.jupiter.api.*;
@@ -158,11 +159,54 @@ class OpenWebExceptionTest {
     class InheritanceTests {
 
         @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            OpenWebException exception = new OpenWebException("Test");
+
+            assertThat(exception).isInstanceOf(OpenException.class);
+        }
+
+        @Test
         @DisplayName("should extend RuntimeException")
         void shouldExtendRuntimeException() {
             OpenWebException exception = new OpenWebException("Test");
 
             assertThat(exception).isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        @DisplayName("should be catchable as OpenException")
+        void shouldBeCatchableAsOpenException() {
+            assertThatThrownBy(() -> {
+                throw OpenWebException.badRequest("test");
+            }).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getCode should return same as getErrorCode from OpenException")
+        void getCodeShouldReturnSameAsGetErrorCode() {
+            OpenWebException exception = new OpenWebException("E001", "test");
+
+            assertThat(exception.getCode()).isEqualTo(exception.getErrorCode());
+            assertThat(exception.getCode()).isEqualTo("E001");
+        }
+
+        @Test
+        @DisplayName("getComponent should return Web")
+        void getComponentShouldReturnWeb() {
+            OpenWebException exception = new OpenWebException("Test");
+
+            assertThat(exception.getComponent()).isEqualTo("Web");
+        }
+
+        @Test
+        @DisplayName("getMessage should return raw message not formatted")
+        void getMessageShouldReturnRawMessageNotFormatted() {
+            OpenWebException exception = new OpenWebException("E001", "test error", 400);
+
+            // getMessage() is overridden to return raw message (not OpenException's formatted [Web] (E001) message)
+            assertThat(exception.getMessage()).isEqualTo("test error");
+            assertThat(exception.getMessage()).doesNotContain("[Web]");
         }
     }
 }

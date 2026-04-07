@@ -106,9 +106,7 @@ class RedisFeatureStoreTest {
         @Test
         @DisplayName("null key抛出异常")
         void testSaveNullKey() {
-            Feature feature = new Feature(null, null, null, false, null, null, null, null);
-
-            assertThatThrownBy(() -> store.save(feature))
+            assertThatThrownBy(() -> new Feature(null, null, null, false, null, null, null, null, null, null, null))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }

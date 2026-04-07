@@ -21,6 +21,8 @@
  * @since JDK 25, opencode-base-cron V1.0.0
  */
 module cloud.opencode.base.cron {
+    requires cloud.opencode.base.core;
+
     exports cloud.opencode.base.cron;
     exports cloud.opencode.base.cron.exception;
 }

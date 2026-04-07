@@ -1,0 +1,32 @@
+[
+  {
+    "name": "cloud.opencode.base.core.convert.impl.ArrayConverter",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "cloud.opencode.base.core.convert.impl.DateConverter",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "cloud.opencode.base.core.convert.impl.NumberConverter",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "cloud.opencode.base.core.convert.impl.StringConverter",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "cloud.opencode.base.core.bean.OpenBean",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "cloud.opencode.base.core.reflect.ReflectUtil",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true
+  }
+]

@@ -20,6 +20,16 @@
 - **压缩序列化器**：在任意序列化器上透明包装压缩
 - **字符串序列化**：基于文本格式的直接字符串转换
 
+### V1.0.3 新增功能
+- **流式 API**：`Serializer` 接口新增 `serialize(Object, OutputStream)` / `deserialize(InputStream, Class)` 默认方法
+- **ClassFilter**：反序列化类过滤器，支持白名单/黑名单、包规则、正则匹配
+- **SerializationResult**：带元数据的序列化结果包装（计时、格式、压缩信息），含零拷贝 `dataUnsafe()` 方法
+- **FormatDetector**：自动检测数据格式（JSON/XML/二进制）
+- **SerializerInfo**：序列化器能力描述 record
+- **DefaultClassFilter**：预置安全过滤器（`secure()` 和 `strict()`）
+- **全局 ClassFilter 应用**：`SerializerConfig.classFilter` 在 JdkSerializer 和 KryoSerializer 中均生效
+- **解压安全**：所有压缩算法（GZIP/LZ4/Snappy/ZSTD）均有解压大小限制（256MB），防止解压炸弹攻击
+
 ### 支持的格式
 | 格式 | 序列化器 | 基于文本 | 可选依赖 |
 |------|---------|---------|---------|
@@ -36,7 +46,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-serialization</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -105,15 +115,75 @@ CompressedSerializer compressed = new CompressedSerializer(
 byte[] compressedData = compressed.serialize(largeObject);
 ```
 
+### 流式 API (V1.0.3)
+```java
+// 序列化到 OutputStream
+try (var out = new FileOutputStream("data.bin")) {
+    OpenSerializer.serialize(user, out);
+}
+
+// 从 InputStream 反序列化
+try (var in = new FileInputStream("data.bin")) {
+    User restored = OpenSerializer.deserialize(in, User.class);
+}
+```
+
+### 格式检测 (V1.0.3)
+```java
+import cloud.opencode.base.serialization.FormatDetector;
+
+// 自动检测数据格式
+String format = FormatDetector.detect(data);  // "json", "xml", "binary", "unknown"
+boolean isJson = FormatDetector.isJson(data);
+
+// 通过 OpenSerializer 门面
+String detected = OpenSerializer.detect(data);
+```
+
+### 类过滤器 (V1.0.3)
+```java
+import cloud.opencode.base.serialization.filter.*;
+
+// 使用预置安全过滤器
+ClassFilter secure = DefaultClassFilter.secure();
+
+// 严格模式（仅白名单）
+ClassFilter strict = DefaultClassFilter.strict();
+
+// 自定义过滤器
+ClassFilter custom = new ClassFilterBuilder()
+    .allowPackage("com.myapp.model")
+    .denyPackage("javax.naming", "java.rmi")
+    .defaultDeny()
+    .build();
+
+// 通过 SerializerConfig 全局应用（对 JdkSerializer 和 KryoSerializer 均生效）
+OpenSerializer.setConfig(SerializerConfig.builder()
+    .classFilter(DefaultClassFilter.strict())
+    .build());
+```
+
+### 序列化结果 (V1.0.3)
+```java
+// 带元数据的序列化
+SerializationResult result = OpenSerializer.serializeWithResult(user);
+byte[] data = result.data();
+long nanos = result.durationNanos();
+int size = result.size();
+```
+
 ## 类参考
 
 ### 根包 (`cloud.opencode.base.serialization`)
 | 类 | 说明 |
 |----|------|
-| `OpenSerializer` | 所有序列化操作的主门面（序列化、反序列化、深拷贝、转换） |
-| `Serializer` | 所有序列化器的核心接口（序列化、反序列化、格式、MIME 类型） |
-| `SerializerConfig` | 全局序列化配置 |
+| `OpenSerializer` | 所有序列化操作的主门面（序列化、反序列化、流式、深拷贝、转换、检测） |
+| `Serializer` | 所有序列化器的核心接口（序列化、反序列化、流式、格式、MIME 类型） |
+| `SerializerConfig` | 全局序列化配置（压缩、类过滤器） |
 | `TypeReference<T>` | 捕获泛型类型信息用于反序列化 |
+| `SerializationResult` | 带元数据的序列化结果（大小、格式、计时） |
+| `FormatDetector` | 从字节模式自动检测数据格式 |
+| `SerializerInfo` | 序列化器能力描述 record |
 
 ### 二进制 (`cloud.opencode.base.serialization.binary`)
 | 类 | 说明 |
@@ -147,6 +217,13 @@ byte[] compressedData = compressed.serialize(largeObject);
 | 类 | 说明 |
 |----|------|
 | `SerializerProvider` | 通过 ServiceLoader 注册序列化器的 SPI 接口 |
+
+### 过滤器 (`cloud.opencode.base.serialization.filter`)
+| 类 | 说明 |
+|----|------|
+| `ClassFilter` | 反序列化类过滤函数式接口 |
+| `ClassFilterBuilder` | 类过滤器构建器（白名单/黑名单规则） |
+| `DefaultClassFilter` | 预置安全过滤器（`secure()`, `strict()`） |
 
 ### 异常 (`cloud.opencode.base.serialization.exception`)
 | 类 | 说明 |

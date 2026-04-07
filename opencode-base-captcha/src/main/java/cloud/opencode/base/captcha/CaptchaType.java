@@ -11,8 +11,10 @@ package cloud.opencode.base.captcha;
  * <ul>
  *   <li>Text-based types: NUMERIC, ALPHA, ALPHANUMERIC, ARITHMETIC, CHINESE - 文本类型</li>
  *   <li>Animated type: GIF - 动画类型</li>
- *   <li>Interactive types: SLIDER, CLICK, ROTATE, IMAGE_SELECT - 交互式类型</li>
- *   <li>Type classification helpers (isInteractive, isTextBased) - 类型分类辅助方法</li>
+ *   <li>Interactive types: SLIDER, CLICK, ROTATE, IMAGE_SELECT, JIGSAW - 交互式类型</li>
+ *   <li>Audio type: AUDIO - 音频类型</li>
+ *   <li>Invisible type: POW - 无感类型</li>
+ *   <li>Type classification helpers (isInteractive, isTextBased, isAudio, isInvisible) - 类型分类辅助方法</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -33,7 +35,7 @@ package cloud.opencode.base.captcha;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-captcha V1.0.0
+ * @since JDK 25, opencode-base-captcha V1.0.3
  */
 public enum CaptchaType {
 
@@ -95,7 +97,25 @@ public enum CaptchaType {
      * Image selection CAPTCHA (select matching images)
      * 图片选择验证码（选择匹配的图片）
      */
-    IMAGE_SELECT;
+    IMAGE_SELECT,
+
+    /**
+     * Audio CAPTCHA (audio challenge)
+     * 音频验证码（音频挑战）
+     */
+    AUDIO,
+
+    /**
+     * Jigsaw CAPTCHA (puzzle piece ordering)
+     * 拼接验证码（碎片排序）
+     */
+    JIGSAW,
+
+    /**
+     * Proof-of-Work CAPTCHA (invisible computation)
+     * 工作量证明验证码（无感计算）
+     */
+    POW;
 
     /**
      * Checks if this type is an interactive CAPTCHA.
@@ -104,7 +124,7 @@ public enum CaptchaType {
      * @return true if interactive | 如果是交互式则返回 true
      */
     public boolean isInteractive() {
-        return this == SLIDER || this == CLICK || this == ROTATE || this == IMAGE_SELECT;
+        return this == SLIDER || this == CLICK || this == ROTATE || this == IMAGE_SELECT || this == JIGSAW;
     }
 
     /**
@@ -116,5 +136,25 @@ public enum CaptchaType {
     public boolean isTextBased() {
         return this == NUMERIC || this == ALPHA || this == ALPHANUMERIC ||
                this == ARITHMETIC || this == CHINESE;
+    }
+
+    /**
+     * Checks if this type is an audio CAPTCHA.
+     * 检查是否为音频验证码。
+     *
+     * @return true if audio | 如果是音频验证码则返回 true
+     */
+    public boolean isAudio() {
+        return this == AUDIO;
+    }
+
+    /**
+     * Checks if this type is invisible (no user interaction).
+     * 检查是否为无感验证码。
+     *
+     * @return true if invisible | 如果是无感验证码则返回 true
+     */
+    public boolean isInvisible() {
+        return this == POW;
     }
 }

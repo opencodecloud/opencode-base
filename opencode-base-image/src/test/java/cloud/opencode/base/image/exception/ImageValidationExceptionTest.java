@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageValidationException 异常测试")
 class ImageValidationExceptionTest {
@@ -26,8 +27,8 @@ class ImageValidationExceptionTest {
         void testConstructorWithMessage() {
             ImageValidationException ex = new ImageValidationException("Validation failed");
 
-            assertThat(ex.getMessage()).isEqualTo("Validation failed");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.VALIDATION_FAILED);
+            assertThat(ex.getRawMessage()).isEqualTo("Validation failed");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.VALIDATION_FAILED);
         }
 
         @Test
@@ -36,7 +37,7 @@ class ImageValidationExceptionTest {
             Throwable cause = new RuntimeException("Invalid data");
             ImageValidationException ex = new ImageValidationException("Validation error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Validation error");
+            assertThat(ex.getRawMessage()).isEqualTo("Validation error");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
 
@@ -45,8 +46,8 @@ class ImageValidationExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             ImageValidationException ex = new ImageValidationException("Too large", ImageErrorCode.IMAGE_TOO_LARGE);
 
-            assertThat(ex.getMessage()).isEqualTo("Too large");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.IMAGE_TOO_LARGE);
+            assertThat(ex.getRawMessage()).isEqualTo("Too large");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.IMAGE_TOO_LARGE);
         }
     }
 
@@ -60,6 +61,22 @@ class ImageValidationExceptionTest {
             ImageValidationException ex = new ImageValidationException("Test");
 
             assertThat(ex).isInstanceOf(ImageException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageValidationException ex = new ImageValidationException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageValidationException ex = new ImageValidationException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

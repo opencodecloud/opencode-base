@@ -1,22 +1,25 @@
 # OpenCode Base DeepClone
 
-High-performance deep clone library with multiple cloning strategies (reflection, serialization, Unsafe) for JDK 25+.
+High-performance deep clone library for JDK 25+, supporting reflection, serialization, and Unsafe strategies.
 
 ## Features
 
-- Single-object deep cloning
-- Batch cloning for lists
-- Parallel cloning with virtual threads
-- Async cloning with CompletableFuture
-- Multiple strategies: reflective (default), serialization, Unsafe
-- Annotation-driven control: `@CloneDeep`, `@CloneIgnore`, `@CloneReference`
-- Custom type handlers for arrays, collections, maps, and records
-- Pluggable clone strategies via SPI
-- Configurable max depth
-- Immutable type detection and registration
-- Circular reference detection via CloneContext
-- Builder API for custom cloner configuration
-- Thread-safe
+- **Multiple strategies**: Reflective (default), Serialization, Unsafe
+- **Null-safe**: All clone methods return `null` for `null` input
+- **Shallow clone**: `shallowClone()` copies field references without deep cloning
+- **Copy-to**: `copyTo()` merges non-null fields into an existing object
+- **Clone policy**: `STANDARD` / `STRICT` (no Unsafe fallback) / `LENIENT` (skip errors)
+- **Field filter**: Programmatic field exclusion by name, type, or annotation
+- **Clone listener**: Lifecycle hooks for audit/logging (before/after/error)
+- **Enum identity**: Enum values preserve `==` identity after clone
+- **Optional\<T\>**: Deep clones Optional contents correctly
+- **JDK immutable collections**: Detects `List.of()`, `Set.of()`, `Map.of()`, `Collections.unmodifiable*()` (skips copy)
+- **Annotation-driven**: `@CloneDeep`, `@CloneIgnore`, `@CloneReference`
+- **Type handlers**: Arrays, Collections, Maps, Records, Enums, Optionals
+- **Batch & parallel**: `cloneBatch()`, `cloneBatchParallel()` (virtual threads), `cloneAsync()`
+- **Circular reference detection** via `CloneContext`
+- **Pluggable strategies** via SPI (`CloneStrategyProvider`)
+- **Thread-safe**
 
 ## Maven
 
@@ -24,74 +27,201 @@ High-performance deep clone library with multiple cloning strategies (reflection
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-deepclone</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
-
-## API Overview
-
-| Class | Description |
-|-------|-------------|
-| `OpenClone` | Facade class -- main entry point for all cloning operations |
-| `Cloner` | Cloner interface for deep clone implementations |
-| `ClonerBuilder` | Builder for creating custom Cloner instances with strategy selection |
-| `CloneContext` | Cloning context with circular reference tracking and depth control |
-| **Cloner Implementations** | |
-| `ReflectiveCloner` | Default cloner using reflection (handles most types) |
-| `SerializingCloner` | Cloner using Java serialization (requires Serializable) |
-| `UnsafeCloner` | High-performance cloner using sun.misc.Unsafe |
-| `AbstractCloner` | Base class for cloner implementations |
-| **Annotations** | |
-| `@CloneDeep` | Marks a field for deep cloning |
-| `@CloneIgnore` | Marks a field to be skipped during cloning |
-| `@CloneReference` | Marks a field to be copied by reference (shallow) |
-| **Type Handlers** | |
-| `ArrayHandler` | Handles deep cloning of arrays |
-| `CollectionHandler` | Handles deep cloning of Collection types |
-| `MapHandler` | Handles deep cloning of Map types |
-| `RecordHandler` | Handles deep cloning of Java records |
-| `TypeHandler` | Type handler interface |
-| **Strategy** | |
-| `CloneStrategy` | Clone strategy interface |
-| `FieldCloneStrategy` | Per-field clone strategy |
-| `TypeCloneStrategy` | Per-type clone strategy |
-| **SPI** | |
-| `CloneStrategyProvider` | SPI for pluggable clone strategies |
-| **Contract** | |
-| `DeepCloneable` | Interface for objects that provide custom deep clone logic |
-| **Exception** | |
-| `OpenDeepCloneException` | Deep clone runtime exception |
 
 ## Quick Start
 
 ```java
-import cloud.opencode.base.deepclone.OpenClone;
+import cloud.opencode.base.deepclone.*;
 
-// Simple deep clone
-User cloned = OpenClone.clone(originalUser);
+// Deep clone (reflective, default)
+User cloned = OpenClone.clone(user);
 
-// Clone via serialization
-User serialClone = OpenClone.cloneBySerialization(originalUser);
+// Shallow clone (copies references only)
+User shallow = OpenClone.shallowClone(user);
 
-// Clone via Unsafe (high performance)
-User unsafeClone = OpenClone.cloneByUnsafe(originalUser);
+// Copy non-null fields into existing object
+OpenClone.copyTo(source, target);
 
-// Batch clone
-List<User> clonedList = OpenClone.cloneBatch(userList);
-
-// Parallel clone with virtual threads
-List<User> parallel = OpenClone.cloneBatchParallel(userList, 4);
-
-// Async clone
-CompletableFuture<User> future = OpenClone.cloneAsync(user);
-
-// Custom cloner via builder
-Cloner custom = OpenClone.builder()
-    .reflective()
-    .maxDepth(50)
-    .build();
-User result = custom.clone(user);
+// Clone with policy
+User lenient = OpenClone.cloneWith(user, ClonePolicy.LENIENT);
 ```
+
+## API Reference — `OpenClone`
+
+Main facade class. All methods are `static` and thread-safe.
+
+### Deep Clone
+
+| Method | Description |
+|--------|-------------|
+| `<T> T clone(T original)` | Deep clone using default reflective strategy |
+| `<T> T clone(T original, Cloner cloner)` | Deep clone using a specific cloner |
+| `<T> T cloneBySerialization(T original)` | Deep clone via Java serialization (requires `Serializable`) |
+| `<T> T cloneByUnsafe(T original)` | Deep clone via Unsafe (highest performance, no constructor call) |
+| `<T> T cloneWith(T original, ClonePolicy policy)` | Deep clone with a specific policy |
+
+### Shallow Clone & Copy
+
+| Method | Description |
+|--------|-------------|
+| `<T> T shallowClone(T original)` | Shallow copy — field references are shared, not deep cloned |
+| `<T> T copyTo(T source, T target)` | Copy all non-null fields from source to target (deep clones values) |
+
+### Batch & Async
+
+| Method | Description |
+|--------|-------------|
+| `<T> List<T> cloneBatch(List<T> originals)` | Clone a list of objects sequentially |
+| `<T> List<T> cloneBatchParallel(List<T> originals, int parallelism)` | Clone in parallel using virtual threads |
+| `<T> CompletableFuture<T> cloneAsync(T original)` | Async deep clone |
+| `<T> CompletableFuture<List<T>> cloneBatchAsync(List<T> originals)` | Async batch clone |
+
+### Utility
+
+| Method | Description |
+|--------|-------------|
+| `boolean isImmutable(Class<?> type)` | Check if a type is registered as immutable |
+| `void registerImmutable(Class<?>... types)` | Register custom immutable types (will not be cloned) |
+| `Cloner getDefaultCloner()` | Get the default ReflectiveCloner instance |
+| `ClonerBuilder builder()` | Create a builder for custom Cloner configuration |
+
+## API Reference — `ClonerBuilder`
+
+Fluent builder for creating configured `Cloner` instances.
+
+```java
+Cloner cloner = OpenClone.builder()
+    .reflective()                                          // or .serializing() or .unsafe()
+    .maxDepth(50)                                          // default: 100
+    .cloneTransient(true)                                  // default: false
+    .policy(ClonePolicy.LENIENT)                           // default: STANDARD
+    .filter(FieldFilter.excludeNames("password", "token")) // field exclusion
+    .listener(myListener)                                  // lifecycle hooks
+    .registerImmutable(Money.class)                        // custom immutable types
+    .registerHandler(MyType.class, myHandler)              // custom type handler
+    .build();
+```
+
+## API Reference — `ClonePolicy`
+
+| Value | Behavior |
+|-------|----------|
+| `STANDARD` | Default. Throws exception on uncloneable types |
+| `STRICT` | Forbids Unsafe fallback. All fields must be accessible via reflection |
+| `LENIENT` | Best effort. Skips errors, uses shallow reference for uncloneable types, records warnings |
+
+## API Reference — `FieldFilter`
+
+Functional interface for programmatic field exclusion. Composable via `and()`, `or()`, `negate()`.
+
+| Factory Method | Description |
+|----------------|-------------|
+| `FieldFilter.acceptAll()` | Accepts all fields (no filtering) |
+| `FieldFilter.excludeNames(String... names)` | Excludes fields by name |
+| `FieldFilter.includeNames(String... names)` | Includes only matching field names |
+| `FieldFilter.excludeTypes(Class<?>... types)` | Excludes fields by declared type |
+| `FieldFilter.excludeAnnotated(Class<? extends Annotation>)` | Excludes annotated fields |
+
+```java
+// Compose filters
+FieldFilter filter = FieldFilter.excludeNames("password")
+    .and(FieldFilter.excludeTypes(InputStream.class));
+```
+
+## API Reference — `CloneListener`
+
+Interface for clone lifecycle hooks. All methods are `default` (no-op). Listener exceptions are isolated and do not affect the clone flow.
+
+| Method | Description |
+|--------|-------------|
+| `void beforeClone(Object original, CloneContext context)` | Called before each object is cloned |
+| `void afterClone(Object original, Object cloned, CloneContext context)` | Called after successful clone |
+| `void onError(Object original, Throwable error, CloneContext context)` | Called when clone fails |
+
+## Annotations
+
+| Annotation | Target | Description |
+|------------|--------|-------------|
+| `@CloneDeep` | Field | Force deep clone for this field (default behavior) |
+| `@CloneIgnore` | Field | Skip this field during cloning (set to `null`) |
+| `@CloneReference` | Field | Copy by reference only (shallow, for shared resources) |
+
+```java
+public class User {
+    private String name;                    // deep cloned (default)
+    @CloneIgnore private String password;   // set to null in clone
+    @CloneReference private Logger logger;  // same reference shared
+}
+```
+
+## Type Handlers
+
+| Handler | Supported Types | Priority |
+|---------|----------------|----------|
+| `EnumHandler` | All `enum` types | 5 |
+| `ArrayHandler` | Primitive and object arrays | 10 |
+| `RecordHandler` | Java `record` types | 15 |
+| `OptionalHandler` | `Optional<T>` | 15 |
+| `CollectionHandler` | ArrayList, LinkedList, HashSet, TreeSet, ArrayDeque, etc. | 20 |
+| `MapHandler` | HashMap, LinkedHashMap, TreeMap, ConcurrentHashMap, etc. | 20 |
+
+## Custom Type Handler
+
+```java
+import cloud.opencode.base.deepclone.handler.TypeHandler;
+
+public class MoneyHandler implements TypeHandler<Money> {
+    @Override
+    public Money clone(Money original, Cloner cloner, CloneContext context) {
+        return new Money(original.getAmount(), original.getCurrency());
+    }
+
+    @Override
+    public boolean supports(Class<?> type) {
+        return Money.class.isAssignableFrom(type);
+    }
+}
+
+// Register
+Cloner cloner = OpenClone.builder()
+    .registerHandler(Money.class, new MoneyHandler())
+    .build();
+```
+
+## Custom Clone Logic via `DeepCloneable`
+
+```java
+import cloud.opencode.base.deepclone.contract.DeepCloneable;
+
+public class Config implements DeepCloneable<Config> {
+    private Map<String, String> settings;
+
+    @Override
+    public Config deepClone() {
+        Config copy = new Config();
+        copy.settings = new HashMap<>(this.settings);
+        return copy;
+    }
+}
+```
+
+## API Overview
+
+| Category | Classes |
+|----------|---------|
+| **Facade** | `OpenClone` |
+| **Core** | `Cloner`, `ClonerBuilder`, `CloneContext`, `ClonePolicy`, `FieldFilter`, `CloneListener` |
+| **Cloner Impl** | `AbstractCloner`, `ReflectiveCloner`, `SerializingCloner`, `UnsafeCloner` |
+| **Annotations** | `@CloneDeep`, `@CloneIgnore`, `@CloneReference` |
+| **Handlers** | `TypeHandler`, `ArrayHandler`, `CollectionHandler`, `MapHandler`, `RecordHandler`, `EnumHandler`, `OptionalHandler` |
+| **Strategy** | `CloneStrategy`, `FieldCloneStrategy`, `TypeCloneStrategy` |
+| **SPI** | `CloneStrategyProvider` |
+| **Contract** | `DeepCloneable` |
+| **Internal** | `ImmutableDetector` |
+| **Exception** | `OpenDeepCloneException` |
 
 ## Requirements
 

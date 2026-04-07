@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -207,6 +208,21 @@ public final class OpenMimeType {
         Map.entry("conf", "text/plain"),
         Map.entry("cfg", "text/plain")
     );
+
+    /**
+     * Reverse mapping: MIME type to extension (O(1) lookup)
+     * 反向映射：MIME 类型到扩展名（O(1) 查找）
+     */
+    private static final Map<String, String> MIME_TO_EXTENSION_MAP = buildReverseMap();
+
+    private static Map<String, String> buildReverseMap() {
+        Map<String, String> reverse = new HashMap<>();
+        for (Map.Entry<String, String> entry : EXTENSION_MAP.entrySet()) {
+            // putIfAbsent: keep first extension for duplicate MIME types
+            reverse.putIfAbsent(entry.getValue(), entry.getKey());
+        }
+        return Map.copyOf(reverse);
+    }
 
     /**
      * Magic number signatures for content detection
@@ -534,13 +550,7 @@ public final class OpenMimeType {
         if (mimeType == null) {
             return Optional.empty();
         }
-        String lower = mimeType.toLowerCase();
-        for (Map.Entry<String, String> entry : EXTENSION_MAP.entrySet()) {
-            if (entry.getValue().equals(lower)) {
-                return Optional.of(entry.getKey());
-            }
-        }
-        return Optional.empty();
+        return Optional.ofNullable(MIME_TO_EXTENSION_MAP.get(mimeType.toLowerCase()));
     }
 
     // ==================== Private Helpers | 私有辅助方法 ====================

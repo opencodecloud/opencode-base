@@ -65,6 +65,7 @@ public record Email(
         String subject,
         String content,
         boolean html,
+        String textContent,
         List<Attachment> attachments,
         Map<String, String> headers,
         String replyTo,
@@ -131,6 +132,7 @@ public record Email(
         private String subject;
         private String content;
         private boolean html = false;
+        private String textContent;
         private final List<Attachment> attachments = new ArrayList<>();
         private final Map<String, String> headers = new HashMap<>();
         private String replyTo;
@@ -273,6 +275,25 @@ public record Email(
         }
 
         /**
+         * Set both plain text and HTML content (multipart/alternative)
+         * 同时设置纯文本和HTML内容（multipart/alternative）
+         *
+         * <p>The email client will choose the best format to display.
+         * HTML-capable clients show HTML, plain text clients show text.</p>
+         * <p>邮件客户端会选择最佳格式显示。支持HTML的客户端显示HTML，纯文本客户端显示文本。</p>
+         *
+         * @param text the plain text content | 纯文本内容
+         * @param htmlContent the HTML content | HTML内容
+         * @return this builder | 构建器
+         */
+        public Builder textAndHtml(String text, String htmlContent) {
+            this.content = htmlContent;
+            this.textContent = text;
+            this.html = true;
+            return this;
+        }
+
+        /**
          * Add attachment
          * 添加附件
          *
@@ -377,6 +398,7 @@ public record Email(
                     subject,
                     content,
                     html,
+                    textContent,
                     List.copyOf(attachments),
                     Map.copyOf(headers),
                     replyTo,
@@ -393,6 +415,16 @@ public record Email(
      */
     public boolean hasAttachments() {
         return attachments != null && !attachments.isEmpty();
+    }
+
+    /**
+     * Check if email has both text and HTML content (multipart/alternative)
+     * 检查邮件是否同时有文本和HTML内容
+     *
+     * @return true if has alternative content | 有备选内容返回true
+     */
+    public boolean hasAlternativeContent() {
+        return html && textContent != null && !textContent.isBlank();
     }
 
     /**

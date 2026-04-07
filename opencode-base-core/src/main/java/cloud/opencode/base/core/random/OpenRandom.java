@@ -307,7 +307,7 @@ public final class OpenRandom {
         }
         List<T> copy = new ArrayList<>(list);
         shuffle(copy);
-        return copy.subList(0, count);
+        return new ArrayList<>(copy.subList(0, count));
     }
 
     /**

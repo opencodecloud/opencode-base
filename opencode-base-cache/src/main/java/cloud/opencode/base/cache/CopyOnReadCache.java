@@ -1,6 +1,7 @@
 package cloud.opencode.base.cache;
 
 import java.io.*;
+import java.io.ObjectInputFilter;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
@@ -92,6 +93,20 @@ public final class CopyOnReadCache<K, V> implements Cache<K, V> {
         return new Builder<>(cache);
     }
 
+    /**
+     * Create a default copier using Java serialization.
+     * 使用 Java 序列化创建默认复制器。
+     *
+     * <p><strong>Security Warning | 安全警告:</strong> The default copier uses Java serialization
+     * with an {@link ObjectInputFilter} restricting depth, size, and array length. For production
+     * use with untrusted data, provide a custom copier via
+     * {@code CopyOnReadCache.wrap(cache).copier(...)} (e.g., using Jackson or a builder pattern).</p>
+     * <p>默认复制器使用带 {@link ObjectInputFilter} 的 Java 序列化，限制深度、大小和数组长度。
+     * 对于生产环境中处理不可信数据的场景，建议通过
+     * {@code CopyOnReadCache.wrap(cache).copier(...)} 提供自定义复制器。</p>
+     *
+     * @return default copier using serialization | 基于序列化的默认复制器
+     */
     @SuppressWarnings("unchecked")
     private UnaryOperator<V> defaultCopier() {
         return value -> {
@@ -113,6 +128,8 @@ public final class CopyOnReadCache<K, V> implements Cache<K, V> {
 
                 try (ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
                      ObjectInputStream ois = new ObjectInputStream(bis)) {
+                    ois.setObjectInputFilter(ObjectInputFilter.Config.createFilter(
+                            "maxdepth=20;maxbytes=1048576;maxarray=10000"));
                     return (V) ois.readObject();
                 }
             } catch (IOException | ClassNotFoundException e) {

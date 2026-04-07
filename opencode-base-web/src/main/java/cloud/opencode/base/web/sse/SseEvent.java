@@ -48,6 +48,20 @@ public record SseEvent(
 
     public static final String DEFAULT_EVENT = "message";
 
+    /**
+     * Compact constructor: validates that id and event do not contain newline characters
+     * to prevent SSE event injection.
+     * 紧凑构造器：校验 id 和 event 不包含换行符以防止 SSE 事件注入。
+     */
+    public SseEvent {
+        if (id != null && (id.indexOf('\n') >= 0 || id.indexOf('\r') >= 0)) {
+            throw new IllegalArgumentException("SSE event id must not contain newline characters");
+        }
+        if (event != null && (event.indexOf('\n') >= 0 || event.indexOf('\r') >= 0)) {
+            throw new IllegalArgumentException("SSE event type must not contain newline characters");
+        }
+    }
+
     public static SseEvent of(String data) {
         return new SseEvent(null, DEFAULT_EVENT, data, null);
     }
@@ -109,20 +123,23 @@ public record SseEvent(
     public static final class Builder {
         private String id;
         private String event;
-        private String data;
+        private StringBuilder dataBuilder;
         private Long retry;
 
         private Builder() {}
 
         public Builder id(String id) { this.id = id; return this; }
         public Builder event(String event) { this.event = event; return this; }
-        public Builder data(String data) { this.data = data; return this; }
+        public Builder data(String data) {
+            this.dataBuilder = data != null ? new StringBuilder(data) : null;
+            return this;
+        }
 
         public Builder appendData(String data) {
-            if (this.data == null) {
-                this.data = data;
+            if (dataBuilder == null) {
+                dataBuilder = new StringBuilder(data);
             } else {
-                this.data = this.data + "\n" + data;
+                dataBuilder.append('\n').append(data);
             }
             return this;
         }
@@ -130,17 +147,18 @@ public record SseEvent(
         public Builder retry(long retry) { this.retry = retry; return this; }
 
         public SseEvent build() {
-            return new SseEvent(id, event, data, retry);
+            String d = dataBuilder != null ? dataBuilder.toString() : null;
+            return new SseEvent(id, event, d, retry);
         }
 
         public boolean hasContent() {
-            return data != null || id != null || event != null || retry != null;
+            return dataBuilder != null || id != null || event != null || retry != null;
         }
 
         public Builder reset() {
             this.id = null;
             this.event = null;
-            this.data = null;
+            this.dataBuilder = null;
             this.retry = null;
             return this;
         }

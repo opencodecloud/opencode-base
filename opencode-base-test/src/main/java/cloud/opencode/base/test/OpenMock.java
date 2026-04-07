@@ -56,7 +56,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class OpenMock {
 
-    private static final Map<Object, MockInvocationHandler> HANDLERS = new WeakHashMap<>();
+    private static final Map<Object, MockInvocationHandler> HANDLERS = new ConcurrentHashMap<>();
 
     private OpenMock() {
     }
@@ -82,9 +82,7 @@ public final class OpenMock {
                 new Class<?>[]{type},
                 handler
         );
-        synchronized (HANDLERS) {
-            HANDLERS.put(proxy, handler);
-        }
+        HANDLERS.put(proxy, handler);
         return proxy;
     }
 
@@ -111,10 +109,7 @@ public final class OpenMock {
      * @return the verification wrapper | 验证包装器
      */
     public static <T> Verification<T> verify(T mock) {
-        MockInvocationHandler handler;
-        synchronized (HANDLERS) {
-            handler = HANDLERS.get(mock);
-        }
+        MockInvocationHandler handler = HANDLERS.get(mock);
         if (handler == null) {
             throw new IllegalArgumentException("Not a mock object created by OpenMock");
         }
@@ -128,10 +123,7 @@ public final class OpenMock {
      * @param mock the mock instance | 模拟实例
      */
     public static void reset(Object mock) {
-        MockInvocationHandler handler;
-        synchronized (HANDLERS) {
-            handler = HANDLERS.get(mock);
-        }
+        MockInvocationHandler handler = HANDLERS.get(mock);
         if (handler != null) {
             handler.reset();
         }
@@ -163,14 +155,16 @@ public final class OpenMock {
             invocations.add(new Invocation(method.getName(), method.getParameterTypes(), args));
 
             MethodKey key = new MethodKey(method.getName(), args);
-            if (stubs.containsKey(key)) {
-                return stubs.get(key);
+            Object stubResult = stubs.get(key);
+            if (stubResult != null) {
+                return stubResult;
             }
 
             // Also check for method name only stub
             MethodKey nameOnlyKey = new MethodKey(method.getName(), null);
-            if (stubs.containsKey(nameOnlyKey)) {
-                return stubs.get(nameOnlyKey);
+            stubResult = stubs.get(nameOnlyKey);
+            if (stubResult != null) {
+                return stubResult;
             }
 
             return getDefaultValue(method.getReturnType());
@@ -186,6 +180,7 @@ public final class OpenMock {
 
         public void reset() {
             invocations.clear();
+            stubs.clear();
         }
 
         private Object getDefaultValue(Class<?> type) {

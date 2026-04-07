@@ -1,5 +1,6 @@
 package cloud.opencode.base.cron.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -24,7 +25,9 @@ class OpenCronExceptionTest {
         @DisplayName("单参数构造")
         void should_create_with_message() {
             OpenCronException ex = new OpenCronException("error");
-            assertThat(ex.getMessage()).isEqualTo("error");
+            assertThat(ex.getRawMessage()).isEqualTo("error");
+            assertThat(ex.getMessage()).contains("error");
+            assertThat(ex.getComponent()).isEqualTo("cron");
             assertThat(ex.getExpression()).isNull();
             assertThat(ex.getField()).isNull();
             assertThat(ex.getCause()).isNull();
@@ -35,7 +38,7 @@ class OpenCronExceptionTest {
         void should_create_with_message_and_cause() {
             Throwable cause = new RuntimeException("root");
             OpenCronException ex = new OpenCronException("error", cause);
-            assertThat(ex.getMessage()).isEqualTo("error");
+            assertThat(ex.getRawMessage()).isEqualTo("error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getExpression()).isNull();
             assertThat(ex.getField()).isNull();
@@ -46,7 +49,7 @@ class OpenCronExceptionTest {
         void should_create_with_all_fields() {
             Throwable cause = new RuntimeException("root");
             OpenCronException ex = new OpenCronException("error", "* * * *", "minute", cause);
-            assertThat(ex.getMessage()).isEqualTo("error");
+            assertThat(ex.getRawMessage()).isEqualTo("error");
             assertThat(ex.getExpression()).isEqualTo("* * * *");
             assertThat(ex.getField()).isEqualTo("minute");
             assertThat(ex.getCause()).isEqualTo(cause);
@@ -140,9 +143,10 @@ class OpenCronExceptionTest {
         }
 
         @Test
-        @DisplayName("继承 RuntimeException")
-        void should_extend_runtime_exception() {
+        @DisplayName("继承 OpenException → RuntimeException")
+        void should_extend_open_exception() {
             OpenCronException ex = new OpenCronException("test");
+            assertThat(ex).isInstanceOf(OpenException.class);
             assertThat(ex).isInstanceOf(RuntimeException.class);
         }
     }

@@ -248,6 +248,14 @@ interface AsyncLoadingCache<K, V> extends AsyncCache<K, V> {
  */
 class DefaultLoadingCache<K, V> implements LoadingCache<K, V> {
 
+    /**
+     * Global shared virtual-thread executor for async refresh operations.
+     * This executor is never shut down because it uses virtual threads (no OS thread resources held)
+     * and is shared across all DefaultLoadingCache instances in the JVM.
+     * 全局共享的虚拟线程执行器，用于异步刷新操作。
+     * 此执行器永不关闭，因为它使用虚拟线程（不持有 OS 线程资源），
+     * 并在 JVM 中所有 DefaultLoadingCache 实例间共享。
+     */
     private static final java.util.concurrent.Executor REFRESH_EXECUTOR =
             java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
 

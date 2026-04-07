@@ -1,5 +1,6 @@
 package cloud.opencode.base.xml.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 @DisplayName("XmlSecurityException Tests")
 class XmlSecurityExceptionTest {
@@ -125,6 +126,17 @@ class XmlSecurityExceptionTest {
             );
 
             assertThat(exception).isInstanceOf(OpenXmlException.class);
+        }
+
+        @Test
+        @DisplayName("should be instance of OpenException")
+        void shouldBeInstanceOfOpenException() {
+            XmlSecurityException exception = new XmlSecurityException(
+                XmlSecurityException.SecurityViolationType.XXE_DETECTED,
+                "error"
+            );
+
+            assertThat(exception).isInstanceOf(OpenException.class);
         }
 
         @Test

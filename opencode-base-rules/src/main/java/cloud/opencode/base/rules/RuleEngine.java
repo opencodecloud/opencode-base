@@ -3,6 +3,8 @@ package cloud.opencode.base.rules;
 import cloud.opencode.base.rules.conflict.ConflictResolver;
 import cloud.opencode.base.rules.listener.RuleListener;
 import cloud.opencode.base.rules.model.RuleGroup;
+import cloud.opencode.base.rules.trace.ExecutionTrace;
+import cloud.opencode.base.rules.trace.TracingRuleListener;
 
 import java.util.List;
 
@@ -196,4 +198,28 @@ public interface RuleEngine {
      * 清除所有已注册的规则
      */
     void clear();
+
+    /**
+     * Fires all matching rules and returns an execution trace
+     * 触发所有匹配规则并返回执行轨迹
+     *
+     * <p><strong>Note:</strong> This method temporarily adds and removes a tracing listener.
+     * It is not safe for concurrent invocation on the same engine instance.</p>
+     * <p><strong>注意:</strong> 此方法会临时添加和移除追踪监听器。
+     * 不支持在同一引擎实例上并发调用。</p>
+     *
+     * @param context the rule context | 规则上下文
+     * @return the execution trace | 执行轨迹
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    default ExecutionTrace fireAndTrace(RuleContext context) {
+        TracingRuleListener tracer = new TracingRuleListener();
+        addListener(tracer);
+        try {
+            fire(context);
+            return tracer.getTrace();
+        } finally {
+            removeListener(tracer);
+        }
+    }
 }

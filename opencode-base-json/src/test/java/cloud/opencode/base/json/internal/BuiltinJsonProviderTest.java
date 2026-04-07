@@ -259,6 +259,15 @@ class BuiltinJsonProviderTest {
         }
 
         @Test
+        @DisplayName("fromJson - byte[] with TypeReference")
+        void fromJson_bytes_typeReference() {
+            Map<String, Integer> map = provider.fromJson(
+                    "{\"a\":1}".getBytes(StandardCharsets.UTF_8),
+                    new TypeReference<Map<String, Integer>>() {});
+            assertThat(map).containsEntry("a", 1);
+        }
+
+        @Test
         @DisplayName("fromJson - InputStream")
         void fromJson_inputStream() {
             InputStream in = new ByteArrayInputStream("{\"user_name\":\"Y\",\"age\":2}".getBytes(StandardCharsets.UTF_8));
@@ -431,6 +440,27 @@ class BuiltinJsonProviderTest {
         @DisplayName("fromJson null json 抛 NPE")
         void fromJson_null_json() {
             assertThatThrownBy(() -> provider.fromJson((String) null, User.class))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("fromJson null byte[] 抛 NPE")
+        void fromJson_null_bytes() {
+            assertThatThrownBy(() -> provider.fromJson((byte[]) null, User.class))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("fromJson null byte[] with TypeReference 抛 NPE")
+        void fromJson_null_bytes_typeReference() {
+            assertThatThrownBy(() -> provider.fromJson((byte[]) null, new TypeReference<Map<String, Integer>>() {}))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("fromJson byte[] with null TypeReference 抛 NPE")
+        void fromJson_bytes_null_typeReference() {
+            assertThatThrownBy(() -> provider.fromJson("{}".getBytes(StandardCharsets.UTF_8), (TypeReference<?>) null))
                     .isInstanceOf(NullPointerException.class);
         }
 

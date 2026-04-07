@@ -2,6 +2,7 @@ package cloud.opencode.base.lunar;
 
 import cloud.opencode.base.lunar.calendar.Festival;
 import cloud.opencode.base.lunar.calendar.SolarTerm;
+import cloud.opencode.base.lunar.calendar.SolarTermInfo;
 import cloud.opencode.base.lunar.ganzhi.GanZhi;
 import cloud.opencode.base.lunar.zodiac.Constellation;
 import cloud.opencode.base.lunar.zodiac.Zodiac;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -103,9 +105,9 @@ class OpenLunarTest {
         @DisplayName("获取节气日期的节气")
         void testOnTermDay() {
             LocalDate date = SolarTerm.CHUN_FEN.getDate(2024);
-            SolarTerm term = OpenLunar.getSolarTerm(date);
+            Optional<SolarTerm> term = OpenLunar.getSolarTerm(date);
 
-            assertThat(term).isEqualTo(SolarTerm.CHUN_FEN);
+            assertThat(term).isPresent().contains(SolarTerm.CHUN_FEN);
         }
     }
 

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
@@ -75,9 +77,9 @@ class ImageTest {
         @Test
         @DisplayName("null格式使用默认值")
         void testNullFormat() {
-            Image image = new Image(testImage, null);
-
-            assertThat(image.getFormat()).isNull();
+            assertThatThrownBy(() -> new Image(testImage, null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("format");
         }
     }
 

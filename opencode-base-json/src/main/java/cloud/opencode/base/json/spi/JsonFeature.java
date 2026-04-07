@@ -101,6 +101,27 @@ public enum JsonFeature {
      */
     INCLUDE_EMPTY_COLLECTIONS(Category.SERIALIZATION, true),
 
+    /**
+     * Wrap output with root element name.
+     * 使用根元素名称包裹输出。
+     * <p>Default: false</p>
+     */
+    WRAP_ROOT_VALUE(Category.SERIALIZATION, false),
+
+    /**
+     * Write enums as ordinal index instead of name.
+     * 将枚举写为序号索引而非名称。
+     * <p>Default: false</p>
+     */
+    WRITE_ENUMS_USING_INDEX(Category.SERIALIZATION, false),
+
+    /**
+     * Write date timestamps with nanosecond precision.
+     * 以纳秒精度写入日期时间戳。
+     * <p>Default: false</p>
+     */
+    WRITE_DATE_TIMESTAMPS_AS_NANOSECONDS(Category.SERIALIZATION, false),
+
     // ==================== Deserialization Features ====================
 
     /**
@@ -179,6 +200,34 @@ public enum JsonFeature {
      * <p>Default: false</p>
      */
     ALLOW_SINGLE_QUOTES(Category.DESERIALIZATION, false),
+
+    /**
+     * Read unknown enum values as null instead of throwing.
+     * 将未知枚举值读为 null 而非抛出异常。
+     * <p>Default: false</p>
+     */
+    READ_UNKNOWN_ENUM_VALUES_AS_NULL(Category.DESERIALIZATION, false),
+
+    /**
+     * Use @JsonEnumDefaultValue for unknown enum values.
+     * 对未知枚举值使用 @JsonEnumDefaultValue。
+     * <p>Default: false</p>
+     */
+    READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE(Category.DESERIALIZATION, false),
+
+    /**
+     * Unwrap root element wrapping during deserialization.
+     * 反序列化时解包根元素包裹。
+     * <p>Default: false</p>
+     */
+    UNWRAP_ROOT_VALUE(Category.DESERIALIZATION, false),
+
+    /**
+     * Read date timestamps with nanosecond precision.
+     * 以纳秒精度读取日期时间戳。
+     * <p>Default: false</p>
+     */
+    READ_DATE_TIMESTAMPS_AS_NANOSECONDS(Category.DESERIALIZATION, false),
 
     // ==================== Security Features ====================
 

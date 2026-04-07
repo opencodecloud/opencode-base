@@ -29,7 +29,7 @@ import java.util.function.Function;
  *   <li>Virtual Thread optimized - 虚拟线程优化</li>
  *   <li>ScopedValue context propagation - ScopedValue 上下文传播</li>
  *   <li>Async borrow operations - 异步借用操作</li>
- *   <li>StructuredTaskScope integration - StructuredTaskScope 集成</li>
+ *   <li>Auto-closeable lifecycle management - 自动关闭生命周期管理</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -74,7 +74,7 @@ public class VirtualThreadPool<T> implements ObjectPool<T> {
     private final AtomicInteger numActive;
     private final DefaultPoolMetrics metrics;
     private final ExecutorService virtualExecutor;
-    private volatile boolean closed;
+    private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
      * Creates a new VirtualThreadPool
@@ -92,7 +92,7 @@ public class VirtualThreadPool<T> implements ObjectPool<T> {
         this.numActive = new AtomicInteger(0);
         this.metrics = new DefaultPoolMetrics();
         this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
-        this.closed = false;
+        // closed is already false (AtomicBoolean default)
 
         // Pre-create minimum objects
         initializePool();
@@ -229,7 +229,7 @@ public class VirtualThreadPool<T> implements ObjectPool<T> {
         try {
             numActive.decrementAndGet();
 
-            if (closed || (config.testOnReturn() && !factory.validateObject(pooledObj))) {
+            if (closed.get() || (config.testOnReturn() && !factory.validateObject(pooledObj))) {
                 destroyObject(pooledObj);
                 return;
             }
@@ -390,17 +390,16 @@ public class VirtualThreadPool<T> implements ObjectPool<T> {
     // ==================== Lifecycle | 生命周期 ====================
 
     private void checkOpen() {
-        if (closed) {
+        if (closed.get()) {
             throw OpenPoolException.closed("VirtualThreadPool");
         }
     }
 
     @Override
     public void close() {
-        if (closed) {
+        if (!closed.compareAndSet(false, true)) {
             return;
         }
-        closed = true;
 
         virtualExecutor.shutdown();
         try {

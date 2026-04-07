@@ -10,12 +10,19 @@ import cloud.opencode.base.rules.dsl.RuleBuilder;
 import cloud.opencode.base.rules.dsl.RuleEngineBuilder;
 import cloud.opencode.base.rules.dsl.RuleGroupBuilder;
 import cloud.opencode.base.rules.engine.DefaultRuleEngine;
+import cloud.opencode.base.rules.key.TypedKey;
 import cloud.opencode.base.rules.listener.LoggingRuleListener;
 import cloud.opencode.base.rules.listener.RuleListener;
+import cloud.opencode.base.rules.metric.MetricsListener;
+import cloud.opencode.base.rules.metric.RuleMetrics;
 import cloud.opencode.base.rules.model.Action;
 import cloud.opencode.base.rules.model.Condition;
 import cloud.opencode.base.rules.model.RuleGroup;
+import cloud.opencode.base.rules.trace.TracingRuleListener;
+import cloud.opencode.base.rules.validation.RuleValidator;
+import cloud.opencode.base.rules.validation.ValidationReport;
 
+import java.util.Collection;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -309,6 +316,79 @@ public final class OpenRules {
         return new LoggingRuleListener();
     }
 
+    // ==================== TypedKey Factories ====================
+
+    /**
+     * Creates a typed key for type-safe fact access
+     * 创建类型化键用于类型安全的事实访问
+     *
+     * @param name the key name | 键名称
+     * @param type the value type | 值类型
+     * @param <T>  the value type | 值类型
+     * @return the typed key | 类型化键
+     */
+    public static <T> TypedKey<T> key(String name, Class<T> type) {
+        return TypedKey.of(name, type);
+    }
+
+    // ==================== Tracing ====================
+
+    /**
+     * Creates a tracing listener for execution tracing
+     * 创建追踪监听器用于执行追踪
+     *
+     * @return the tracing listener | 追踪监听器
+     */
+    public static TracingRuleListener tracingListener() {
+        return new TracingRuleListener();
+    }
+
+    // ==================== Metrics ====================
+
+    /**
+     * Creates a new rule metrics collector
+     * 创建新的规则指标收集器
+     *
+     * @return the rule metrics | 规则指标
+     */
+    public static RuleMetrics metrics() {
+        return new RuleMetrics();
+    }
+
+    /**
+     * Creates a metrics listener backed by the given metrics collector
+     * 创建由指定指标收集器支持的指标监听器
+     *
+     * @param metrics the metrics collector | 指标收集器
+     * @return the metrics listener | 指标监听器
+     */
+    public static MetricsListener metricsListener(RuleMetrics metrics) {
+        return new MetricsListener(metrics);
+    }
+
+    /**
+     * Creates a metrics listener with its own internal metrics collector
+     * 创建带有内部指标收集器的指标监听器
+     *
+     * @return the metrics listener | 指标监听器
+     */
+    public static MetricsListener metricsListener() {
+        return new MetricsListener();
+    }
+
+    // ==================== Validation ====================
+
+    /**
+     * Validates a collection of rules
+     * 验证规则集合
+     *
+     * @param rules the rules to validate | 要验证的规则
+     * @return the validation report | 验证报告
+     */
+    public static ValidationReport validate(Collection<Rule> rules) {
+        return RuleValidator.validate(rules);
+    }
+
     // ==================== Utility Methods ====================
 
     /**
@@ -318,7 +398,7 @@ public final class OpenRules {
      * @return the version string | 版本字符串
      */
     public static String version() {
-        return "1.0.0";
+        return "1.0.3";
     }
 
     /**

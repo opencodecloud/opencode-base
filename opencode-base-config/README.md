@@ -24,9 +24,18 @@ Flexible configuration management library with multiple sources, type conversion
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-config</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
+
+## What's New in v1.0.3
+
+- **Relaxed Binding** — `database.max-pool-size` matches `DATABASE_MAX_POOL_SIZE`, `database.maxPoolSize`, etc. Opt-in via `ConfigBuilder.enableRelaxedBinding()`.
+- **ConfigDump** — Export all effective config with sensitive value masking (`***`). Default patterns: password, secret, token, key, credential, auth, bearer.
+- **ConfigDiff** — Compare two config snapshots, returns `List<ConfigChangeEvent>` with formatted output.
+- **@DefaultValue on POJO fields** — Extended from records to POJO fields for `ConfigBinder`.
+- **Validation merge** — `ValidationResult.merge()` collects all validation errors into a single report.
+- **Security hardening** — SSRF DNS rebinding prevention (IP pinning), sensitive values redacted from toString/exceptions, PlaceholderResolver depth capping.
 
 ## API Overview
 
@@ -37,10 +46,13 @@ Flexible configuration management library with multiple sources, type conversion
 | `Config` | Core configuration interface (get, getAs, getOrDefault, subscribe) |
 | `OpenConfig` | Global configuration manager facade |
 | `ConfigBuilder` | Fluent builder for creating Config instances |
-| `ConfigChangeEvent` | Configuration change event record (key, oldValue, newValue, type) |
+| `RelaxedKeyResolver` **[v1.0.3]** | Relaxed binding: normalize, variants, resolve across naming conventions |
+| `ConfigDump` **[v1.0.3]** | Export config with sensitive value masking |
+| `ConfigDiff` **[v1.0.3]** | Compare two config snapshots for changes |
+| `ConfigChangeEvent` | Configuration change event record (key, changeType, timestamp) |
 | `ConfigChangeType` | Change type enum (ADDED, MODIFIED, REMOVED) |
 | `ConfigListener` | Configuration change listener interface |
-| `OpenConfigException` | Configuration exception |
+| `OpenConfigException` | Configuration exception (values redacted for security) |
 
 ### Configuration Sources
 
@@ -74,10 +86,11 @@ Flexible configuration management library with multiple sources, type conversion
 
 | Class | Description |
 |-------|-------------|
-| `ConfigBinder` | Bind configuration to JavaBean instances |
-| `RecordConfigBinder` | Bind configuration to record instances |
+| `ConfigBinder` | Bind configuration to JavaBean instances (supports @DefaultValue) |
+| `RecordConfigBinder` | Bind configuration to record instances (supports @DefaultValue) |
 | `ConfigProperties` | Annotation for configuration prefix binding |
 | `NestedConfig` | Annotation for nested configuration objects |
+| `DefaultValue` **[v1.0.3]** | Default value annotation for record components and POJO fields |
 
 ### Validation
 
@@ -176,6 +189,47 @@ Config profileConfig = MultiProfileConfig.builder()
     .profileSource("prod", new PropertiesConfigSource("app-prod.properties"))
     .activeProfile("dev")
     .build();
+```
+
+### v1.0.3 Features
+
+```java
+import cloud.opencode.base.config.*;
+import cloud.opencode.base.config.bind.DefaultValue;
+
+// ---- Relaxed Binding ----
+Config config = OpenConfig.builder()
+    .addEnvironmentVariables()             // DATABASE_MAX_POOL_SIZE=10
+    .enableRelaxedBinding()
+    .build();
+int poolSize = config.getInt("database.max-pool-size"); // matches env var → 10
+
+// ---- ConfigDump (debug with sensitive masking) ----
+Map<String, String> dump = ConfigDump.dump(config);
+// db.password → "***", app.name → "myapp"
+System.out.println(ConfigDump.dumpToString(config));
+
+// ---- ConfigDiff (compare snapshots) ----
+Config before = OpenConfig.builder().addProperties(Map.of("a", "1", "b", "2")).build();
+Config after  = OpenConfig.builder().addProperties(Map.of("a", "1", "b", "3", "c", "4")).build();
+List<ConfigChangeEvent> changes = ConfigDiff.diff(before, after);
+System.out.println(ConfigDiff.format(changes));
+// ~ b: 2 -> 3
+// + c = 4
+
+// ---- @DefaultValue on POJO fields ----
+public class ServerConfig {
+    @DefaultValue("8080") int port;
+    @DefaultValue("localhost") String host;
+}
+ServerConfig server = config.bind("server", ServerConfig.class);
+// port=8080 if server.port not configured
+
+// ---- Validation merge (all errors at once) ----
+Config validated = OpenConfig.builder()
+    .addProperties(Map.of("app.name", "myapp"))
+    .required("db.url", "db.user", "app.port")
+    .build(); // throws: "Missing required keys: [db.url, db.user, app.port]"
 ```
 
 ## Requirements

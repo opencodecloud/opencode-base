@@ -3,8 +3,12 @@ package cloud.opencode.base.core.builder;
 import cloud.opencode.base.core.bean.OpenBean;
 import cloud.opencode.base.core.bean.PropertyDescriptor;
 import cloud.opencode.base.core.convert.Convert;
+import cloud.opencode.base.core.exception.OpenIllegalArgumentException;
 import cloud.opencode.base.core.reflect.ReflectUtil;
 
+import java.io.Serializable;
+import java.lang.invoke.SerializedLambda;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -60,6 +64,22 @@ import java.util.function.Function;
  */
 public class BeanBuilder<T> implements Builder<T> {
 
+    /**
+     * Serializable Function - A function interface that supports serialization for method reference resolution
+     * 可序列化函数 - 支持序列化的函数接口，用于方法引用解析
+     *
+     * <p>This interface combines {@link Function} and {@link Serializable} so that
+     * getter method references can be resolved to property names via {@link SerializedLambda}.</p>
+     * <p>此接口组合了 {@link Function} 和 {@link Serializable}，使得
+     * getter 方法引用可以通过 {@link SerializedLambda} 解析为属性名。</p>
+     *
+     * @param <T> the input type | 输入类型
+     * @param <R> the result type | 结果类型
+     */
+    @FunctionalInterface
+    public interface SerializableFunction<T, R> extends Function<T, R>, Serializable {
+    }
+
     private final Class<T> beanClass;
     private final Map<String, Object> properties = new LinkedHashMap<>();
     private T source;
@@ -112,18 +132,89 @@ public class BeanBuilder<T> implements Builder<T> {
     }
 
     /**
-     * Type-safe property setting (using getter method reference) | 类型安全设置属性（使用 getter 方法引用）
+     * Sets a property value using a getter function reference (deprecated) |
+     * 使用 getter 函数引用设置属性值（已废弃）
+     *
+     * <p>This method is retained for binary/source compatibility with 1.0.2.
+     * Use {@link #set(SerializableFunction, Object)} instead, which provides
+     * the same functionality with proper type-safe property name resolution.</p>
+     * <p>此方法为兼容 1.0.2 版本而保留。
+     * 请改用 {@link #set(SerializableFunction, Object)}，它提供相同的功能并支持类型安全的属性名解析。</p>
+     *
+     * <p>If the passed {@code getter} is actually a serializable method reference,
+     * property name resolution works normally. Otherwise, an
+     * {@link OpenIllegalArgumentException} is thrown with a clear migration hint.</p>
+     * <p>如果传入的 {@code getter} 实际上是可序列化的方法引用，属性名解析正常工作。
+     * 否则抛出 {@link OpenIllegalArgumentException} 并给出明确的迁移提示。</p>
      *
      * @param <V> the value type | 值类型
-     * @param getter the getter reference | getter 引用
+     * @param getter the getter function | getter 函数
      * @param value the value | 值
      * @return this builder | 此构建器
+     * @throws OpenIllegalArgumentException if property name cannot be resolved
+     *         如果无法解析属性名则抛出异常
+     * @deprecated since 1.0.3, for removal. Use {@link #set(SerializableFunction, Object)} instead.
+     *             自 1.0.3 起废弃，将被移除。请改用 {@link #set(SerializableFunction, Object)}。
      */
+    @Deprecated(since = "1.0.3", forRemoval = true)
     public <V> BeanBuilder<T> set(Function<T, V> getter, V value) {
-        String propertyName = resolvePropertyName(getter);
-        if (propertyName != null) {
-            properties.put(propertyName, value);
+        // If the Function is actually a serializable method reference, resolve normally
+        // 如果 Function 实际上是可序列化的方法引用，则正常解析
+        if (getter instanceof Serializable) {
+            try {
+                Method writeReplace = getter.getClass().getDeclaredMethod("writeReplace");
+                writeReplace.setAccessible(true);
+                SerializedLambda lambda = (SerializedLambda) writeReplace.invoke(getter);
+                String methodName = lambda.getImplMethodName();
+                String propertyName;
+                if (methodName.startsWith("get") && methodName.length() > 3) {
+                    propertyName = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+                } else if (methodName.startsWith("is") && methodName.length() > 2) {
+                    propertyName = Character.toLowerCase(methodName.charAt(2)) + methodName.substring(3);
+                } else {
+                    throw new OpenIllegalArgumentException(
+                            "Method '" + methodName + "' does not follow getter naming convention (getXxx/isXxx) | "
+                                    + "方法 '" + methodName + "' 不符合 getter 命名约定（getXxx/isXxx）");
+                }
+                properties.put(propertyName, value);
+                return this;
+            } catch (OpenIllegalArgumentException e) {
+                throw e;
+            } catch (Exception ignored) {
+                // Fall through to error below
+            }
         }
+        throw new OpenIllegalArgumentException(
+                "Cannot resolve property name from Function<T,V>. "
+                        + "Please use set(SerializableFunction<T,V>, V) with a method reference (e.g. User::getName) instead. "
+                        + "This overload is deprecated since 1.0.3. | "
+                        + "无法从 Function<T,V> 解析属性名。"
+                        + "请改用 set(SerializableFunction<T,V>, V) 并传入方法引用（如 User::getName）。"
+                        + "此重载自 1.0.3 起已废弃。");
+    }
+
+    /**
+     * Type-safe property setting (using getter method reference) | 类型安全设置属性（使用 getter 方法引用）
+     *
+     * <p>Usage example | 使用示例:</p>
+     * <pre>{@code
+     * BeanBuilder.of(User.class)
+     *     .set(User::getName, "John")
+     *     .set(User::getAge, 25)
+     *     .build();
+     * }</pre>
+     *
+     * @param <V> the value type | 值类型
+     * @param getter the getter method reference (must be a method reference, not a lambda expression)
+     *               getter 方法引用（必须是方法引用，不能是 lambda 表达式）
+     * @param value the value | 值
+     * @return this builder | 此构建器
+     * @throws OpenIllegalArgumentException if the getter is not a valid method reference
+     *         如果 getter 不是有效的方法引用则抛出异常
+     */
+    public <V> BeanBuilder<T> set(SerializableFunction<T, V> getter, V value) {
+        String propertyName = resolvePropertyName(getter);
+        properties.put(propertyName, value);
         return this;
     }
 
@@ -211,9 +302,46 @@ public class BeanBuilder<T> implements Builder<T> {
         return bean;
     }
 
-    private <V> String resolvePropertyName(Function<T, V> getter) {
-        // 简化实现：无法直接从 lambda 获取属性名
-        // 实际项目中可使用字节码工具如 ByteBuddy
-        return null;
+    /**
+     * Resolves property name from a getter method reference via SerializedLambda
+     * 通过 SerializedLambda 从 getter 方法引用解析属性名
+     *
+     * <p>Extracts the property name by removing the "get"/"is" prefix from the
+     * implementation method name and converting the first character to lowercase.</p>
+     * <p>通过移除实现方法名的 "get"/"is" 前缀并将首字母转小写来提取属性名。</p>
+     *
+     * @param <V> the return type of the getter | getter 的返回类型
+     * @param getter the serializable getter method reference | 可序列化的 getter 方法引用
+     * @return the property name | 属性名
+     * @throws OpenIllegalArgumentException if the method reference cannot be resolved or
+     *         the method name does not follow getter naming conventions
+     *         如果无法解析方法引用或方法名不符合 getter 命名约定则抛出异常
+     */
+    private <V> String resolvePropertyName(SerializableFunction<T, V> getter) {
+        SerializedLambda lambda;
+        try {
+            Method writeReplace = getter.getClass().getDeclaredMethod("writeReplace");
+            writeReplace.setAccessible(true);
+            lambda = (SerializedLambda) writeReplace.invoke(getter);
+        } catch (Exception e) {
+            throw new OpenIllegalArgumentException(
+                    "Failed to resolve property name from getter: the argument must be a method reference (e.g. User::getName), not a lambda expression | "
+                            + "无法从 getter 解析属性名：参数必须是方法引用（如 User::getName），不能是 lambda 表达式", e);
+        }
+
+        String methodName = lambda.getImplMethodName();
+
+        String propertyName;
+        if (methodName.startsWith("get") && methodName.length() > 3) {
+            propertyName = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+        } else if (methodName.startsWith("is") && methodName.length() > 2) {
+            propertyName = Character.toLowerCase(methodName.charAt(2)) + methodName.substring(3);
+        } else {
+            throw new OpenIllegalArgumentException(
+                    "Method '" + methodName + "' does not follow getter naming convention (getXxx/isXxx) | "
+                            + "方法 '" + methodName + "' 不符合 getter 命名约定（getXxx/isXxx）");
+        }
+
+        return propertyName;
     }
 }

@@ -29,9 +29,9 @@ class EventSecurityExceptionTest {
         void testMessageOnlyConstructor() {
             EventSecurityException ex = new EventSecurityException("Security error");
 
-            assertThat(ex.getMessage()).isEqualTo("Security error");
+            assertThat(ex.getRawMessage()).isEqualTo("Security error");
             assertThat(ex.getCause()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.SECURITY_VIOLATION);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.SECURITY_VIOLATION);
         }
 
         @Test
@@ -40,8 +40,8 @@ class EventSecurityExceptionTest {
             EventSecurityException ex = new EventSecurityException(
                     "Rate limit exceeded", EventErrorCode.RATE_LIMITED);
 
-            assertThat(ex.getMessage()).isEqualTo("Rate limit exceeded");
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.RATE_LIMITED);
+            assertThat(ex.getRawMessage()).isEqualTo("Rate limit exceeded");
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.RATE_LIMITED);
         }
 
         @Test
@@ -51,9 +51,9 @@ class EventSecurityExceptionTest {
 
             EventSecurityException ex = new EventSecurityException("Security error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Security error");
+            assertThat(ex.getRawMessage()).isEqualTo("Security error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.SECURITY_VIOLATION);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.SECURITY_VIOLATION);
         }
 
         @Test
@@ -65,10 +65,10 @@ class EventSecurityExceptionTest {
             EventSecurityException ex = new EventSecurityException(
                     "Security error", cause, event, EventErrorCode.VERIFICATION_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("Security error");
+            assertThat(ex.getRawMessage()).isEqualTo("Security error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getEvent()).isEqualTo(event);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.VERIFICATION_FAILED);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.VERIFICATION_FAILED);
         }
     }
 

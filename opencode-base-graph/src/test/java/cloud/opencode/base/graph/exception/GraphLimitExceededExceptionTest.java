@@ -26,8 +26,8 @@ class GraphLimitExceededExceptionTest {
         void testMessageOnlyConstructor() {
             GraphLimitExceededException ex = new GraphLimitExceededException("Limit exceeded");
 
-            assertThat(ex.getMessage()).isEqualTo("Limit exceeded");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.LIMIT_EXCEEDED);
+            assertThat(ex.getMessage()).contains("Limit exceeded");
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.LIMIT_EXCEEDED);
             assertThat(ex.getLimit()).isEqualTo(-1);
             assertThat(ex.getActual()).isEqualTo(-1);
         }
@@ -97,8 +97,8 @@ class GraphLimitExceededExceptionTest {
         void testErrorCode() {
             GraphLimitExceededException ex = new GraphLimitExceededException("test");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.LIMIT_EXCEEDED);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(4001);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.LIMIT_EXCEEDED);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(4001);
         }
     }
 }

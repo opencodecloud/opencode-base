@@ -2,6 +2,8 @@ package cloud.opencode.base.test.assertion;
 
 import cloud.opencode.base.test.exception.AssertionException;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -46,6 +48,7 @@ public final class JsonAssert {
     private static final Pattern REGEX_SPECIAL_CHARS_PATTERN = Pattern.compile("([\\\\\\[\\](){}.*+?^$|])");
 
     private final String actual;
+    private final Map<String, Pattern> patternCache = new HashMap<>();
 
     private JsonAssert(String actual) {
         this.actual = actual;
@@ -143,7 +146,7 @@ public final class JsonAssert {
     public JsonAssert containsKey(String key) {
         isNotNull();
         String pattern = "\"" + escapeRegex(key) + "\"\\s*:";
-        if (!Pattern.compile(pattern).matcher(actual).find()) {
+        if (!cachedPattern(pattern).matcher(actual).find()) {
             throw new AssertionException("Expected to contain key '" + key + "' but did not");
         }
         return this;
@@ -159,7 +162,7 @@ public final class JsonAssert {
     public JsonAssert doesNotContainKey(String key) {
         isNotNull();
         String pattern = "\"" + escapeRegex(key) + "\"\\s*:";
-        if (Pattern.compile(pattern).matcher(actual).find()) {
+        if (cachedPattern(pattern).matcher(actual).find()) {
             throw new AssertionException("Expected not to contain key '" + key + "' but did");
         }
         return this;
@@ -175,7 +178,7 @@ public final class JsonAssert {
     public JsonAssert containsValue(String value) {
         isNotNull();
         String pattern = ":\\s*\"" + escapeRegex(value) + "\"";
-        if (!Pattern.compile(pattern).matcher(actual).find()) {
+        if (!cachedPattern(pattern).matcher(actual).find()) {
             throw new AssertionException("Expected to contain value '" + value + "' but did not");
         }
         return this;
@@ -192,7 +195,7 @@ public final class JsonAssert {
     public JsonAssert hasKeyValue(String key, String value) {
         isNotNull();
         String pattern = "\"" + escapeRegex(key) + "\"\\s*:\\s*\"" + escapeRegex(value) + "\"";
-        if (!Pattern.compile(pattern).matcher(actual).find()) {
+        if (!cachedPattern(pattern).matcher(actual).find()) {
             throw new AssertionException("Expected key '" + key + "' = '" + value + "' but not found");
         }
         return this;
@@ -209,7 +212,7 @@ public final class JsonAssert {
     public JsonAssert hasKeyValue(String key, Number value) {
         isNotNull();
         String pattern = "\"" + escapeRegex(key) + "\"\\s*:\\s*" + value;
-        if (!Pattern.compile(pattern).matcher(actual).find()) {
+        if (!cachedPattern(pattern).matcher(actual).find()) {
             throw new AssertionException("Expected key '" + key + "' = " + value + " but not found");
         }
         return this;
@@ -226,7 +229,7 @@ public final class JsonAssert {
     public JsonAssert hasKeyValue(String key, boolean value) {
         isNotNull();
         String pattern = "\"" + escapeRegex(key) + "\"\\s*:\\s*" + value;
-        if (!Pattern.compile(pattern).matcher(actual).find()) {
+        if (!cachedPattern(pattern).matcher(actual).find()) {
             throw new AssertionException("Expected key '" + key + "' = " + value + " but not found");
         }
         return this;
@@ -242,7 +245,7 @@ public final class JsonAssert {
     public JsonAssert hasNullValue(String key) {
         isNotNull();
         String pattern = "\"" + escapeRegex(key) + "\"\\s*:\\s*null";
-        if (!Pattern.compile(pattern).matcher(actual).find()) {
+        if (!cachedPattern(pattern).matcher(actual).find()) {
             throw new AssertionException("Expected key '" + key + "' to be null but was not");
         }
         return this;
@@ -331,7 +334,37 @@ public final class JsonAssert {
 
     private String normalizeJson(String json) {
         if (json == null) return null;
-        return WHITESPACE_PATTERN.matcher(json).replaceAll("");
+        String trimmed = json.trim();
+        StringBuilder sb = new StringBuilder(trimmed.length());
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            if (escaped) {
+                sb.append(c);
+                escaped = false;
+                continue;
+            }
+            if (c == '\\' && inString) {
+                sb.append(c);
+                escaped = true;
+                continue;
+            }
+            if (c == '"') {
+                inString = !inString;
+                sb.append(c);
+                continue;
+            }
+            if (!inString && Character.isWhitespace(c)) {
+                continue;
+            }
+            sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    private Pattern cachedPattern(String regex) {
+        return patternCache.computeIfAbsent(regex, Pattern::compile);
     }
 
     private String escapeRegex(String str) {

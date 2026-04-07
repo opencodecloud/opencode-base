@@ -1,5 +1,7 @@
 package cloud.opencode.base.rules.model;
 
+import cloud.opencode.base.rules.key.TypedKey;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -135,4 +137,45 @@ public interface FactStore {
      * @return fact count | 事实数量
      */
     int size();
+
+    /**
+     * Gets a typed fact value by typed key
+     * 通过类型化键获取类型化事实值
+     *
+     * @param key the typed key | 类型化键
+     * @param <T> the value type | 值类型
+     * @return optional containing the typed value | 包含类型化值的Optional
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    default <T> Optional<T> get(TypedKey<T> key) {
+        Object value = get(key.name());
+        if (value == null) return Optional.empty();
+        return key.type().isInstance(value) ? Optional.of(key.type().cast(value)) : Optional.empty();
+    }
+
+    /**
+     * Puts a typed value by typed key
+     * 通过类型化键存放类型化值
+     *
+     * @param key   the typed key | 类型化键
+     * @param value the value | 值
+     * @param <T>   the value type | 值类型
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    default <T> void put(TypedKey<T> key, T value) {
+        add(key.name(), value);
+    }
+
+    /**
+     * Checks if a typed key exists in the store
+     * 检查类型化键是否存在于存储中
+     *
+     * @param key the typed key | 类型化键
+     * @param <T> the value type | 值类型
+     * @return true if exists | 如果存在返回true
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    default <T> boolean contains(TypedKey<T> key) {
+        return contains(key.name());
+    }
 }

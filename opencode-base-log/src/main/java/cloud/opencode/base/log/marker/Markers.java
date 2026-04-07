@@ -1,6 +1,13 @@
 package cloud.opencode.base.log.marker;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -147,7 +154,7 @@ public final class Markers {
      * @return the marker names - 标记名称
      */
     public static Set<String> getMarkerNames() {
-        return Collections.unmodifiableSet(MARKERS.keySet());
+        return Set.copyOf(MARKERS.keySet());
     }
 
     // ==================== Basic Marker Implementation ====================
@@ -195,11 +202,22 @@ public final class Markers {
             if (other == null) {
                 return false;
             }
+            return containsWithCycleDetection(other, Collections.newSetFromMap(new IdentityHashMap<>()));
+        }
+
+        private boolean containsWithCycleDetection(Marker other, Set<Marker> visited) {
             if (this.equals(other)) {
                 return true;
             }
+            if (!visited.add(this)) {
+                return false; // Cycle detected, stop recursion
+            }
             for (Marker ref : references) {
-                if (ref.contains(other)) {
+                if (ref instanceof BasicMarker bm) {
+                    if (bm.containsWithCycleDetection(other, visited)) {
+                        return true;
+                    }
+                } else if (ref.contains(other)) {
                     return true;
                 }
             }
@@ -211,11 +229,22 @@ public final class Markers {
             if (name == null) {
                 return false;
             }
-            if (this.name.equals(name)) {
+            return containsNameWithCycleDetection(name, Collections.newSetFromMap(new IdentityHashMap<>()));
+        }
+
+        private boolean containsNameWithCycleDetection(String targetName, Set<Marker> visited) {
+            if (this.name.equals(targetName)) {
                 return true;
             }
+            if (!visited.add(this)) {
+                return false; // Cycle detected, stop recursion
+            }
             for (Marker ref : references) {
-                if (ref.contains(name)) {
+                if (ref instanceof BasicMarker bm) {
+                    if (bm.containsNameWithCycleDetection(targetName, visited)) {
+                        return true;
+                    }
+                } else if (ref.contains(targetName)) {
                     return true;
                 }
             }

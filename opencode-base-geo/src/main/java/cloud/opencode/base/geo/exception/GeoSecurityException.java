@@ -51,6 +51,18 @@ public class GeoSecurityException extends GeoException {
     }
 
     /**
+     * Create geo security exception with error code and cause
+     * 使用错误码和原因创建地理安全异常
+     *
+     * @param message the error message | 错误消息
+     * @param cause the cause | 原因
+     * @param errorCode the error code | 错误码
+     */
+    public GeoSecurityException(String message, Throwable cause, GeoErrorCode errorCode) {
+        super(message, cause, errorCode);
+    }
+
+    /**
      * Create location spoofing exception
      * 创建位置欺骗异常
      *

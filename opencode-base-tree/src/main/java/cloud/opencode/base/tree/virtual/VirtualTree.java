@@ -4,6 +4,7 @@ import cloud.opencode.base.tree.Treeable;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -60,10 +61,10 @@ public class VirtualTree<T, ID> implements Treeable<VirtualTree<T, ID>, ID> {
     private final int maxCacheSize;
     private final boolean cacheEnabled;
 
-    // Statistics
-    private volatile long loadCount = 0;
-    private volatile long cacheHits = 0;
-    private volatile long cacheMisses = 0;
+    // Statistics (AtomicLong for thread-safe increments)
+    private final AtomicLong loadCount = new AtomicLong();
+    private final AtomicLong cacheHits = new AtomicLong();
+    private final AtomicLong cacheMisses = new AtomicLong();
 
     /**
      * Create virtual tree node with lazy loading
@@ -220,7 +221,7 @@ public class VirtualTree<T, ID> implements Treeable<VirtualTree<T, ID>, ID> {
                 }
             }
 
-            loadCount++;
+            loadCount.incrementAndGet();
             childrenLoaded.set(true);
         } catch (Exception e) {
             this.children = new ArrayList<>();
@@ -356,11 +357,11 @@ public class VirtualTree<T, ID> implements Treeable<VirtualTree<T, ID>, ID> {
         if (cacheEnabled && nodeCache != null) {
             VirtualTree<T, ID> cached = nodeCache.get(nodeId);
             if (cached != null) {
-                cacheHits++;
+                cacheHits.incrementAndGet();
                 return Optional.of(cached);
             }
         }
-        cacheMisses++;
+        cacheMisses.incrementAndGet();
         return Optional.empty();
     }
 
@@ -450,7 +451,7 @@ public class VirtualTree<T, ID> implements Treeable<VirtualTree<T, ID>, ID> {
      * @param visitor the visitor | 访问者
      */
     public void traverseBreadthFirst(Consumer<VirtualTree<T, ID>> visitor) {
-        Queue<VirtualTree<T, ID>> queue = new LinkedList<>();
+        Queue<VirtualTree<T, ID>> queue = new ArrayDeque<>();
         queue.offer(this);
 
         while (!queue.isEmpty()) {
@@ -492,9 +493,9 @@ public class VirtualTree<T, ID> implements Treeable<VirtualTree<T, ID>, ID> {
         return new CacheStats(
                 nodeCache != null ? nodeCache.size() : 0,
                 maxCacheSize,
-                loadCount,
-                cacheHits,
-                cacheMisses
+                loadCount.get(),
+                cacheHits.get(),
+                cacheMisses.get()
         );
     }
 

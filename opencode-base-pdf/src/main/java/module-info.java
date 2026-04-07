@@ -6,12 +6,13 @@
  * document creation, merge, split, form filling and digital signatures.</p>
  * <p>提供零依赖的 PDF 处理功能，包括文档创建、合并、拆分、表单填充和数字签名。</p>
  *
- * @since JDK 25, opencode-base-pdf V1.0.0
+ * @since JDK 25, opencode-base-pdf V1.0.3
  */
 module cloud.opencode.base.pdf {
 
     // Required modules
     requires java.desktop;  // For java.awt.Color
+    requires cloud.opencode.base.core;
 
     // Export all public packages
     exports cloud.opencode.base.pdf;

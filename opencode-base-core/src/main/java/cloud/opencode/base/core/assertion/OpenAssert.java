@@ -8,11 +8,30 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Assertion Utility - Comprehensive assertion methods for validation
- * 断言工具类 - 全面的验证断言方法
+ * Assertion Utility - Spring Assert-style validation for business application developers
+ * 断言工具类 - 面向业务应用开发者的 Spring Assert 风格验证
  *
- * <p>Provides assertion methods that throw OpenException subclasses for validation failures.</p>
- * <p>提供验证失败时抛出 OpenException 子类的断言方法。</p>
+ * <p>Provides rich assertion methods (notNull, notEmpty, notBlank, inclusiveBetween,
+ * isInstanceOf, matchesPattern, etc.) designed for business application validation.
+ * Throws OpenException subclasses on validation failures.</p>
+ * <p>提供丰富的断言方法（notNull、notEmpty、notBlank、inclusiveBetween、
+ * isInstanceOf、matchesPattern 等），专为业务应用验证设计。
+ * 验证失败时抛出 OpenException 子类。</p>
+ *
+ * <p><strong>When to use this class vs {@link cloud.opencode.base.core.Preconditions} |
+ * 本类与 {@link cloud.opencode.base.core.Preconditions} 的选择:</strong></p>
+ * <ul>
+ *   <li><strong>OpenAssert</strong> — Spring Assert-style, for business application code:
+ *       rich validation API ({@code notNull}, {@code notEmpty}, {@code notBlank},
+ *       {@code inclusiveBetween}, {@code isInstanceOf}, {@code matchesPattern}),
+ *       collection/map/array emptiness checks, type checks.
+ *       适用于业务应用代码：丰富的验证 API，集合/Map/数组空值检查，类型检查。</li>
+ *   <li><strong>{@link cloud.opencode.base.core.Preconditions}</strong> — Guava-style,
+ *       for library/framework internals: compact API ({@code checkNotNull},
+ *       {@code checkArgument}, {@code checkState}), index boundary checks,
+ *       {@code %s} template formatting.
+ *       适用于库/框架内部：紧凑的 API，索引边界检查，{@code %s} 模板格式化。</li>
+ * </ul>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
@@ -43,6 +62,7 @@ import java.util.regex.Pattern;
  *
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
+ * @see cloud.opencode.base.core.Preconditions
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-core V1.0.0
  */
@@ -189,11 +209,10 @@ public final class OpenAssert {
      * 断言数组无 null 元素
      */
     public static <T> T[] noNullElements(T[] array, String message) {
-        if (array != null) {
-            for (T element : array) {
-                if (element == null) {
-                    throw new OpenIllegalArgumentException(message);
-                }
+        notNull(array, "array must not be null");
+        for (T element : array) {
+            if (element == null) {
+                throw new OpenIllegalArgumentException(message);
             }
         }
         return array;
@@ -204,11 +223,10 @@ public final class OpenAssert {
      * 断言集合无 null 元素
      */
     public static <T extends Iterable<?>> T noNullElements(T iterable, String message) {
-        if (iterable != null) {
-            for (Object element : iterable) {
-                if (element == null) {
-                    throw new OpenIllegalArgumentException(message);
-                }
+        notNull(iterable, "iterable must not be null");
+        for (Object element : iterable) {
+            if (element == null) {
+                throw new OpenIllegalArgumentException(message);
             }
         }
         return iterable;

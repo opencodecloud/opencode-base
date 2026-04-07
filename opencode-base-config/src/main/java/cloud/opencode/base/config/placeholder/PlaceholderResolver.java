@@ -90,6 +90,10 @@ public class PlaceholderResolver {
      */
     public PlaceholderResolver(Function<String, String> propertyResolver,
                                int maxRecursionDepth) {
+        if (maxRecursionDepth < 1 || maxRecursionDepth > 20) {
+            throw new IllegalArgumentException(
+                    "maxRecursionDepth must be between 1 and 20, got: " + maxRecursionDepth);
+        }
         this.propertyResolver = propertyResolver;
         this.maxRecursionDepth = maxRecursionDepth;
     }

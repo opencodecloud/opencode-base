@@ -77,8 +77,8 @@ public interface CheckedBiConsumer<T, U> {
     }
 
     /**
-     * Accept silently, ignoring exceptions
-     * 静默接受，忽略异常
+     * Accept silently, ignoring any checked or unchecked exception (but not {@link Error})
+     * 静默接受，忽略任何受检或非受检异常（不包括 {@link Error}）
      *
      * @param t first input - 第一个输入
      * @param u second input - 第二个输入
@@ -99,6 +99,7 @@ public interface CheckedBiConsumer<T, U> {
      * @return chained consumer - 链式消费者
      */
     default CheckedBiConsumer<T, U> andThen(CheckedBiConsumer<? super T, ? super U> after) {
+        java.util.Objects.requireNonNull(after, "after must not be null");
         return (t, u) -> {
             accept(t, u);
             after.accept(t, u);
@@ -115,6 +116,7 @@ public interface CheckedBiConsumer<T, U> {
      * @return CheckedBiConsumer wrapper - CheckedBiConsumer 包装器
      */
     static <T, U> CheckedBiConsumer<T, U> of(BiConsumer<T, U> consumer) {
+        java.util.Objects.requireNonNull(consumer, "consumer must not be null");
         return consumer::accept;
     }
 }

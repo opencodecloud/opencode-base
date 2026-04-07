@@ -1,5 +1,9 @@
 package cloud.opencode.base.feature.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.io.Serial;
+
 /**
  * Feature Exception Base Class
  * 功能异常基类
@@ -11,6 +15,7 @@ package cloud.opencode.base.feature.exception;
  * <ul>
  *   <li>Error code support - 错误码支持</li>
  *   <li>Feature key context - 功能键上下文</li>
+ *   <li>Extends OpenException for unified exception handling - 扩展OpenException以统一异常处理</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -19,7 +24,7 @@ package cloud.opencode.base.feature.exception;
  *     OpenFeature.getInstance().get("unknown");
  * } catch (FeatureException e) {
  *     log.error("Feature error: code={}, message={}",
- *         e.getErrorCode().getCode(), e.getMessage());
+ *         e.getFeatureErrorCode().getCode(), e.getMessage());
  * }
  * }</pre>
  *
@@ -29,12 +34,15 @@ package cloud.opencode.base.feature.exception;
  *   <li>Thread-safe: Yes (immutable) - 线程安全: 是（不可变）</li>
  *   <li>Null-safe: Partial (validates inputs) - 空值安全: 部分（验证输入）</li>
  * </ul>
-  * @author Leon Soo
+ * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
-public class FeatureException extends RuntimeException {
+public class FeatureException extends OpenException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final String featureKey;
     private final FeatureErrorCode errorCode;
@@ -81,7 +89,7 @@ public class FeatureException extends RuntimeException {
      * @param errorCode  the error code | 错误码
      */
     public FeatureException(String message, Throwable cause, String featureKey, FeatureErrorCode errorCode) {
-        super(message, cause);
+        super("feature", errorCode != null ? String.valueOf(errorCode.getCode()) : null, message, cause);
         this.featureKey = featureKey;
         this.errorCode = errorCode != null ? errorCode : FeatureErrorCode.UNKNOWN;
     }
@@ -97,12 +105,12 @@ public class FeatureException extends RuntimeException {
     }
 
     /**
-     * Get the error code
-     * 获取错误码
+     * Get the feature error code
+     * 获取功能错误码
      *
      * @return error code | 错误码
      */
-    public FeatureErrorCode getErrorCode() {
+    public FeatureErrorCode getFeatureErrorCode() {
         return errorCode;
     }
 }

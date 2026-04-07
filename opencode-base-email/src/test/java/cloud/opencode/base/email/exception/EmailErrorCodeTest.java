@@ -1,6 +1,6 @@
 package cloud.opencode.base.email.exception;
 
-import jakarta.mail.AuthenticationFailedException;
+import cloud.opencode.base.email.protocol.ProtocolException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -13,6 +13,7 @@ import java.net.SocketTimeoutException;
 import static org.assertj.core.api.Assertions.*;
 
 /**
+ * EmailErrorCode test class
  * EmailErrorCode 测试类
  *
  * @author Leon Soo
@@ -171,9 +172,16 @@ class EmailErrorCodeTest {
         }
 
         @Test
-        @DisplayName("AuthenticationFailedException返回AUTH_FAILED")
-        void testAuthenticationFailedException() {
-            AuthenticationFailedException e = new AuthenticationFailedException("Auth failed");
+        @DisplayName("ProtocolException with auth failure返回AUTH_FAILED")
+        void testProtocolExceptionAuthFailure() {
+            ProtocolException e = new ProtocolException("auth failed", 535);
+            assertThat(EmailErrorCode.fromException(e)).isEqualTo(EmailErrorCode.AUTH_FAILED);
+        }
+
+        @Test
+        @DisplayName("ProtocolException with code 534返回AUTH_FAILED")
+        void testProtocolExceptionAuthFailure534() {
+            ProtocolException e = new ProtocolException("authentication required", 534);
             assertThat(EmailErrorCode.fromException(e)).isEqualTo(EmailErrorCode.AUTH_FAILED);
         }
 
@@ -203,6 +211,22 @@ class EmailErrorCodeTest {
         void testIOException() {
             java.io.IOException e = new java.io.IOException("IO error");
             assertThat(EmailErrorCode.fromException(e)).isEqualTo(EmailErrorCode.UNKNOWN);
+        }
+
+        @Test
+        @DisplayName("ProtocolException with timeout cause返回CONNECTION_TIMEOUT")
+        void testProtocolExceptionWithTimeoutCause() {
+            SocketTimeoutException cause = new SocketTimeoutException("timed out");
+            ProtocolException e = new ProtocolException("connection timeout", cause);
+            assertThat(EmailErrorCode.fromException(e)).isEqualTo(EmailErrorCode.CONNECTION_TIMEOUT);
+        }
+
+        @Test
+        @DisplayName("ProtocolException with connection failure cause返回CONNECTION_FAILED")
+        void testProtocolExceptionWithConnectCause() {
+            ConnectException cause = new ConnectException("refused");
+            ProtocolException e = new ProtocolException("connection failed", cause);
+            assertThat(EmailErrorCode.fromException(e)).isEqualTo(EmailErrorCode.CONNECTION_FAILED);
         }
     }
 

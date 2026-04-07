@@ -163,16 +163,25 @@ public final class CountingBloomFilter<T> {
         funnel.funnel(element, hasher);
         HashCode hashCode = hasher.hash();
 
-        long hash1 = hashCode.padToLong();
+        long hash1;
         long hash2;
         if (hashCode.bits() >= 128) {
+            // Single asBytes() call to extract both hash1 and hash2
             byte[] bytes = hashCode.asBytes();
+            hash1 = 0;
+            for (int i = 0; i < 8; i++) {
+                hash1 |= (bytes[i] & 0xFFL) << (i * 8);
+            }
             hash2 = 0;
             for (int i = 8; i < 16 && i < bytes.length; i++) {
                 hash2 |= (bytes[i] & 0xFFL) << ((i - 8) * 8);
             }
         } else {
+            hash1 = hashCode.padToLong();
             hash2 = hash1 >>> 32;
+            if (hash2 == 0) {
+                hash2 = hash1 * 0x9E3779B97F4A7C15L;
+            }
         }
 
         int[] indices = new int[numHashFunctions];

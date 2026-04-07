@@ -2,6 +2,7 @@ package cloud.opencode.base.string;
 
 import cloud.opencode.base.string.template.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -32,8 +33,9 @@ import java.util.regex.Pattern;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: No (shared mutable filter/cache maps) - 线程安全: 否（共享可变过滤器/缓存映射）</li>
+ *   <li>Thread-safe: Yes (ConcurrentHashMap for filters and cache) - 线程安全: 是（过滤器和缓存使用 ConcurrentHashMap）</li>
  *   <li>Null-safe: Yes - 空值安全: 是</li>
+ *   <li>Cache bounded: Yes (max 1024 templates) - 缓存有界: 是（最多1024个模板）</li>
  * </ul>
  *
  * @author Leon Soo
@@ -47,8 +49,28 @@ public final class OpenTemplate {
     }
 
     private static final Pattern INDEXED_PLACEHOLDER_PATTERN = Pattern.compile("\\{(\\d+)\\}");
-    private static final Map<String, TemplateFilter> GLOBAL_FILTERS = new HashMap<>();
-    private static final Map<String, String> TEMPLATE_CACHE = new HashMap<>();
+
+    /**
+     * Thread-safe filter registry. Registration typically happens at startup,
+     * but ConcurrentHashMap prevents data races if filters are added at runtime.
+     * 线程安全的过滤器注册表。注册通常在启动时进行，
+     * 但 ConcurrentHashMap 可防止运行时添加过滤器时的数据竞争。
+     */
+    private static final Map<String, TemplateFilter> GLOBAL_FILTERS = new ConcurrentHashMap<>();
+
+    /**
+     * Maximum number of cached templates to prevent memory exhaustion (DoS).
+     * 缓存模板最大数量，防止内存耗尽（DoS）。
+     */
+    private static final int MAX_CACHE_SIZE = 1024;
+
+    /**
+     * Thread-safe, bounded template cache. Rejects new entries beyond MAX_CACHE_SIZE
+     * to prevent unbounded memory growth from attacker-controlled template registration.
+     * 线程安全且有界的模板缓存。超过 MAX_CACHE_SIZE 时拒绝新条目，
+     * 防止攻击者通过注册模板导致无限内存增长。
+     */
+    private static final Map<String, String> TEMPLATE_CACHE = new ConcurrentHashMap<>();
 
     static {
         registerDefaultFilters();
@@ -68,10 +90,9 @@ public final class OpenTemplate {
             v != null && !v.isEmpty() ? v : (args.length > 0 ? args[0] : ""));
         GLOBAL_FILTERS.put("escape", (v, args) -> {
             if (v == null) return "";
-            return v.replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                    .replace("\"", "&quot;");
+            // Delegate to HtmlUtil.escape() which covers all 5 entities: & < > " '
+            // 委托给 HtmlUtil.escape()，覆盖全部 5 个实体：& < > " '
+            return cloud.opencode.base.string.escape.HtmlUtil.escape(v);
         });
     }
 
@@ -126,7 +147,22 @@ public final class OpenTemplate {
     }
 
     // Template cache
+    /**
+     * Register a named template. Cache is bounded to {@value #MAX_CACHE_SIZE} entries
+     * to prevent memory exhaustion from unbounded registration.
+     * 注册命名模板。缓存限制为 {@value #MAX_CACHE_SIZE} 条，防止无限注册导致内存耗尽。
+     *
+     * @param name     the template name | 模板名
+     * @param template the template string | 模板字符串
+     * @throws IllegalStateException if the cache is full and the name is new |
+     *                               如果缓存已满且名称是新的
+     */
     public static void register(String name, String template) {
+        if (!TEMPLATE_CACHE.containsKey(name) && TEMPLATE_CACHE.size() >= MAX_CACHE_SIZE) {
+            throw new IllegalStateException(
+                    "Template cache is full (max " + MAX_CACHE_SIZE + "). "
+                            + "Call clearCache() to remove old templates.");
+        }
         TEMPLATE_CACHE.put(name, template);
     }
 

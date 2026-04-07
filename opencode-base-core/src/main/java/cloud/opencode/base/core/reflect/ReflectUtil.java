@@ -1,5 +1,6 @@
 package cloud.opencode.base.core.reflect;
 
+import cloud.opencode.base.core.convert.TypeUtil;
 import cloud.opencode.base.core.exception.OpenException;
 
 import java.lang.reflect.*;
@@ -353,20 +354,10 @@ public final class ReflectUtil {
         return false;
     }
 
-    private static final Map<Class<?>, Class<?>> PRIMITIVE_TO_WRAPPER = Map.of(
-            boolean.class, Boolean.class,
-            byte.class, Byte.class,
-            char.class, Character.class,
-            short.class, Short.class,
-            int.class, Integer.class,
-            long.class, Long.class,
-            float.class, Float.class,
-            double.class, Double.class
-    );
-
     private static boolean primitiveAssignable(Class<?> target, Class<?> source) {
-        Class<?> targetWrapper = PRIMITIVE_TO_WRAPPER.getOrDefault(target, target);
-        Class<?> sourceWrapper = PRIMITIVE_TO_WRAPPER.getOrDefault(source, source);
-        return targetWrapper.isAssignableFrom(sourceWrapper);
+        Class<?> targetWrapper = TypeUtil.getWrapperClass(target);
+        Class<?> sourceWrapper = TypeUtil.getWrapperClass(source);
+        return (targetWrapper != null ? targetWrapper : target)
+                .isAssignableFrom(sourceWrapper != null ? sourceWrapper : source);
     }
 }

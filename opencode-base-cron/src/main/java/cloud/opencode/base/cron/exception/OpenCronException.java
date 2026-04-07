@@ -1,5 +1,7 @@
 package cloud.opencode.base.cron.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
 import java.io.Serial;
 
 /**
@@ -7,13 +9,16 @@ import java.io.Serial;
  * Cron异常 - Cron表达式错误异常
  *
  * <p>Thrown when cron expression parsing, validation, or evaluation fails.
+ * Extends {@link OpenException} to maintain consistent exception hierarchy.
  * Carries diagnostic context including the original expression and the
  * problematic field name.</p>
  * <p>当Cron表达式解析、验证或计算失败时抛出。
+ * 继承 {@link OpenException} 以保持一致的异常体系。
  * 携带诊断上下文，包括原始表达式和有问题的字段名称。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
+ *   <li>Extends OpenException for unified hierarchy - 继承OpenException统一异常体系</li>
  *   <li>Diagnostic fields: expression, field name - 诊断字段：表达式、字段名称</li>
  *   <li>Factory methods for common error types - 常见错误类型的工厂方法</li>
  *   <li>Serializable - 可序列化</li>
@@ -36,10 +41,12 @@ import java.io.Serial;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-cron V1.0.0
  */
-public class OpenCronException extends RuntimeException {
+public class OpenCronException extends OpenException {
 
     @Serial
     private static final long serialVersionUID = 1L;
+
+    private static final String COMPONENT = "cron";
 
     private final String expression;
     private final String field;
@@ -75,7 +82,7 @@ public class OpenCronException extends RuntimeException {
      * @param cause      the cause | 原因
      */
     public OpenCronException(String message, String expression, String field, Throwable cause) {
-        super(message, cause);
+        super(COMPONENT, null, message, cause);
         this.expression = expression;
         this.field = field;
     }

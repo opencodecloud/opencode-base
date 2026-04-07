@@ -366,6 +366,158 @@ class OpenGatherersTest {
     }
 
     @Nested
+    @DisplayName("zipWithIndex 测试")
+    class ZipWithIndexTests {
+
+        @Test
+        @DisplayName("should_pairElementsWithIndex")
+        void should_pairElementsWithIndex() {
+            List<Pair<Long, String>> result = Stream.of("a", "b", "c")
+                    .gather(OpenGatherers.zipWithIndex())
+                    .toList();
+
+            assertThat(result).containsExactly(
+                    Pair.of(0L, "a"),
+                    Pair.of(1L, "b"),
+                    Pair.of(2L, "c")
+            );
+        }
+
+        @Test
+        @DisplayName("should_returnEmptyForEmptyStream")
+        void should_returnEmptyForEmptyStream() {
+            List<Pair<Long, String>> result = Stream.<String>empty()
+                    .gather(OpenGatherers.zipWithIndex())
+                    .toList();
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("should_handleSingleElement")
+        void should_handleSingleElement() {
+            List<Pair<Long, String>> result = Stream.of("a")
+                    .gather(OpenGatherers.zipWithIndex())
+                    .toList();
+
+            assertThat(result).containsExactly(Pair.of(0L, "a"));
+        }
+
+        @Test
+        @DisplayName("should_returnPairType")
+        void should_returnPairType() {
+            List<Pair<Long, Integer>> result = Stream.of(42)
+                    .gather(OpenGatherers.zipWithIndex())
+                    .toList();
+
+            assertThat(result).hasSize(1);
+            assertThat(result.getFirst()).isInstanceOf(Pair.class);
+            assertThat(result.getFirst().first()).isEqualTo(0L);
+            assertThat(result.getFirst().second()).isEqualTo(42);
+        }
+    }
+
+    @Nested
+    @DisplayName("takeWhileInclusive 测试")
+    class TakeWhileInclusiveTests {
+
+        @Test
+        @DisplayName("should_includeFirstFailingElement")
+        void should_includeFirstFailingElement() {
+            List<Integer> result = Stream.of(1, 2, 3, 4, 5)
+                    .gather(OpenGatherers.takeWhileInclusive(x -> x < 3))
+                    .toList();
+
+            assertThat(result).containsExactly(1, 2, 3);
+        }
+
+        @Test
+        @DisplayName("should_returnAllIfAllMatch")
+        void should_returnAllIfAllMatch() {
+            List<Integer> result = Stream.of(1, 2, 3)
+                    .gather(OpenGatherers.takeWhileInclusive(x -> x < 10))
+                    .toList();
+
+            assertThat(result).containsExactly(1, 2, 3);
+        }
+
+        @Test
+        @DisplayName("should_returnFirstIfNoneMatch")
+        void should_returnFirstIfNoneMatch() {
+            List<Integer> result = Stream.of(5, 6, 7)
+                    .gather(OpenGatherers.takeWhileInclusive(x -> x < 3))
+                    .toList();
+
+            assertThat(result).containsExactly(5);
+        }
+
+        @Test
+        @DisplayName("should_handleEmptyStream")
+        void should_handleEmptyStream() {
+            List<Integer> result = Stream.<Integer>empty()
+                    .gather(OpenGatherers.takeWhileInclusive(x -> x < 3))
+                    .toList();
+
+            assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("interleave 测试")
+    class InterleaveWithIteratorTests {
+
+        @Test
+        @DisplayName("should_interleaveEqualLength")
+        void should_interleaveEqualLength() {
+            List<String> result = Stream.of("1", "2", "3")
+                    .gather(OpenGatherers.interleave(List.of("a", "b", "c").iterator()))
+                    .toList();
+
+            assertThat(result).containsExactly("1", "a", "2", "b", "3", "c");
+        }
+
+        @Test
+        @DisplayName("should_appendRemainingFromSource")
+        void should_appendRemainingFromSource() {
+            List<String> result = Stream.of("1", "2", "3")
+                    .gather(OpenGatherers.interleave(List.of("a").iterator()))
+                    .toList();
+
+            assertThat(result).containsExactly("1", "a", "2", "3");
+        }
+
+        @Test
+        @DisplayName("should_appendRemainingFromOther")
+        void should_appendRemainingFromOther() {
+            List<String> result = Stream.of("1")
+                    .gather(OpenGatherers.interleave(List.of("a", "b", "c").iterator()))
+                    .toList();
+
+            assertThat(result).containsExactly("1", "a", "b", "c");
+        }
+
+        @Test
+        @DisplayName("should_handleEmptyOther")
+        void should_handleEmptyOther() {
+            List<String> result = Stream.of("1", "2")
+                    .gather(OpenGatherers.interleave(Collections.<String>emptyIterator()))
+                    .toList();
+
+            assertThat(result).containsExactly("1", "2");
+        }
+
+        @Test
+        @DisplayName("should_handleEmptySource")
+        void should_handleEmptySource() {
+            List<String> result = Stream.<String>empty()
+                    .gather(OpenGatherers.interleave(List.of("a", "b").iterator()))
+                    .toList();
+
+            assertThat(result).containsExactly("a", "b");
+        }
+    }
+
+    @Nested
     @DisplayName("工具方法测试")
     class UtilityTests {
 

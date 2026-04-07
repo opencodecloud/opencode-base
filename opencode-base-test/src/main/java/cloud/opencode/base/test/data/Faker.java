@@ -109,6 +109,30 @@ public final class Faker {
         "有限公司", "股份有限公司", "科技有限公司", "集团", "实业有限公司"
     };
 
+    // US state abbreviations
+    private static final String[] US_STATES = {
+        "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+        "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD"
+    };
+
+    // Lorem ipsum words
+    private static final String[] LOREM_WORDS = {
+        "lorem", "ipsum", "dolor", "sit", "amet", "consectetur",
+        "adipiscing", "elit", "sed", "do", "eiusmod", "tempor", "incididunt"
+    };
+
+    // Chinese company name prefixes
+    private static final String[] CHINESE_COMPANY_PREFIXES = {
+        "中", "华", "国", "新", "创", "智", "恒", "盛", "鑫"
+    };
+
+    // Chinese phone prefixes
+    private static final String[] CHINESE_PHONE_PREFIXES = {
+        "130", "131", "132", "133", "135", "136", "137", "138", "139",
+        "150", "151", "152", "153", "155", "156", "157", "158", "159",
+        "180", "181", "182", "183", "184", "185", "186", "187", "188", "189"
+    };
+
     private Faker() {
     }
 
@@ -194,11 +218,8 @@ public final class Faker {
      * @return the phone number | 手机号
      */
     public static String chinesePhone() {
-        String[] prefixes = {"130", "131", "132", "133", "135", "136", "137", "138", "139",
-            "150", "151", "152", "153", "155", "156", "157", "158", "159",
-            "180", "181", "182", "183", "184", "185", "186", "187", "188", "189"};
         var r = random();
-        StringBuilder sb = new StringBuilder(oneOf(prefixes));
+        StringBuilder sb = new StringBuilder(oneOf(CHINESE_PHONE_PREFIXES));
         for (int i = 0; i < 8; i++) {
             sb.append(r.nextInt(10));
         }
@@ -274,9 +295,7 @@ public final class Faker {
      * @return the state | 州
      */
     public static String state() {
-        String[] states = {"AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-            "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD"};
-        return oneOf(states);
+        return oneOf(US_STATES);
     }
 
     /**
@@ -318,8 +337,7 @@ public final class Faker {
      * @return the company name | 公司名
      */
     public static String chineseCompany() {
-        String[] prefixes = {"中", "华", "国", "新", "创", "智", "恒", "盛", "鑫"};
-        return oneOf(prefixes) + oneOf(CHINESE_GIVEN_NAMES) + oneOf(CHINESE_COMPANY_SUFFIXES);
+        return oneOf(CHINESE_COMPANY_PREFIXES) + oneOf(CHINESE_GIVEN_NAMES) + oneOf(CHINESE_COMPANY_SUFFIXES);
     }
 
     // ============ Internet | 互联网 ============
@@ -425,9 +443,7 @@ public final class Faker {
      * @return the word | 单词
      */
     public static String word() {
-        String[] words = {"lorem", "ipsum", "dolor", "sit", "amet", "consectetur",
-            "adipiscing", "elit", "sed", "do", "eiusmod", "tempor", "incididunt"};
-        return oneOf(words);
+        return oneOf(LOREM_WORDS);
     }
 
     /**

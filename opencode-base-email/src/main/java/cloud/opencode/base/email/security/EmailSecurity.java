@@ -174,11 +174,11 @@ public final class EmailSecurity {
                     EmailErrorCode.INVALID_ATTACHMENT);
         }
 
-        // Check size
+        // Check size (reject negative sizes from corrupted files)
         long size = attachment.getSize();
-        if (size > maxSize) {
+        if (size < 0 || size > maxSize) {
             throw new EmailSecurityException(
-                    String.format("Attachment size exceeds limit: %d > %d bytes", size, maxSize),
+                    String.format("Attachment size invalid or exceeds limit: %d (max %d bytes)", size, maxSize),
                     EmailErrorCode.INVALID_ATTACHMENT);
         }
     }

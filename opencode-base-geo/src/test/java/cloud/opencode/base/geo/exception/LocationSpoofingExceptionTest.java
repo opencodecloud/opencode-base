@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,19 +27,21 @@ class LocationSpoofingExceptionTest {
         void testMessageOnlyConstructor() {
             LocationSpoofingException ex = new LocationSpoofingException("Location spoofing detected");
 
-            assertThat(ex.getMessage()).isEqualTo("Location spoofing detected");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
+            assertThat(ex.getRawMessage()).isEqualTo("Location spoofing detected");
+            assertThat(ex.getMessage()).contains("Location spoofing detected");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
         }
 
         @Test
         @DisplayName("消息和原因构造函数")
         void testMessageAndCauseConstructor() {
-            // Note: The current implementation has a bug where initCause is called after super() sets the cause
-            // Testing the message and error code only
-            LocationSpoofingException ex = new LocationSpoofingException("Location spoofing detected");
+            RuntimeException cause = new RuntimeException("cause");
+            LocationSpoofingException ex = new LocationSpoofingException("Location spoofing detected", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Location spoofing detected");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
+            assertThat(ex.getRawMessage()).isEqualTo("Location spoofing detected");
+            assertThat(ex.getMessage()).contains("Location spoofing detected");
+            assertThat(ex.getCause()).isEqualTo(cause);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
         }
     }
 
@@ -60,6 +63,14 @@ class LocationSpoofingExceptionTest {
             LocationSpoofingException ex = new LocationSpoofingException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            LocationSpoofingException ex = new LocationSpoofingException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

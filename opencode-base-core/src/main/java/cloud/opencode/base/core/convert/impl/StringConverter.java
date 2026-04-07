@@ -236,15 +236,25 @@ public class StringConverter implements Converter<String> {
     /**
      * Reader 转字符串
      */
+    private static final int MAX_READER_SIZE = 10 * 1024 * 1024; // 10 MB
+
     private String readerToString(Reader reader) {
         try (reader) {
             StringBuilder sb = new StringBuilder();
             char[] buffer = new char[8192];
             int len;
+            long total = 0;
             while ((len = reader.read(buffer)) != -1) {
+                total += len;
+                if (total > MAX_READER_SIZE) {
+                    throw new IllegalStateException(
+                            "Reader exceeds max size: " + MAX_READER_SIZE + " chars");
+                }
                 sb.append(buffer, 0, len);
             }
             return sb.toString();
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             return null;
         }

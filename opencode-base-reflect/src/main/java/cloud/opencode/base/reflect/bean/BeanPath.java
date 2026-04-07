@@ -254,6 +254,9 @@ public final class BeanPath {
         if (indexStart >= 0) {
             String propName = part.substring(0, indexStart);
             int indexEnd = part.indexOf(']', indexStart);
+            if (indexEnd < 0) {
+                throw new OpenReflectException("Malformed indexed property (missing ']'): " + part);
+            }
             String indexStr = part.substring(indexStart + 1, indexEnd);
 
             Object collection = getSimpleProperty(bean, propName);
@@ -284,6 +287,9 @@ public final class BeanPath {
         if (indexStart >= 0) {
             String propName = part.substring(0, indexStart);
             int indexEnd = part.indexOf(']', indexStart);
+            if (indexEnd < 0) {
+                throw new OpenReflectException("Malformed indexed property (missing ']'): " + part);
+            }
             String indexStr = part.substring(indexStart + 1, indexEnd);
 
             Object collection = getSimpleProperty(bean, propName);
@@ -312,11 +318,17 @@ public final class BeanPath {
     private static Object getIndexed(Object collection, String indexStr) {
         if (collection instanceof List<?> list) {
             int index = Integer.parseInt(indexStr);
+            if (index < 0) {
+                throw new OpenReflectException("Negative index not allowed: " + index);
+            }
             return index < list.size() ? list.get(index) : null;
         }
 
         if (collection instanceof Object[] array) {
             int index = Integer.parseInt(indexStr);
+            if (index < 0) {
+                throw new OpenReflectException("Negative index not allowed: " + index);
+            }
             return index < array.length ? array[index] : null;
         }
 

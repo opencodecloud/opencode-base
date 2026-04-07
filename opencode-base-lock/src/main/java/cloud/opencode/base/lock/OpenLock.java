@@ -1,14 +1,20 @@
 package cloud.opencode.base.lock;
 
 import cloud.opencode.base.lock.distributed.DistributedLockConfig;
+import cloud.opencode.base.lock.event.LockListener;
+import cloud.opencode.base.lock.event.ObservableLock;
 import cloud.opencode.base.lock.local.LocalLock;
 import cloud.opencode.base.lock.local.LocalReadWriteLock;
+import cloud.opencode.base.lock.local.RetryLock;
 import cloud.opencode.base.lock.local.SegmentLock;
 import cloud.opencode.base.lock.local.SpinLock;
+import cloud.opencode.base.lock.local.StampedLockAdapter;
+import cloud.opencode.base.lock.local.TtlLock;
 import cloud.opencode.base.lock.manager.LockGroup;
 import cloud.opencode.base.lock.manager.LockManager;
 import cloud.opencode.base.lock.manager.NamedLockFactory;
 
+import java.time.Duration;
 import java.util.function.Supplier;
 
 /**
@@ -24,6 +30,10 @@ import java.util.function.Supplier;
  *   <li>Read-write locks - 读写锁</li>
  *   <li>Spin locks for short critical sections - 短临界区自旋锁</li>
  *   <li>Segment locks for fine-grained locking - 细粒度分段锁</li>
+ *   <li>Stamped locks with optimistic reads - 支持乐观读的戳记锁</li>
+ *   <li>Retry locks with exponential backoff - 指数退避重试锁</li>
+ *   <li>TTL locks with auto-expiry - 带自动过期的TTL锁</li>
+ *   <li>Observable locks with event listeners - 带事件监听的可观察锁</li>
  *   <li>Lock groups with deadlock prevention - 带死锁预防的锁组</li>
  *   <li>Named lock factory with striping - 带条纹的命名锁工厂</li>
  * </ul>
@@ -210,6 +220,156 @@ public final class OpenLock {
      */
     public static <K> SegmentLock<K> segmentLock(int segments) {
         return new SegmentLock<>(segments);
+    }
+
+    // ==================== Stamped Lock | 戳记锁 ====================
+
+    /**
+     * Creates a stamped lock adapter with optimistic read support
+     * 创建支持乐观读的戳记锁适配器
+     *
+     * <p>Stamped locks offer higher throughput for read-heavy workloads via optimistic reads.
+     * Note: StampedLock is NOT reentrant and has limited virtual thread support.</p>
+     * <p>戳记锁通过乐观读为读密集型工作负载提供更高吞吐量。
+     * 注意：StampedLock 不可重入，且虚拟线程支持有限。</p>
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * StampedLockAdapter stampedLock = OpenLock.stampedLock();
+     * String data = stampedLock.optimisticRead(() -> readData());
+     * stampedLock.executeWrite(() -> writeData());
+     * }</pre>
+     *
+     * @return the stamped lock adapter | 戳记锁适配器
+     */
+    public static StampedLockAdapter stampedLock() {
+        return new StampedLockAdapter();
+    }
+
+    /**
+     * Creates a stamped lock adapter with specified configuration
+     * 使用指定配置创建戳记锁适配器
+     *
+     * @param config the lock configuration | 锁配置
+     * @return the stamped lock adapter | 戳记锁适配器
+     */
+    public static StampedLockAdapter stampedLock(LockConfig config) {
+        return new StampedLockAdapter(config);
+    }
+
+    // ==================== Retry Lock | 重试锁 ====================
+
+    /**
+     * Creates a retry lock wrapping a new local lock with default retry settings
+     * 使用默认重试设置包装新本地锁创建重试锁
+     *
+     * <p>Retries lock acquisition with exponential backoff on failure.</p>
+     * <p>锁获取失败时使用指数退避重试。</p>
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Lock<Long> retryLock = OpenLock.retryLock();
+     * retryLock.execute(() -> doWork());
+     * }</pre>
+     *
+     * @return the retry lock | 重试锁
+     */
+    public static Lock<Long> retryLock() {
+        return new RetryLock<>(new LocalLock());
+    }
+
+    /**
+     * Creates a retry lock builder wrapping the specified lock
+     * 创建包装指定锁的重试锁构建器
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Lock<Long> retryLock = OpenLock.retryLock(existingLock)
+     *     .maxRetries(5)
+     *     .retryDelay(Duration.ofMillis(200))
+     *     .backoffMultiplier(1.5)
+     *     .build();
+     * }</pre>
+     *
+     * @param <T>      the lock token type | 锁令牌类型
+     * @param delegate the lock to wrap with retry logic | 要包装重试逻辑的锁
+     * @return the retry lock builder | 重试锁构建器
+     */
+    public static <T> RetryLock.Builder<T> retryLock(Lock<T> delegate) {
+        return RetryLock.builder(delegate);
+    }
+
+    // ==================== TTL Lock | TTL锁 ====================
+
+    /**
+     * Creates a lock with TTL (Time-To-Live) auto-expiry
+     * 创建带 TTL（生存时间）自动过期的锁
+     *
+     * <p>If the lock is held beyond the TTL, it is marked as expired for monitoring.
+     * The actual lock release still depends on the holder calling unlock().
+     * Use {@link TtlLock#isExpired()} to detect and handle expired locks.</p>
+     * <p>如果锁持有超过TTL，将被标记为过期以供监控。
+     * 实际锁释放仍取决于持有者调用 unlock()。
+     * 使用 {@link TtlLock#isExpired()} 检测和处理过期锁。</p>
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Lock<Long> ttlLock = OpenLock.ttlLock(Duration.ofSeconds(30));
+     * ttlLock.execute(() -> processTask());
+     * }</pre>
+     *
+     * @param ttl the maximum time a lock can be held | 锁可持有的最长时间
+     * @return the TTL lock | TTL锁
+     */
+    public static Lock<Long> ttlLock(Duration ttl) {
+        return new TtlLock(ttl);
+    }
+
+    /**
+     * Creates a fair TTL lock
+     * 创建公平TTL锁
+     *
+     * @param ttl  the maximum time a lock can be held | 锁可持有的最长时间
+     * @param fair whether the lock should be fair | 锁是否应该是公平的
+     * @return the TTL lock | TTL锁
+     */
+    public static Lock<Long> ttlLock(Duration ttl, boolean fair) {
+        return new TtlLock(ttl, fair);
+    }
+
+    // ==================== Observable Lock | 可观察锁 ====================
+
+    /**
+     * Creates an observable lock that fires events to listeners
+     * 创建向监听器触发事件的可观察锁
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Lock<Long> observable = OpenLock.observableLock("myLock",
+     *     event -> log.info("Lock event: {}", event));
+     * observable.execute(() -> doWork());
+     * }</pre>
+     *
+     * @param lockName  the lock name for event identification | 用于事件标识的锁名称
+     * @param listeners the event listeners | 事件监听器
+     * @return the observable lock | 可观察锁
+     */
+    public static Lock<Long> observableLock(String lockName, LockListener... listeners) {
+        return new ObservableLock<>(new LocalLock(), lockName, listeners);
+    }
+
+    /**
+     * Wraps an existing lock with event observation
+     * 用事件观察包装现有锁
+     *
+     * @param <T>       the lock token type | 锁令牌类型
+     * @param delegate  the lock to observe | 要观察的锁
+     * @param lockName  the lock name for event identification | 用于事件标识的锁名称
+     * @param listeners the event listeners | 事件监听器
+     * @return the observable lock | 可观察锁
+     */
+    public static <T> Lock<T> observableLock(Lock<T> delegate, String lockName, LockListener... listeners) {
+        return new ObservableLock<>(delegate, lockName, listeners);
     }
 
     // ==================== Named Lock Factory | 命名锁工厂 ====================

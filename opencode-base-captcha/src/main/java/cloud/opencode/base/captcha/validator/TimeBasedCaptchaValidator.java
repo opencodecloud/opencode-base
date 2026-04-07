@@ -1,6 +1,7 @@
 package cloud.opencode.base.captcha.validator;
 
 import cloud.opencode.base.captcha.ValidationResult;
+import cloud.opencode.base.captcha.security.CaptchaSecurity;
 import cloud.opencode.base.captcha.store.CaptchaStore;
 
 import java.time.Duration;
@@ -46,6 +47,12 @@ public final class TimeBasedCaptchaValidator implements CaptchaValidator {
 
     private static final Duration MIN_RESPONSE_TIME = Duration.ofMillis(500);
 
+    /**
+     * Maximum number of tracked creation times to prevent unbounded map growth (OOM).
+     * 最大跟踪创建时间数量，防止无限制的 Map 增长（OOM）。
+     */
+    private static final int MAX_TRACKED_IDS = 100_000;
+
     private final CaptchaStore store;
     private final Map<String, Instant> creationTimes = new ConcurrentHashMap<>();
 
@@ -66,6 +73,14 @@ public final class TimeBasedCaptchaValidator implements CaptchaValidator {
      * @param id the CAPTCHA ID | 验证码 ID
      */
     public void recordCreation(String id) {
+        // Prevent unbounded map growth — evict old entries first, then skip if still full
+        // 防止无限制的 Map 增长 — 先淘汰过期条目，然后跳过
+        if (creationTimes.size() >= MAX_TRACKED_IDS) {
+            clearOldRecords();
+            if (creationTimes.size() >= MAX_TRACKED_IDS) {
+                return;
+            }
+        }
         creationTimes.put(id, Instant.now());
     }
 
@@ -101,8 +116,8 @@ public final class TimeBasedCaptchaValidator implements CaptchaValidator {
 
         String stored = storedAnswer.get();
         boolean matches = caseSensitive
-            ? stored.equals(answer)
-            : stored.equalsIgnoreCase(answer);
+            ? CaptchaSecurity.constantTimeEquals(stored, answer)
+            : CaptchaSecurity.constantTimeEquals(stored.toLowerCase(), answer.toLowerCase());
 
         return matches ? ValidationResult.ok() : ValidationResult.mismatch();
     }

@@ -74,7 +74,6 @@ public final class RotateCaptchaGenerator implements CaptchaGenerator {
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("width", size);
             metadata.put("height", size);
-            metadata.put("correctAngle", correctAngle);
             metadata.put("tolerance", ANGLE_TOLERANCE);
 
             byte[] imageData = toBytes(rotatedImage);

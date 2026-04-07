@@ -1,5 +1,7 @@
 package cloud.opencode.base.core.tuple;
 
+import cloud.opencode.base.core.func.TriFunction;
+
 import java.io.Serializable;
 import java.util.function.Function;
 
@@ -230,17 +232,4 @@ public record Triple<A, B, C>(A first, B second, C third) implements Serializabl
         return "(" + first + ", " + second + ", " + third + ")";
     }
 
-    /**
-     * Three-argument function interface
-     * 三元函数接口
-     *
-     * @param <A> first argument type | 第一个参数类型
-     * @param <B> second argument type | 第二个参数类型
-     * @param <C> third argument type | 第三个参数类型
-     * @param <R> return type | 返回值类型
-     */
-    @FunctionalInterface
-    public interface TriFunction<A, B, C, R> {
-        R apply(A a, B b, C c);
-    }
 }

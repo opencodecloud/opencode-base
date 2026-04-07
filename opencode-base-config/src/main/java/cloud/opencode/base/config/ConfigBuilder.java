@@ -80,6 +80,7 @@ public class ConfigBuilder {
     private final List<ConfigValidator> validators = new ArrayList<>();
     private boolean enablePlaceholders = true;
     private boolean enableHotReload = false;
+    private boolean relaxedBinding = false;
     private Duration hotReloadInterval = Duration.ofSeconds(30);
 
     // ============ Add Configuration Sources | 添加配置源 ============
@@ -260,6 +261,25 @@ public class ConfigBuilder {
         return this;
     }
 
+    // ============ Relaxed Binding | 宽松绑定 ============
+
+    /**
+     * Enable relaxed binding for configuration key resolution
+     * 启用配置键解析的宽松绑定
+     *
+     * <p>When enabled, configuration keys are matched using relaxed rules, allowing
+     * different naming conventions (kebab-case, camelCase, snake_case, UPPER_SNAKE)
+     * to be used interchangeably.</p>
+     * <p>启用后，配置键使用宽松规则匹配，允许不同命名约定（kebab-case、camelCase、
+     * snake_case、UPPER_SNAKE）互换使用。</p>
+     *
+     * @return this builder | 构建器
+     */
+    public ConfigBuilder enableRelaxedBinding() {
+        this.relaxedBinding = true;
+        return this;
+    }
+
     // ============ Validation | 验证 ============
 
     /**
@@ -300,7 +320,7 @@ public class ConfigBuilder {
         CompositeConfigSource compositeSource = new CompositeConfigSource(sources);
 
         // Create config instance
-        DefaultConfig config = new DefaultConfig(compositeSource, converters);
+        DefaultConfig config = new DefaultConfig(compositeSource, converters, relaxedBinding);
 
         // Enable placeholder resolution
         if (enablePlaceholders) {
@@ -312,13 +332,14 @@ public class ConfigBuilder {
             config.enableHotReload(hotReloadInterval);
         }
 
-        // Validate
-        for (ConfigValidator validator : validators) {
-            ValidationResult result = validator.validate(config);
-            if (!result.isValid()) {
-                throw OpenConfigException.validationFailed(
-                    String.join(", ", result.getErrors()));
-            }
+        // Validate - collect all results and merge
+        List<ValidationResult> results = validators.stream()
+            .map(validator -> validator.validate(config))
+            .toList();
+        ValidationResult merged = ValidationResult.merge(results);
+        if (!merged.isValid()) {
+            throw OpenConfigException.validationFailed(
+                String.join(", ", merged.getErrors()));
         }
 
         return config;

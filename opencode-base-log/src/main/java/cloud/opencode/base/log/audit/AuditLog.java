@@ -188,13 +188,33 @@ public final class AuditLog {
                 .success();
 
         if (before != null) {
-            builder.detail("before", before.toString());
+            builder.detail("before", truncate(before.toString()));
         }
         if (after != null) {
-            builder.detail("after", after.toString());
+            builder.detail("after", truncate(after.toString()));
         }
 
         log(builder.build());
+    }
+
+    /**
+     * Maximum length of a single detail value in audit logs.
+     * 审计日志中单个详情值的最大长度。
+     */
+    private static final int MAX_DETAIL_LENGTH = 1024;
+
+    /**
+     * Truncates a string to prevent unbounded output in audit logs.
+     * 截断字符串以防止审计日志中的无限输出。
+     *
+     * @param value the value to truncate - 要截断的值
+     * @return the truncated value - 截断后的值
+     */
+    private static String truncate(String value) {
+        if (value.length() <= MAX_DETAIL_LENGTH) {
+            return value;
+        }
+        return value.substring(0, MAX_DETAIL_LENGTH) + "...(truncated)";
     }
 
     // ==================== Logger Configuration ====================

@@ -5,6 +5,7 @@ import cloud.opencode.base.captcha.CaptchaConfig;
 import cloud.opencode.base.captcha.CaptchaType;
 import cloud.opencode.base.captcha.interactive.ClickCaptchaGenerator;
 import cloud.opencode.base.captcha.interactive.ImageSelectCaptchaGenerator;
+import cloud.opencode.base.captcha.interactive.JigsawCaptchaGenerator;
 import cloud.opencode.base.captcha.interactive.RotateCaptchaGenerator;
 import cloud.opencode.base.captcha.interactive.SliderCaptchaGenerator;
 
@@ -43,9 +44,10 @@ import cloud.opencode.base.captcha.interactive.SliderCaptchaGenerator;
  */
 public sealed interface CaptchaGenerator
     permits ImageCaptchaGenerator, ArithmeticCaptchaGenerator, ChineseCaptchaGenerator,
-            GifCaptchaGenerator, SpecCaptchaGenerator,
+            GifCaptchaGenerator, SpecCaptchaGenerator, PowCaptchaGenerator,
+            AudioCaptchaGenerator, TestCaptchaGenerator,
             SliderCaptchaGenerator, ClickCaptchaGenerator, RotateCaptchaGenerator,
-            ImageSelectCaptchaGenerator {
+            ImageSelectCaptchaGenerator, JigsawCaptchaGenerator {
 
     /**
      * Generates a CAPTCHA with default configuration.
@@ -91,6 +93,9 @@ public sealed interface CaptchaGenerator
             case CLICK -> new ClickCaptchaGenerator();
             case ROTATE -> new RotateCaptchaGenerator();
             case IMAGE_SELECT -> new ImageSelectCaptchaGenerator();
+            case POW -> new PowCaptchaGenerator();
+            case AUDIO -> new AudioCaptchaGenerator();
+            case JIGSAW -> new JigsawCaptchaGenerator();
         };
     }
 
@@ -152,5 +157,25 @@ public sealed interface CaptchaGenerator
      */
     static CaptchaGenerator gif() {
         return new GifCaptchaGenerator();
+    }
+
+    /**
+     * Creates an audio CAPTCHA generator.
+     * 创建音频验证码生成器。
+     *
+     * @return the generator | 生成器
+     */
+    static CaptchaGenerator audio() {
+        return new AudioCaptchaGenerator();
+    }
+
+    /**
+     * Creates a Proof-of-Work CAPTCHA generator.
+     * 创建工作量证明验证码生成器。
+     *
+     * @return the generator | 生成器
+     */
+    static CaptchaGenerator pow() {
+        return new PowCaptchaGenerator();
     }
 }

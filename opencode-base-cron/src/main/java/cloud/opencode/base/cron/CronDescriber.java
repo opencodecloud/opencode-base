@@ -197,7 +197,7 @@ final class CronDescriber {
             return "on " + DOW_NAMES[dow.nextSetBit(0)] + "s";
         }
         StringJoiner sj = new StringJoiner(", ");
-        for (int i = dow.nextSetBit(0); i >= 0; i = dow.nextSetBit(i + 1)) {
+        for (int i = dow.nextSetBit(0); i >= 0 && i <= 6; i = dow.nextSetBit(i + 1)) {
             sj.add(DOW_NAMES[i]);
         }
         return "on " + sj;
@@ -209,7 +209,7 @@ final class CronDescriber {
             return "in " + MONTH_NAMES[months.nextSetBit(1)];
         }
         StringJoiner sj = new StringJoiner(", ");
-        for (int i = months.nextSetBit(1); i >= 0; i = months.nextSetBit(i + 1)) {
+        for (int i = months.nextSetBit(1); i >= 0 && i <= 12; i = months.nextSetBit(i + 1)) {
             sj.add(MONTH_NAMES[i]);
         }
         return "in " + sj;

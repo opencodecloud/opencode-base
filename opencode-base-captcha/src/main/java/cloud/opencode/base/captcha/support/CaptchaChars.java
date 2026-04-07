@@ -185,6 +185,7 @@ public final class CaptchaChars {
      * @return the random integer | 随机整数
      */
     public static int randomInt(int min, int max) {
+        if (max <= min) return min;
         return min + RANDOM.nextInt(max - min);
     }
 }

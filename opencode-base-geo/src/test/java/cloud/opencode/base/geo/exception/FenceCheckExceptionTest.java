@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,8 @@ class FenceCheckExceptionTest {
         void testMessageOnlyConstructor() {
             FenceCheckException ex = new FenceCheckException("Fence check failed");
 
-            assertThat(ex.getMessage()).isEqualTo("Fence check failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Fence check failed");
+            assertThat(ex.getMessage()).contains("Fence check failed");
         }
 
         @Test
@@ -35,7 +37,8 @@ class FenceCheckExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             FenceCheckException ex = new FenceCheckException("Fence check failed", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Fence check failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Fence check failed");
+            assertThat(ex.getMessage()).contains("Fence check failed");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -58,6 +61,14 @@ class FenceCheckExceptionTest {
             FenceCheckException ex = new FenceCheckException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            FenceCheckException ex = new FenceCheckException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

@@ -102,10 +102,33 @@ public final class JsonSchemaValidator {
      */
     private static final int MAX_PATTERN_CACHE_SIZE = 1000;
     /**
+     * Maximum length of a regex pattern string to prevent ReDoS.
+     * 正则模式字符串的最大长度以防止 ReDoS。
+     */
+    private static final int MAX_PATTERN_LENGTH = 1000;
+    /**
+     * Maximum schema nesting depth to prevent stack overflow from recursive schemas.
+     * 最大 schema 嵌套深度以防止递归 schema 导致的栈溢出。
+     */
+    private static final int MAX_SCHEMA_DEPTH = 64;
+    /**
      * Thread-safe pattern cache for regex validation with bounded size.
      * 用于正则验证的线程安全且大小有限的模式缓存。
      */
-    private final Map<String, Pattern> patternCache = new ConcurrentHashMap<>();
+    private static final Map<String, Pattern> patternCache = new ConcurrentHashMap<>();
+
+    /**
+     * Checks if a regex pattern contains nested quantifiers that cause catastrophic backtracking.
+     * 检查正则模式是否包含导致灾难性回溯的嵌套量词。
+     *
+     * @param pattern the regex pattern string - 正则模式字符串
+     * @return true if the pattern is potentially dangerous - 如果模式可能危险则返回 true
+     */
+    private static boolean isPotentiallyDangerous(String pattern) {
+        // Reject patterns with nested quantifiers that cause catastrophic backtracking
+        // e.g., (a+)+, (a*)+, (a+)*, (.+)+, etc.
+        return pattern.matches(".*\\(.+[+*]\\)[+*].*");
+    }
 
     private JsonSchemaValidator(JsonNode schema) {
         this.schema = Objects.requireNonNull(schema, "Schema must not be null");
@@ -158,7 +181,7 @@ public final class JsonSchemaValidator {
      */
     public ValidationResult validate(JsonNode data) {
         List<ValidationError> errors = new ArrayList<>();
-        validateNode(data, schema, "", errors);
+        validateNode(data, schema, "", errors, 0);
         return errors.isEmpty() ? ValidationResult.success() : ValidationResult.failure(errors);
     }
 
@@ -176,7 +199,12 @@ public final class JsonSchemaValidator {
         }
     }
 
-    private void validateNode(JsonNode data, JsonNode schema, String path, List<ValidationError> errors) {
+    private void validateNode(JsonNode data, JsonNode schema, String path, List<ValidationError> errors, int depth) {
+        if (depth > MAX_SCHEMA_DEPTH) {
+            errors.add(new ValidationError(path, "schema", "Schema nesting depth exceeds maximum of " + MAX_SCHEMA_DEPTH));
+            return;
+        }
+
         if (schema.isBoolean()) {
             if (!schema.asBoolean()) {
                 errors.add(new ValidationError(path, "false", "Schema is false, validation always fails"));
@@ -209,33 +237,41 @@ public final class JsonSchemaValidator {
 
         // array validations
         if (data.isArray()) {
-            validateArray(data, schema, path, errors);
+            validateArray(data, schema, path, errors, depth);
         }
 
         // object validations
         if (data.isObject()) {
-            validateObject(data, schema, path, errors);
+            validateObject(data, schema, path, errors, depth);
         }
 
         // composition validations
-        validateComposition(data, schema, path, errors);
+        validateComposition(data, schema, path, errors, depth);
     }
 
     private void validateType(JsonNode data, JsonNode schema, String path, List<ValidationError> errors) {
         JsonNode typeNode = schema.get("type");
         if (typeNode == null) return;
 
-        List<String> allowedTypes = new ArrayList<>();
-        if (typeNode.isString()) {
-            allowedTypes.add(typeNode.asString());
-        } else if (typeNode.isArray()) {
-            for (int i = 0; i < typeNode.size(); i++) {
-                allowedTypes.add(typeNode.get(i).asString());
-            }
-        }
-
         String actualType = getJsonType(data);
-        boolean matches = allowedTypes.stream().anyMatch(t -> matchesType(data, t));
+        boolean matches = false;
+        List<String> allowedTypes;
+        if (typeNode.isString()) {
+            String t = typeNode.asString();
+            matches = matchesType(data, t);
+            allowedTypes = List.of(t);
+        } else if (typeNode.isArray()) {
+            allowedTypes = new ArrayList<>(typeNode.size());
+            for (int i = 0; i < typeNode.size(); i++) {
+                String t = typeNode.get(i).asString();
+                allowedTypes.add(t);
+                if (!matches && matchesType(data, t)) {
+                    matches = true;
+                }
+            }
+        } else {
+            return;
+        }
 
         if (!matches) {
             errors.add(new ValidationError(path, "type",
@@ -322,14 +358,24 @@ public final class JsonSchemaValidator {
         JsonNode patternNode = schema.get("pattern");
         if (patternNode != null) {
             String patternStr = patternNode.asString();
+            if (patternStr.length() > MAX_PATTERN_LENGTH) {
+                errors.add(new ValidationError(path, "pattern",
+                        "Regex pattern exceeds maximum length of " + MAX_PATTERN_LENGTH));
+                return;
+            }
+            if (isPotentiallyDangerous(patternStr)) {
+                errors.add(new ValidationError(path, "pattern",
+                        "Pattern contains potentially dangerous nested quantifiers: " + patternStr));
+                return;
+            }
             try {
                 Pattern pattern = patternCache.get(patternStr);
                 if (pattern == null) {
                     pattern = Pattern.compile(patternStr);
                     // Only cache if under the size limit to prevent unbounded growth
                     if (patternCache.size() < MAX_PATTERN_CACHE_SIZE) {
-                        patternCache.putIfAbsent(patternStr, pattern);
-                        pattern = patternCache.get(patternStr);
+                        Pattern existing = patternCache.putIfAbsent(patternStr, pattern);
+                        if (existing != null) pattern = existing;
                     }
                 }
                 if (!pattern.matcher(value).find()) {
@@ -400,7 +446,7 @@ public final class JsonSchemaValidator {
         }
     }
 
-    private void validateArray(JsonNode data, JsonNode schema, String path, List<ValidationError> errors) {
+    private void validateArray(JsonNode data, JsonNode schema, String path, List<ValidationError> errors, int depth) {
         int size = data.size();
 
         // minItems
@@ -435,12 +481,12 @@ public final class JsonSchemaValidator {
         JsonNode items = schema.get("items");
         if (items != null) {
             for (int i = 0; i < size; i++) {
-                validateNode(data.get(i), items, path + "/" + i, errors);
+                validateNode(data.get(i), items, path + "/" + i, errors, depth + 1);
             }
         }
     }
 
-    private void validateObject(JsonNode data, JsonNode schema, String path, List<ValidationError> errors) {
+    private void validateObject(JsonNode data, JsonNode schema, String path, List<ValidationError> errors, int depth) {
         Set<String> keys = data.keys();
 
         // required
@@ -476,7 +522,7 @@ public final class JsonSchemaValidator {
             for (String key : properties.keys()) {
                 validatedProps.add(key);
                 if (data.has(key)) {
-                    validateNode(data.get(key), properties.get(key), path + "/" + key, errors);
+                    validateNode(data.get(key), properties.get(key), path + "/" + key, errors, depth + 1);
                 }
             }
         }
@@ -490,19 +536,19 @@ public final class JsonSchemaValidator {
                         errors.add(new ValidationError(path, "additionalProperties",
                                 "Additional property not allowed: " + key));
                     } else if (additionalProps.isObject()) {
-                        validateNode(data.get(key), additionalProps, path + "/" + key, errors);
+                        validateNode(data.get(key), additionalProps, path + "/" + key, errors, depth + 1);
                     }
                 }
             }
         }
     }
 
-    private void validateComposition(JsonNode data, JsonNode schema, String path, List<ValidationError> errors) {
+    private void validateComposition(JsonNode data, JsonNode schema, String path, List<ValidationError> errors, int depth) {
         // allOf
         JsonNode allOf = schema.get("allOf");
         if (allOf != null && allOf.isArray()) {
             for (int i = 0; i < allOf.size(); i++) {
-                validateNode(data, allOf.get(i), path, errors);
+                validateNode(data, allOf.get(i), path, errors, depth + 1);
             }
         }
 
@@ -512,7 +558,7 @@ public final class JsonSchemaValidator {
             boolean anyValid = false;
             for (int i = 0; i < anyOf.size(); i++) {
                 List<ValidationError> subErrors = new ArrayList<>();
-                validateNode(data, anyOf.get(i), path, subErrors);
+                validateNode(data, anyOf.get(i), path, subErrors, depth + 1);
                 if (subErrors.isEmpty()) {
                     anyValid = true;
                     break;
@@ -530,7 +576,7 @@ public final class JsonSchemaValidator {
             int validCount = 0;
             for (int i = 0; i < oneOf.size(); i++) {
                 List<ValidationError> subErrors = new ArrayList<>();
-                validateNode(data, oneOf.get(i), path, subErrors);
+                validateNode(data, oneOf.get(i), path, subErrors, depth + 1);
                 if (subErrors.isEmpty()) {
                     validCount++;
                 }
@@ -545,7 +591,7 @@ public final class JsonSchemaValidator {
         JsonNode not = schema.get("not");
         if (not != null) {
             List<ValidationError> subErrors = new ArrayList<>();
-            validateNode(data, not, path, subErrors);
+            validateNode(data, not, path, subErrors, depth + 1);
             if (subErrors.isEmpty()) {
                 errors.add(new ValidationError(path, "not",
                         "Value must not match the schema in 'not'"));

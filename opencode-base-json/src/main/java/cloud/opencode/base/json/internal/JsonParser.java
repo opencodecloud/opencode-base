@@ -164,7 +164,11 @@ final class JsonParser {
 
     private String parseString() {
         expect('"');
-        StringBuilder sb = new StringBuilder();
+        // Estimate capacity: scan for closing quote or 32 chars, whichever is shorter.
+        // Reduces GC pressure for the common case of short strings.
+        int end = input.indexOf('"', pos);
+        int capacity = (end > pos) ? Math.min(end - pos, 512) : 32;
+        StringBuilder sb = new StringBuilder(capacity);
         while (pos < input.length()) {
             char c = input.charAt(pos++);
             if (c == '"') {
@@ -188,9 +192,27 @@ final class JsonParser {
                         if (pos + 4 > input.length()) {
                             throw error("unterminated unicode escape");
                         }
-                        String hex = input.substring(pos, pos + 4);
-                        sb.append((char) Integer.parseInt(hex, 16));
+                        int codeUnit = parseHex4(pos);
                         pos += 4;
+                        // Handle surrogate pairs: high surrogate followed by a \\uXXXX low surrogate
+                        if (Character.isHighSurrogate((char) codeUnit)) {
+                            if (pos + 6 <= input.length()
+                                    && input.charAt(pos) == '\\'
+                                    && input.charAt(pos + 1) == 'u') {
+                                int lowSurrogate = parseHex4(pos + 2);
+                                if (Character.isLowSurrogate((char) lowSurrogate)) {
+                                    int codePoint = Character.toCodePoint((char) codeUnit, (char) lowSurrogate);
+                                    sb.append(Character.toChars(codePoint));
+                                    pos += 6;
+                                } else {
+                                    sb.append((char) codeUnit);
+                                }
+                            } else {
+                                sb.append((char) codeUnit);
+                            }
+                        } else {
+                            sb.append((char) codeUnit);
+                        }
                     }
                     default -> throw error("invalid escape: \\" + escaped);
                 }
@@ -302,6 +324,18 @@ final class JsonParser {
 
     private void popDepth() {
         depth--;
+    }
+
+    private int parseHex4(int start) {
+        int result = 0;
+        for (int i = start; i < start + 4; i++) {
+            int digit = Character.digit(input.charAt(i), 16);
+            if (digit == -1) {
+                throw error("invalid hex digit in unicode escape: " + input.charAt(i));
+            }
+            result = (result << 4) | digit;
+        }
+        return result;
     }
 
     private OpenJsonProcessingException error(String msg) {

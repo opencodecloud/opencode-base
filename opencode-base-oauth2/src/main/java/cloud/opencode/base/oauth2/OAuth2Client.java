@@ -5,6 +5,7 @@ import cloud.opencode.base.oauth2.exception.OAuth2Exception;
 import cloud.opencode.base.oauth2.grant.DeviceCodeResponse;
 import cloud.opencode.base.oauth2.grant.GrantType;
 import cloud.opencode.base.oauth2.http.OAuth2HttpClient;
+import cloud.opencode.base.oauth2.internal.JsonParser;
 import cloud.opencode.base.oauth2.oidc.UserInfo;
 import cloud.opencode.base.oauth2.pkce.PkceChallenge;
 import cloud.opencode.base.oauth2.provider.OAuth2Provider;
@@ -475,29 +476,29 @@ public class OAuth2Client implements AutoCloseable {
     private OAuth2Token parseTokenResponse(String json) {
         OAuth2Token.Builder builder = OAuth2Token.builder();
 
-        builder.accessToken(extractJsonString(json, "access_token"));
+        builder.accessToken(JsonParser.getString(json, "access_token"));
 
-        String tokenType = extractJsonString(json, "token_type");
+        String tokenType = JsonParser.getString(json, "token_type");
         if (tokenType != null) {
             builder.tokenType(tokenType);
         }
 
-        String refreshToken = extractJsonString(json, "refresh_token");
+        String refreshToken = JsonParser.getString(json, "refresh_token");
         if (refreshToken != null) {
             builder.refreshToken(refreshToken);
         }
 
-        String idToken = extractJsonString(json, "id_token");
+        String idToken = JsonParser.getString(json, "id_token");
         if (idToken != null) {
             builder.idToken(idToken);
         }
 
-        String scope = extractJsonString(json, "scope");
+        String scope = JsonParser.getString(json, "scope");
         if (scope != null) {
             builder.scopeString(scope);
         }
 
-        Long expiresIn = extractJsonLong(json, "expires_in");
+        Long expiresIn = JsonParser.getLong(json, "expires_in");
         if (expiresIn != null) {
             builder.expiresIn(expiresIn);
         }
@@ -515,21 +516,21 @@ public class OAuth2Client implements AutoCloseable {
     private DeviceCodeResponse parseDeviceCodeResponse(String json) {
         DeviceCodeResponse.Builder builder = DeviceCodeResponse.builder();
 
-        builder.deviceCode(extractJsonString(json, "device_code"));
-        builder.userCode(extractJsonString(json, "user_code"));
-        builder.verificationUri(extractJsonString(json, "verification_uri"));
+        builder.deviceCode(JsonParser.getString(json, "device_code"));
+        builder.userCode(JsonParser.getString(json, "user_code"));
+        builder.verificationUri(JsonParser.getString(json, "verification_uri"));
 
-        String verificationUriComplete = extractJsonString(json, "verification_uri_complete");
+        String verificationUriComplete = JsonParser.getString(json, "verification_uri_complete");
         if (verificationUriComplete != null) {
             builder.verificationUriComplete(verificationUriComplete);
         }
 
-        Long expiresIn = extractJsonLong(json, "expires_in");
+        Long expiresIn = JsonParser.getLong(json, "expires_in");
         if (expiresIn != null) {
             builder.expiresIn(expiresIn.intValue());
         }
 
-        Long interval = extractJsonLong(json, "interval");
+        Long interval = JsonParser.getLong(json, "interval");
         if (interval != null) {
             builder.interval(interval.intValue());
         }
@@ -537,147 +538,6 @@ public class OAuth2Client implements AutoCloseable {
         builder.createdAt(Instant.now());
 
         return builder.build();
-    }
-
-    /**
-     * Find the index of a JSON field key, ensuring it is a complete key match.
-     * Validates that the character before the opening quote is not a letter/digit
-     * (to avoid partial matches like "custom_access_token" matching "access_token").
-     * 查找 JSON 字段键的索引，确保是完整的键匹配。
-     *
-     * @param json  the JSON string | JSON 字符串
-     * @param field the field name | 字段名称
-     * @return the index of the field pattern, or -1 if not found | 字段模式的索引，未找到则返回 -1
-     */
-    private int findFieldIndex(String json, String field) {
-        String pattern = "\"" + field + "\"";
-        int searchFrom = 0;
-        while (searchFrom < json.length()) {
-            int idx = json.indexOf(pattern, searchFrom);
-            if (idx < 0) return -1;
-            // Ensure this is not part of a larger key: preceding char should not be alphanumeric/underscore
-            if (idx == 0 || !Character.isLetterOrDigit(json.charAt(idx - 1))) {
-                return idx;
-            }
-            searchFrom = idx + 1;
-        }
-        return -1;
-    }
-
-    /**
-     * Skip to the value portion after finding a field key, advancing past ':' and whitespace.
-     * 跳到字段键之后的值部分，跳过 ':' 和空白字符。
-     *
-     * @param json     the JSON string | JSON 字符串
-     * @param fieldEnd the index after the closing quote of the field key | 字段键闭合引号之后的索引
-     * @return the start index of the value, or -1 if invalid | 值的起始索引，无效则返回 -1
-     */
-    private int skipToValue(String json, int fieldEnd) {
-        int colonIdx = json.indexOf(':', fieldEnd);
-        if (colonIdx < 0) return -1;
-        int start = colonIdx + 1;
-        while (start < json.length() && Character.isWhitespace(json.charAt(start))) {
-            start++;
-        }
-        return start < json.length() ? start : -1;
-    }
-
-    /**
-     * Extract string field from JSON, handling escaped quotes and null values.
-     * 从 JSON 中提取字符串字段，处理转义引号和 null 值。
-     */
-    private String extractJsonString(String json, String field) {
-        if (json == null || json.isEmpty()) return null;
-
-        String pattern = "\"" + field + "\"";
-        int idx = findFieldIndex(json, field);
-        if (idx < 0) return null;
-
-        int start = skipToValue(json, idx + pattern.length());
-        if (start < 0) return null;
-
-        // Handle null value
-        if (json.regionMatches(start, "null", 0, 4)) {
-            return null;
-        }
-
-        // Check if it's a string value
-        if (json.charAt(start) != '"') return null;
-
-        // Find end of string, handling escaped quotes
-        // 查找字符串结尾，处理转义引号
-        StringBuilder sb = new StringBuilder();
-        for (int i = start + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '\\' && i + 1 < json.length()) {
-                char next = json.charAt(i + 1);
-                switch (next) {
-                    case '"', '\\', '/' -> { sb.append(next); i++; }
-                    case 'n' -> { sb.append('\n'); i++; }
-                    case 'r' -> { sb.append('\r'); i++; }
-                    case 't' -> { sb.append('\t'); i++; }
-                    case 'b' -> { sb.append('\b'); i++; }
-                    case 'f' -> { sb.append('\f'); i++; }
-                    case 'u' -> {
-                        // Handle unicode escape (backslash-u followed by 4 hex digits)
-                        if (i + 5 < json.length()) {
-                            String hex = json.substring(i + 2, i + 6);
-                            try {
-                                sb.append((char) Integer.parseInt(hex, 16));
-                                i += 5;
-                            } catch (NumberFormatException e) {
-                                sb.append(c); // Invalid escape, keep backslash
-                            }
-                        } else {
-                            sb.append(c);
-                        }
-                    }
-                    default -> sb.append(c);
-                }
-            } else if (c == '"') {
-                return sb.toString();
-            } else {
-                sb.append(c);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Extract long field from JSON, handling null values.
-     * 从 JSON 中提取长整型字段，处理 null 值。
-     */
-    private Long extractJsonLong(String json, String field) {
-        if (json == null || json.isEmpty()) return null;
-
-        String pattern = "\"" + field + "\"";
-        int idx = findFieldIndex(json, field);
-        if (idx < 0) return null;
-
-        int start = skipToValue(json, idx + pattern.length());
-        if (start < 0) return null;
-
-        // Handle null value
-        if (json.regionMatches(start, "null", 0, 4)) {
-            return null;
-        }
-
-        // Find end of number
-        int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
-            end++;
-        }
-
-        if (end > start) {
-            try {
-                return Long.parseLong(json.substring(start, end));
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -695,7 +555,8 @@ public class OAuth2Client implements AutoCloseable {
             }
             if ("http".equalsIgnoreCase(scheme)) {
                 String host = uri.getHost();
-                if ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)) {
+                if ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)
+                        || "::1".equals(host)) {
                     return;
                 }
             }

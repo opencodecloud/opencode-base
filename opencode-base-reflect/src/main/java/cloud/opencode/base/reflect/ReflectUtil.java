@@ -59,7 +59,13 @@ public final class ReflectUtil {
      * @return the accessible object | 可访问对象
      */
     public static <T extends AccessibleObject> T setAccessible(T accessible) {
-        if (accessible != null && !accessible.canAccess(null)) {
+        if (accessible == null) {
+            return null;
+        }
+        // canAccess(null) is only valid for static members; instance members require a target
+        if (accessible instanceof Member member && !java.lang.reflect.Modifier.isStatic(member.getModifiers())) {
+            accessible.setAccessible(true);
+        } else if (!accessible.canAccess(null)) {
             accessible.setAccessible(true);
         }
         return accessible;

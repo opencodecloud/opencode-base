@@ -73,6 +73,25 @@ public enum TokenType {
     // Special operators
     MATCHES,        // matches
     INSTANCEOF,     // instanceof
+    IN,             // in
+    BETWEEN,        // between
+
+    // Bitwise operators
+    BIT_AND,        // &
+    BIT_OR,         // |
+    BIT_XOR,        // ^
+    BIT_NOT,        // ~
+    LSHIFT,         // <<
+    RSHIFT,         // >>
+
+    // Arrow (lambda)
+    ARROW,          // ->
+
+    // Elvis
+    ELVIS,          // ?:
+
+    // Map literal
+    MAP_LBRACE,     // #{
 
     // Punctuation
     LPAREN,         // (

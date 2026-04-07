@@ -3,7 +3,7 @@ package cloud.opencode.base.config.bind;
 import cloud.opencode.base.config.Config;
 import cloud.opencode.base.config.OpenConfigException;
 import cloud.opencode.base.config.converter.ConverterRegistry;
-import cloud.opencode.base.config.jdk25.DefaultValue;
+import cloud.opencode.base.config.bind.DefaultValue;
 import cloud.opencode.base.config.jdk25.Required;
 
 import java.lang.reflect.Constructor;
@@ -86,9 +86,17 @@ public class RecordConfigBinder {
         String value = config.getString(key, null);
 
         if (value == null) {
+            // Check new annotation (bind.DefaultValue) first, then legacy (jdk25.DefaultValue)
             DefaultValue defaultValue = component.getAnnotation(DefaultValue.class);
             if (defaultValue != null) {
                 value = defaultValue.value();
+            } else {
+                @SuppressWarnings("deprecation")
+                cloud.opencode.base.config.jdk25.DefaultValue legacyDefault =
+                        component.getAnnotation(cloud.opencode.base.config.jdk25.DefaultValue.class);
+                if (legacyDefault != null) {
+                    value = legacyDefault.value();
+                }
             }
         }
 

@@ -27,8 +27,8 @@ class EmailReceiveExceptionTest {
         void testConstructorWithMessage() {
             EmailReceiveException exception = new EmailReceiveException("Receive failed");
 
-            assertThat(exception.getMessage()).isEqualTo("Receive failed");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
+            assertThat(exception.getRawMessage()).isEqualTo("Receive failed");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
             assertThat(exception.getReceivedEmail()).isNull();
             assertThat(exception.getFolder()).isNull();
             assertThat(exception.getMessageId()).isNull();
@@ -39,8 +39,8 @@ class EmailReceiveExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             EmailReceiveException exception = new EmailReceiveException("Folder not found", EmailErrorCode.FOLDER_NOT_FOUND);
 
-            assertThat(exception.getMessage()).isEqualTo("Folder not found");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.FOLDER_NOT_FOUND);
+            assertThat(exception.getRawMessage()).isEqualTo("Folder not found");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.FOLDER_NOT_FOUND);
         }
 
         @Test
@@ -49,7 +49,7 @@ class EmailReceiveExceptionTest {
             Throwable cause = new RuntimeException("Connection reset");
             EmailReceiveException exception = new EmailReceiveException("Receive failed", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Receive failed");
+            assertThat(exception.getRawMessage()).isEqualTo("Receive failed");
             assertThat(exception.getCause()).isEqualTo(cause);
         }
 
@@ -59,9 +59,9 @@ class EmailReceiveExceptionTest {
             Throwable cause = new RuntimeException("Timeout");
             EmailReceiveException exception = new EmailReceiveException("Receive timeout", cause, EmailErrorCode.RECEIVE_TIMEOUT);
 
-            assertThat(exception.getMessage()).isEqualTo("Receive timeout");
+            assertThat(exception.getRawMessage()).isEqualTo("Receive timeout");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.RECEIVE_TIMEOUT);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.RECEIVE_TIMEOUT);
         }
 
         @Test
@@ -82,9 +82,9 @@ class EmailReceiveExceptionTest {
                     email
             );
 
-            assertThat(exception.getMessage()).isEqualTo("Parse failed");
+            assertThat(exception.getRawMessage()).isEqualTo("Parse failed");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.MESSAGE_PARSE_FAILED);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.MESSAGE_PARSE_FAILED);
             assertThat(exception.getFolder()).isEqualTo("INBOX");
             assertThat(exception.getMessageId()).isEqualTo("<123@test.com>");
             assertThat(exception.getReceivedEmail()).isEqualTo(email);
@@ -101,7 +101,7 @@ class EmailReceiveExceptionTest {
             EmailReceiveException exception = EmailReceiveException.folderNotFound("SENT");
 
             assertThat(exception.getMessage()).contains("SENT");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.FOLDER_NOT_FOUND);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.FOLDER_NOT_FOUND);
             assertThat(exception.getFolder()).isEqualTo("SENT");
             assertThat(exception.getMessageId()).isNull();
             assertThat(exception.isRetryable()).isFalse();
@@ -113,7 +113,7 @@ class EmailReceiveExceptionTest {
             EmailReceiveException exception = EmailReceiveException.messageNotFound("<abc123@example.com>");
 
             assertThat(exception.getMessage()).contains("<abc123@example.com>");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.MESSAGE_NOT_FOUND);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.MESSAGE_NOT_FOUND);
             assertThat(exception.getMessageId()).isEqualTo("<abc123@example.com>");
             assertThat(exception.getFolder()).isNull();
             assertThat(exception.isRetryable()).isFalse();
@@ -127,7 +127,7 @@ class EmailReceiveExceptionTest {
 
             assertThat(exception.getMessage()).contains("Connection lost");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.CONNECTION_LOST);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.CONNECTION_LOST);
             assertThat(exception.isRetryable()).isTrue();
         }
 
@@ -137,7 +137,7 @@ class EmailReceiveExceptionTest {
             EmailReceiveException exception = EmailReceiveException.timeout();
 
             assertThat(exception.getMessage()).contains("timed out");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.RECEIVE_TIMEOUT);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.RECEIVE_TIMEOUT);
             assertThat(exception.isRetryable()).isTrue();
         }
 
@@ -149,7 +149,7 @@ class EmailReceiveExceptionTest {
 
             assertThat(exception.getMessage()).contains("<msg@test.com>");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.MESSAGE_PARSE_FAILED);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.MESSAGE_PARSE_FAILED);
             assertThat(exception.getMessageId()).isEqualTo("<msg@test.com>");
             assertThat(exception.isRetryable()).isFalse();
         }

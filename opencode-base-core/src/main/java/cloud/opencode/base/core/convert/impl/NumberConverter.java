@@ -115,7 +115,10 @@ public class NumberConverter<T extends Number> implements Converter<T> {
             if (str.startsWith("0") && str.length() > 1 && !str.contains(".")) {
                 return Long.parseLong(str.substring(1), 8);
             }
-            // 普通数字解析
+            // 普通数字解析 — guard against DoS via extremely long strings
+            if (str.length() > 10_000) {
+                return null;
+            }
             return new BigDecimal(str);
         } catch (NumberFormatException e) {
             return null;

@@ -13,8 +13,11 @@
  *   <li>Chinese Zodiac (12 animals) - 十二生肖</li>
  *   <li>Western Constellation - 十二星座</li>
  *   <li>GanZhi (Heavenly Stems &amp; Earthly Branches) - 天干地支</li>
+ *   <li>BaZi (Four Pillars of Destiny) - 八字四柱</li>
+ *   <li>NaYin (Sexagenary Cycle Sounds) - 纳音五行</li>
  *   <li>WuXing (Five Elements) - 五行</li>
  *   <li>Traditional Festivals - 传统节日</li>
+ *   <li>LunarYear / LunarMonth information - 农历年/月信息</li>
  *   <li>Memorial Days - 纪念日</li>
  *   <li>YiJi Divination (Auspicious/Inauspicious) - 黄历宜忌</li>
  * </ul>

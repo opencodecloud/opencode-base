@@ -27,9 +27,7 @@ class CompressionAlgorithmTest {
                     .containsExactly(
                             CompressionAlgorithm.NONE,
                             CompressionAlgorithm.GZIP,
-                            CompressionAlgorithm.LZ4,
-                            CompressionAlgorithm.SNAPPY,
-                            CompressionAlgorithm.ZSTD
+                            CompressionAlgorithm.DEFLATE
                     );
         }
 
@@ -38,9 +36,7 @@ class CompressionAlgorithmTest {
         void valueOfShouldReturnCorrectEnum() {
             assertThat(CompressionAlgorithm.valueOf("NONE")).isEqualTo(CompressionAlgorithm.NONE);
             assertThat(CompressionAlgorithm.valueOf("GZIP")).isEqualTo(CompressionAlgorithm.GZIP);
-            assertThat(CompressionAlgorithm.valueOf("LZ4")).isEqualTo(CompressionAlgorithm.LZ4);
-            assertThat(CompressionAlgorithm.valueOf("SNAPPY")).isEqualTo(CompressionAlgorithm.SNAPPY);
-            assertThat(CompressionAlgorithm.valueOf("ZSTD")).isEqualTo(CompressionAlgorithm.ZSTD);
+            assertThat(CompressionAlgorithm.valueOf("DEFLATE")).isEqualTo(CompressionAlgorithm.DEFLATE);
         }
     }
 
@@ -61,21 +57,9 @@ class CompressionAlgorithmTest {
         }
 
         @Test
-        @DisplayName("LZ4 should have name 'lz4'")
-        void lz4ShouldHaveCorrectName() {
-            assertThat(CompressionAlgorithm.LZ4.getName()).isEqualTo("lz4");
-        }
-
-        @Test
-        @DisplayName("SNAPPY should have name 'snappy'")
-        void snappyShouldHaveCorrectName() {
-            assertThat(CompressionAlgorithm.SNAPPY.getName()).isEqualTo("snappy");
-        }
-
-        @Test
-        @DisplayName("ZSTD should have name 'zstd'")
-        void zstdShouldHaveCorrectName() {
-            assertThat(CompressionAlgorithm.ZSTD.getName()).isEqualTo("zstd");
+        @DisplayName("DEFLATE should have name 'deflate'")
+        void deflateShouldHaveCorrectName() {
+            assertThat(CompressionAlgorithm.DEFLATE.getName()).isEqualTo("deflate");
         }
     }
 
@@ -96,21 +80,9 @@ class CompressionAlgorithmTest {
         }
 
         @Test
-        @DisplayName("LZ4 should have id 2")
-        void lz4ShouldHaveId2() {
-            assertThat(CompressionAlgorithm.LZ4.getId()).isEqualTo((byte) 2);
-        }
-
-        @Test
-        @DisplayName("SNAPPY should have id 3")
-        void snappyShouldHaveId3() {
-            assertThat(CompressionAlgorithm.SNAPPY.getId()).isEqualTo((byte) 3);
-        }
-
-        @Test
-        @DisplayName("ZSTD should have id 4")
-        void zstdShouldHaveId4() {
-            assertThat(CompressionAlgorithm.ZSTD.getId()).isEqualTo((byte) 4);
+        @DisplayName("DEFLATE should have id 5")
+        void deflateShouldHaveId5() {
+            assertThat(CompressionAlgorithm.DEFLATE.getId()).isEqualTo((byte) 5);
         }
 
         @Test
@@ -140,21 +112,9 @@ class CompressionAlgorithmTest {
         }
 
         @Test
-        @DisplayName("LZ4 should not be built-in")
-        void lz4ShouldNotBeBuiltIn() {
-            assertThat(CompressionAlgorithm.LZ4.isBuiltIn()).isFalse();
-        }
-
-        @Test
-        @DisplayName("SNAPPY should not be built-in")
-        void snappyShouldNotBeBuiltIn() {
-            assertThat(CompressionAlgorithm.SNAPPY.isBuiltIn()).isFalse();
-        }
-
-        @Test
-        @DisplayName("ZSTD should not be built-in")
-        void zstdShouldNotBeBuiltIn() {
-            assertThat(CompressionAlgorithm.ZSTD.isBuiltIn()).isFalse();
+        @DisplayName("DEFLATE should be built-in")
+        void deflateShouldBeBuiltIn() {
+            assertThat(CompressionAlgorithm.DEFLATE.isBuiltIn()).isTrue();
         }
     }
 
@@ -175,27 +135,9 @@ class CompressionAlgorithmTest {
         }
 
         @Test
-        @DisplayName("LZ4 availability depends on classpath")
-        void lz4AvailabilityDependsOnClasspath() {
-            // Just verify the method doesn't throw
-            boolean available = CompressionAlgorithm.LZ4.isAvailable();
-            assertThat(available).isIn(true, false);
-        }
-
-        @Test
-        @DisplayName("SNAPPY availability depends on classpath")
-        void snappyAvailabilityDependsOnClasspath() {
-            // Just verify the method doesn't throw
-            boolean available = CompressionAlgorithm.SNAPPY.isAvailable();
-            assertThat(available).isIn(true, false);
-        }
-
-        @Test
-        @DisplayName("ZSTD availability depends on classpath")
-        void zstdAvailabilityDependsOnClasspath() {
-            // Just verify the method doesn't throw
-            boolean available = CompressionAlgorithm.ZSTD.isAvailable();
-            assertThat(available).isIn(true, false);
+        @DisplayName("DEFLATE should always be available (JDK built-in)")
+        void deflateShouldAlwaysBeAvailable() {
+            assertThat(CompressionAlgorithm.DEFLATE.isAvailable()).isTrue();
         }
     }
 
@@ -208,9 +150,7 @@ class CompressionAlgorithmTest {
         void fromIdShouldReturnCorrectAlgorithm() {
             assertThat(CompressionAlgorithm.fromId((byte) 0)).isEqualTo(CompressionAlgorithm.NONE);
             assertThat(CompressionAlgorithm.fromId((byte) 1)).isEqualTo(CompressionAlgorithm.GZIP);
-            assertThat(CompressionAlgorithm.fromId((byte) 2)).isEqualTo(CompressionAlgorithm.LZ4);
-            assertThat(CompressionAlgorithm.fromId((byte) 3)).isEqualTo(CompressionAlgorithm.SNAPPY);
-            assertThat(CompressionAlgorithm.fromId((byte) 4)).isEqualTo(CompressionAlgorithm.ZSTD);
+            assertThat(CompressionAlgorithm.fromId((byte) 5)).isEqualTo(CompressionAlgorithm.DEFLATE);
         }
 
         @Test
@@ -230,9 +170,7 @@ class CompressionAlgorithmTest {
         void fromNameShouldReturnCorrectAlgorithm() {
             assertThat(CompressionAlgorithm.fromName("none")).isEqualTo(CompressionAlgorithm.NONE);
             assertThat(CompressionAlgorithm.fromName("gzip")).isEqualTo(CompressionAlgorithm.GZIP);
-            assertThat(CompressionAlgorithm.fromName("lz4")).isEqualTo(CompressionAlgorithm.LZ4);
-            assertThat(CompressionAlgorithm.fromName("snappy")).isEqualTo(CompressionAlgorithm.SNAPPY);
-            assertThat(CompressionAlgorithm.fromName("zstd")).isEqualTo(CompressionAlgorithm.ZSTD);
+            assertThat(CompressionAlgorithm.fromName("deflate")).isEqualTo(CompressionAlgorithm.DEFLATE);
         }
 
         @Test

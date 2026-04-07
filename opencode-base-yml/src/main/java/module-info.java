@@ -25,9 +25,6 @@ module cloud.opencode.base.yml {
     // Required modules
     requires transitive cloud.opencode.base.core;
 
-    // Optional dependency on SnakeYAML
-    requires static org.yaml.snakeyaml;
-
     // Export all public packages
     exports cloud.opencode.base.yml;
     exports cloud.opencode.base.yml.bind;
@@ -36,12 +33,18 @@ module cloud.opencode.base.yml {
     exports cloud.opencode.base.yml.path;
     exports cloud.opencode.base.yml.placeholder;
     exports cloud.opencode.base.yml.security;
+    exports cloud.opencode.base.yml.schema;
     exports cloud.opencode.base.yml.spi;
+    exports cloud.opencode.base.yml.diff;
+    exports cloud.opencode.base.yml.transform;
+    exports cloud.opencode.base.yml.include;
+    exports cloud.opencode.base.yml.profile;
 
     // SPI uses
     uses cloud.opencode.base.yml.spi.YmlProvider;
 
-    // Provide SnakeYAML implementation
+    // SPI provides
     provides cloud.opencode.base.yml.spi.YmlProvider
-        with cloud.opencode.base.yml.snakeyaml.SnakeYamlProvider;
+        with cloud.opencode.base.yml.internal.BuiltinYmlProvider;
+
 }

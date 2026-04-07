@@ -153,7 +153,7 @@ public final class Aggregation {
         List<DataPoint> stdPoints = new ArrayList<>();
 
         for (int i = window - 1; i < points.size(); i++) {
-            double sum = 0, min = Double.MAX_VALUE, max = Double.MIN_VALUE;
+            double sum = 0, min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
             for (int j = i - window + 1; j <= i; j++) {
                 double v = points.get(j).value();
                 sum += v;

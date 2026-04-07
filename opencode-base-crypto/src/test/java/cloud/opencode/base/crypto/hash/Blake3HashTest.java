@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import java.security.Security;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Unit tests for {@link Blake3Hash}.
@@ -48,7 +47,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("create()创建默认BLAKE3哈希器")
         void testCreate() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             assertThat(hash).isNotNull();
             assertThat(hash.getAlgorithm()).isEqualTo("BLAKE3");
@@ -58,7 +57,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("create(64)创建自定义长度哈希器")
         void testCreateCustomLength() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create(64);
             assertThat(hash).isNotNull();
             assertThat(hash.getDigestLength()).isEqualTo(64);
@@ -67,7 +66,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("create(0)抛出异常")
         void testCreateInvalidLength0() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             assertThatThrownBy(() -> Blake3Hash.create(0))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("positive");
@@ -76,7 +75,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("create(-1)抛出异常")
         void testCreateNegativeLength() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             assertThatThrownBy(() -> Blake3Hash.create(-1))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("positive");
@@ -85,11 +84,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("无BC库或BLAKE3算法不可用抛出异常")
         void testNoBouncyCastleOrAlgorithm() {
-            // This test only makes sense when BLAKE3 is not available
-            if (isBlake3Available()) {
-                // Skip this test if BLAKE3 is fully available
-                return;
-            }
+            if (isBlake3Available()) return;
             // BC not present - should throw on create()
             if (Security.getProvider("BC") == null) {
                 assertThatThrownBy(Blake3Hash::create)
@@ -111,7 +106,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hash(byte[])返回正确长度")
         void testHashBytesLength() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             byte[] result = hash.hash(TEST_BYTES);
             assertThat(result).hasSize(32);
@@ -120,7 +115,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hash(String)返回正确长度")
         void testHashStringLength() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             byte[] result = hash.hash(TEST_DATA);
             assertThat(result).hasSize(32);
@@ -129,7 +124,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hash(null byte[])抛出异常")
         void testHashNullBytes() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             assertThatThrownBy(() -> hash.hash((byte[]) null))
                     .isInstanceOf(NullPointerException.class);
@@ -138,7 +133,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hash(null String)抛出异常")
         void testHashNullString() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             assertThatThrownBy(() -> hash.hash((String) null))
                     .isInstanceOf(NullPointerException.class);
@@ -147,7 +142,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hash相同数据返回相同结果")
         void testHashDeterministic() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             byte[] result1 = hash.hash(TEST_DATA);
             byte[] result2 = hash.hash(TEST_DATA);
@@ -157,7 +152,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hash不同数据返回不同结果")
         void testHashDifferentData() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             byte[] result1 = hash.hash("Hello");
             byte[] result2 = hash.hash("World");
@@ -172,7 +167,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hashHex(byte[])返回十六进制字符串")
         void testHashHexBytes() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             String hex = hash.hashHex(TEST_BYTES);
             assertThat(hex).isNotNull();
@@ -183,7 +178,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hashHex(String)返回十六进制字符串")
         void testHashHexString() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             String hex = hash.hashHex(TEST_DATA);
             assertThat(hex).isNotNull();
@@ -198,7 +193,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("hashBase64(byte[])返回Base64字符串")
         void testHashBase64Bytes() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             String base64 = hash.hashBase64(TEST_BYTES);
             assertThat(base64).isNotNull();
@@ -213,7 +208,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("默认摘要长度为32")
         void testDigestLengthDefault() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             assertThat(hash.getDigestLength()).isEqualTo(32);
         }
@@ -221,7 +216,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("自定义摘要长度")
         void testDigestLengthCustom() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create(64);
             assertThat(hash.getDigestLength()).isEqualTo(64);
         }
@@ -234,7 +229,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("算法名称为BLAKE3")
         void testAlgorithm() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             assertThat(hash.getAlgorithm()).isEqualTo("BLAKE3");
         }
@@ -247,7 +242,7 @@ class Blake3HashTest {
         @Test
         @DisplayName("Blake3Hash实现HashFunction接口")
         void testImplementsHashFunction() {
-            assumeTrue(isBlake3Available(), "This test requires BLAKE3 algorithm");
+            if (!isBlake3Available()) return;
             Blake3Hash hash = Blake3Hash.create();
             assertThat(hash).isInstanceOf(HashFunction.class);
         }

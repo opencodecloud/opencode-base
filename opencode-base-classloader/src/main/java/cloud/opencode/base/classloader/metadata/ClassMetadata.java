@@ -57,6 +57,9 @@ public final class ClassMetadata {
     private final List<FieldMetadata> fields;
     private final List<AnnotationMetadata> annotations;
     private final String sourceFile;
+    private final String genericSignature;
+    private final List<String> typeParameters;
+    private final List<RecordComponentMetadata> recordComponents;
 
     /**
      * Create class metadata using builder
@@ -82,6 +85,10 @@ public final class ClassMetadata {
         this.fields = builder.fields != null ? List.copyOf(builder.fields) : List.of();
         this.annotations = builder.annotations != null ? List.copyOf(builder.annotations) : List.of();
         this.sourceFile = builder.sourceFile;
+        this.genericSignature = builder.genericSignature;
+        this.typeParameters = builder.typeParameters != null ? List.copyOf(builder.typeParameters) : List.of();
+        this.recordComponents = builder.recordComponents != null ?
+                List.copyOf(builder.recordComponents) : List.of();
     }
 
     // ==================== Getters ====================
@@ -264,6 +271,46 @@ public final class ClassMetadata {
      */
     public String sourceFile() {
         return sourceFile;
+    }
+
+    /**
+     * Get generic signature of the class
+     * 获取类的泛型签名
+     *
+     * @return generic signature or null if not generic | 泛型签名，非泛型类返回 null
+     */
+    public String getGenericSignature() {
+        return genericSignature;
+    }
+
+    /**
+     * Get type parameters of the class
+     * 获取类的类型参数列表
+     *
+     * @return list of type parameter strings (e.g. ["T", "K extends Comparable&lt;K&gt;"]) | 类型参数字符串列表
+     */
+    public List<String> getTypeParameters() {
+        return typeParameters;
+    }
+
+    /**
+     * Get record components (empty list if not a record)
+     * 获取 Record 组件列表（非 Record 类返回空列表）
+     *
+     * @return list of record component metadata | Record 组件元数据列表
+     */
+    public List<RecordComponentMetadata> getRecordComponents() {
+        return recordComponents;
+    }
+
+    /**
+     * Check if the class has type parameters
+     * 检查类是否有类型参数
+     *
+     * @return true if has type parameters | 有类型参数返回 true
+     */
+    public boolean hasTypeParameters() {
+        return !typeParameters.isEmpty();
     }
 
     // ==================== Convenience Methods | 便捷方法 ====================
@@ -465,6 +512,9 @@ public final class ClassMetadata {
         private List<FieldMetadata> fields;
         private List<AnnotationMetadata> annotations;
         private String sourceFile;
+        private String genericSignature;
+        private List<String> typeParameters;
+        private List<RecordComponentMetadata> recordComponents;
 
         public Builder className(String className) {
             this.className = className;
@@ -533,6 +583,21 @@ public final class ClassMetadata {
 
         public Builder sourceFile(String sourceFile) {
             this.sourceFile = sourceFile;
+            return this;
+        }
+
+        public Builder genericSignature(String genericSignature) {
+            this.genericSignature = genericSignature;
+            return this;
+        }
+
+        public Builder typeParameters(List<String> typeParameters) {
+            this.typeParameters = typeParameters;
+            return this;
+        }
+
+        public Builder recordComponents(List<RecordComponentMetadata> recordComponents) {
+            this.recordComponents = recordComponents;
             return this;
         }
 

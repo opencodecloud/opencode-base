@@ -75,6 +75,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class SecureGeoFenceService {
 
+    /**
+     * Maximum number of tracked users to prevent unbounded memory growth
+     * 最大跟踪用户数量，防止内存无限增长
+     */
+    private static final int MAX_LOCATION_HISTORIES = 100_000;
+
     private final Map<String, GeoFence> fences = new ConcurrentHashMap<>();
     private final Map<String, LocationHistory> locationHistories = new ConcurrentHashMap<>();
     private final Clock clock;
@@ -222,11 +228,23 @@ public class SecureGeoFenceService {
                         String.format("Impossible travel speed detected: %.2f km/h (max: %.2f km/h)",
                             speedKmh, maxSpeedKmh));
                 }
+            } else if (distanceKm > 0.001) {
+                // Zero or negative time with non-trivial distance: teleportation
+                throw new GeoSecurityException(
+                    String.format("Impossible teleportation detected: %.4f km in zero time", distanceKm));
             }
         }
 
-        // Update location history
-        locationHistories.put(userId, new LocationHistory(point, timestamp));
+        // Update location history atomically (guard against unbounded growth)
+        final LocationHistory newHistory = new LocationHistory(point, timestamp);
+        locationHistories.compute(userId, (key, existing) -> {
+            if (existing == null && locationHistories.size() >= MAX_LOCATION_HISTORIES) {
+                throw new GeoSecurityException(
+                    "Location history capacity exceeded (" + MAX_LOCATION_HISTORIES
+                    + "). Call clearHistory() to release entries.");
+            }
+            return newHistory;
+        });
         return true;
     }
 
@@ -304,6 +322,7 @@ public class SecureGeoFenceService {
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
             + Math.cos(lat1) * Math.cos(lat2)
             * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        a = Math.max(0.0, Math.min(a, 1.0));
 
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 

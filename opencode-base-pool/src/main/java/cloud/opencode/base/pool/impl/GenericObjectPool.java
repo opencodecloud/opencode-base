@@ -2,6 +2,7 @@ package cloud.opencode.base.pool.impl;
 
 import cloud.opencode.base.pool.ObjectPool;
 import cloud.opencode.base.pool.PoolConfig;
+import cloud.opencode.base.pool.PoolEventListener;
 import cloud.opencode.base.pool.PooledObject;
 import cloud.opencode.base.pool.PooledObjectFactory;
 import cloud.opencode.base.pool.exception.OpenPoolException;
@@ -12,6 +13,7 @@ import cloud.opencode.base.pool.metrics.PoolMetrics;
 import cloud.opencode.base.pool.policy.WaitPolicy;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -84,9 +86,11 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
     private final Deque<PooledObject<T>> idleObjects;
     private final Map<IdentityWrapper<T>, PooledObject<T>> allObjects;
     private final AtomicInteger numActive;
+    private final AtomicInteger numIdle;
     private final Semaphore permits;
     private final DefaultPoolMetrics metrics;
     private final ScheduledExecutorService evictionExecutor;
+    private final PoolEventListener<T> eventListener;
     private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
@@ -106,16 +110,19 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
      * @param factory the object factory - 对象工厂
      * @param config  the pool configuration - 池配置
      */
+    @SuppressWarnings("unchecked")
     public GenericObjectPool(PooledObjectFactory<T> factory, PoolConfig config) {
         this.factory = java.util.Objects.requireNonNull(factory, "factory cannot be null");
         this.config = java.util.Objects.requireNonNull(config, "config cannot be null");
         this.idleObjects = new ConcurrentLinkedDeque<>();
         this.allObjects = new ConcurrentHashMap<>();
         this.numActive = new AtomicInteger(0);
+        this.numIdle = new AtomicInteger(0);
         this.permits = new Semaphore(config.maxTotal(), true);
         this.metrics = new DefaultPoolMetrics();
         this.metrics.setActiveSupplier(this::getNumActive);
         this.metrics.setIdleSupplier(this::getNumIdle);
+        this.eventListener = (PoolEventListener<T>) config.eventListener();
 
         // Start eviction task if configured
         ScheduledExecutorService evictionExec = null;
@@ -164,6 +171,12 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
 
         // Acquire permit
         if (!tryAcquirePermit(timeout)) {
+            fireOnExhausted();
+            // Only fire onTimeout when blocking wait was attempted (not FAIL/instant rejection)
+            if (config.blockWhenExhausted()) {
+                Duration waited = Duration.ofNanos(System.nanoTime() - startNanos);
+                fireOnTimeout(waited);
+            }
             throw new OpenPoolException("Timeout waiting for available object");
         }
 
@@ -173,6 +186,12 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
                 // Try to get from idle queue
                 PooledObject<T> pooledObject = pollIdle();
 
+                // Check max object lifetime for idle objects
+                if (pooledObject != null && isExpired(pooledObject)) {
+                    invalidateInternal(pooledObject);
+                    pooledObject = null;
+                }
+
                 if (pooledObject == null) {
                     // Create new object
                     pooledObject = createObject();
@@ -180,10 +199,14 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
 
                 // Validate and activate
                 if (validateAndActivate(pooledObject)) {
+                    long borrowNanos = System.nanoTime();
+                    ((DefaultPooledObject<T>) pooledObject).markBorrowed(borrowNanos);
                     numActive.incrementAndGet();
                     metrics.recordBorrow();
-                    metrics.recordWaitDuration(Duration.ofNanos(System.nanoTime() - startNanos));
-                    return pooledObject.getObject();
+                    metrics.recordWaitNanos(borrowNanos - startNanos);
+                    T obj = pooledObject.getObject();
+                    fireOnBorrow(obj);
+                    return obj;
                 }
 
                 // Validation failed, check remaining time
@@ -221,6 +244,7 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
 
         numActive.decrementAndGet();
 
+        boolean returned = false;
         try {
             // Validate on return
             if (config.testOnReturn() && !factory.validateObject(pooledObject)) {
@@ -241,7 +265,7 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
             ((DefaultPooledObject<T>) pooledObject).markReturned();
 
             // Check max idle
-            if (idleObjects.size() >= config.maxIdle()) {
+            if (numIdle.get() >= config.maxIdle()) {
                 invalidateInternal(pooledObject);
             } else {
                 if (config.lifo()) {
@@ -249,6 +273,8 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
                 } else {
                     idleObjects.addLast(pooledObject);
                 }
+                numIdle.incrementAndGet();
+                returned = true;
             }
 
         } catch (Exception e) {
@@ -256,6 +282,9 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
         } finally {
             permits.release();
             metrics.recordReturn();
+            if (returned) {
+                fireOnReturn(obj);
+            }
         }
     }
 
@@ -263,9 +292,13 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
     public void invalidateObject(T obj) {
         PooledObject<T> pooledObject = allObjects.get(new IdentityWrapper<>(obj));
         if (pooledObject != null) {
+            boolean wasActive = pooledObject.compareAndSetState(
+                    PooledObjectState.ALLOCATED, PooledObjectState.INVALID);
             invalidateInternal(pooledObject);
-            numActive.decrementAndGet();
-            permits.release();
+            if (wasActive) {
+                numActive.decrementAndGet();
+                permits.release();
+            }
         }
     }
 
@@ -288,6 +321,7 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
                     PooledObjectState.ALLOCATED, PooledObjectState.IDLE);
             ((DefaultPooledObject<T>) pooledObject).markReturned();
             idleObjects.addLast(pooledObject);
+            numIdle.incrementAndGet();
         } catch (Exception e) {
             throw e instanceof OpenPoolException pe ? pe :
                     new OpenPoolException("Failed to add object", e);
@@ -296,7 +330,7 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
 
     @Override
     public int getNumIdle() {
-        return idleObjects.size();
+        return Math.max(0, numIdle.get());
     }
 
     @Override
@@ -308,6 +342,7 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
     public void clear() {
         PooledObject<T> pooledObject;
         while ((pooledObject = idleObjects.poll()) != null) {
+            numIdle.decrementAndGet();
             invalidateInternal(pooledObject);
             // No permit release needed: idle objects do not hold permits.
             // Permits track only active (borrowed) objects.
@@ -372,7 +407,11 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
     }
 
     private PooledObject<T> pollIdle() {
-        return config.lifo() ? idleObjects.pollFirst() : idleObjects.pollLast();
+        PooledObject<T> obj = config.lifo() ? idleObjects.pollFirst() : idleObjects.pollLast();
+        if (obj != null) {
+            numIdle.decrementAndGet();
+        }
+        return obj;
     }
 
     private PooledObject<T> createObject() throws OpenPoolException {
@@ -382,6 +421,7 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
         }
         allObjects.put(new IdentityWrapper<>(pooledObject.getObject()), pooledObject);
         metrics.recordCreate();
+        fireOnCreate(pooledObject.getObject());
         return pooledObject;
     }
 
@@ -399,7 +439,6 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
             }
 
             factory.activateObject(pooledObject);
-            ((DefaultPooledObject<T>) pooledObject).markBorrowed();
             return true;
 
         } catch (Exception e) {
@@ -411,6 +450,7 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
 
     private void invalidateInternal(PooledObject<T> pooledObject) {
         pooledObject.compareAndSetState(pooledObject.getState(), PooledObjectState.INVALID);
+        fireOnDestroy(pooledObject.getObject());
         try {
             factory.destroyObject(pooledObject);
         } catch (Exception e) {
@@ -432,11 +472,12 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
     private void evict() {
         if (closed.get()) return;
 
-        int numTests = Math.min(config.numTestsPerEvictionRun(), idleObjects.size());
+        int numTests = Math.min(config.numTestsPerEvictionRun(), numIdle.get());
 
         for (int i = 0; i < numTests; i++) {
             PooledObject<T> pooledObject = idleObjects.pollFirst();
             if (pooledObject == null) break;
+            numIdle.decrementAndGet();
 
             boolean evict = false;
 
@@ -458,18 +499,25 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
                 }
             }
 
+            // Check max object lifetime
+            if (!evict && isExpired(pooledObject)) {
+                evict = true;
+            }
+
             if (evict) {
+                fireOnEvict(pooledObject.getObject());
                 invalidateInternal(pooledObject);
                 // No permit release needed: idle objects do not hold permits.
                 // Permits track only active (borrowed) objects.
             } else {
                 // Return to queue tail
                 idleObjects.addLast(pooledObject);
+                numIdle.incrementAndGet();
             }
         }
 
         // Ensure minimum idle
-        while (idleObjects.size() < config.minIdle() && !closed.get()) {
+        while (numIdle.get() < config.minIdle() && !closed.get()) {
             try {
                 addObject();
             } catch (OpenPoolException e) {
@@ -479,4 +527,86 @@ public class GenericObjectPool<T> implements ObjectPool<T> {
         }
     }
 
+    // ==================== Lifetime Check ====================
+
+    private boolean isExpired(PooledObject<T> pooledObject) {
+        if (!config.isLifetimeEnabled()) {
+            return false;
+        }
+        // Avoid Instant/Duration allocation: compare epoch millis directly
+        long ageMillis = System.currentTimeMillis() - pooledObject.getCreateInstant().toEpochMilli();
+        return ageMillis > config.maxObjectLifetime().toMillis();
+    }
+
+    // ==================== Event Listener Helpers ====================
+
+    private void fireOnBorrow(T object) {
+        if (eventListener != null) {
+            try {
+                eventListener.onBorrow(object);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Exception in pool event listener onBorrow", e);
+            }
+        }
+    }
+
+    private void fireOnReturn(T object) {
+        if (eventListener != null) {
+            try {
+                eventListener.onReturn(object);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Exception in pool event listener onReturn", e);
+            }
+        }
+    }
+
+    private void fireOnCreate(T object) {
+        if (eventListener != null) {
+            try {
+                eventListener.onCreate(object);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Exception in pool event listener onCreate", e);
+            }
+        }
+    }
+
+    private void fireOnDestroy(T object) {
+        if (eventListener != null) {
+            try {
+                eventListener.onDestroy(object);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Exception in pool event listener onDestroy", e);
+            }
+        }
+    }
+
+    private void fireOnEvict(T object) {
+        if (eventListener != null) {
+            try {
+                eventListener.onEvict(object);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Exception in pool event listener onEvict", e);
+            }
+        }
+    }
+
+    private void fireOnExhausted() {
+        if (eventListener != null) {
+            try {
+                eventListener.onExhausted();
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Exception in pool event listener onExhausted", e);
+            }
+        }
+    }
+
+    private void fireOnTimeout(Duration waitDuration) {
+        if (eventListener != null) {
+            try {
+                eventListener.onTimeout(waitDuration);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING, "Exception in pool event listener onTimeout", e);
+            }
+        }
+    }
 }

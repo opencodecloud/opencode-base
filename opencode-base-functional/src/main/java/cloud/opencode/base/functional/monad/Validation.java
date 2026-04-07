@@ -1,5 +1,6 @@
 package cloud.opencode.base.functional.monad;
 
+import cloud.opencode.base.functional.exception.OpenFunctionalException;
 import cloud.opencode.base.functional.function.TriFunction;
 
 import java.util.ArrayList;
@@ -7,7 +8,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
  * Validation Monad - Accumulating error validation
@@ -99,6 +102,7 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
      * @return Invalid containing the error
      */
     static <E, T> Validation<E, T> invalid(E error) {
+        Objects.requireNonNull(error, "error must not be null");
         return new Invalid<>(List.of(error));
     }
 
@@ -106,12 +110,16 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
      * Create an Invalid result with multiple errors
      * 创建带多个错误的无效结果
      *
-     * @param errors the errors - 错误列表
+     * @param errors the errors (must not be null or contain null elements) - 错误列表（不能为 null 或包含 null 元素）
      * @param <E>    error type - 错误类型
      * @param <T>    value type - 值类型
      * @return Invalid containing the errors
      */
     static <E, T> Validation<E, T> invalid(List<E> errors) {
+        Objects.requireNonNull(errors, "errors must not be null");
+        if (errors.isEmpty()) {
+            throw new IllegalArgumentException("errors must not be empty");
+        }
         return new Invalid<>(errors);
     }
 
@@ -216,7 +224,133 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
     <R> R fold(Function<? super List<E>, ? extends R> ifInvalid,
                Function<? super T, ? extends R> ifValid);
 
+    // ==================== Error Transformation | 错误转换 ====================
+
+    /**
+     * Transform the error type if Invalid
+     * 如果无效则转换错误类型
+     *
+     * <p>If this is Valid, returns itself (cast). If Invalid, transforms each error
+     * using the mapper function.</p>
+     * <p>如果有效，返回自身（类型转换）。如果无效，使用映射函数转换每个错误。</p>
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>
+     * Validation&lt;String, Integer&gt; v = Validation.invalid("bad");
+     * Validation&lt;Error, Integer&gt; mapped = v.mapError(Error::new);
+     * </pre>
+     *
+     * @param mapper error transformation function - 错误转换函数
+     * @param <E2>   new error type - 新的错误类型
+     * @return Validation with transformed errors - 错误已转换的 Validation
+     */
+    <E2> Validation<E2, T> mapError(Function<? super E, ? extends E2> mapper);
+
+    // ==================== Side Effects | 副作用 ====================
+
+    /**
+     * Execute an action on the value if Valid, then return this Validation
+     * 如果有效，对值执行操作，然后返回此 Validation
+     *
+     * <p>This is useful for logging, debugging, or other side effects
+     * without breaking the fluent chain.</p>
+     * <p>这对于日志记录、调试或其他副作用非常有用，不会中断流式调用链。</p>
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>
+     * Validation.valid("hello")
+     *     .peek(v -&gt; System.out.println("Value: " + v))
+     *     .map(String::toUpperCase);
+     * </pre>
+     *
+     * @param action action to execute on the value - 对值执行的操作
+     * @return this Validation (unchanged) - 此 Validation（不变）
+     */
+    default Validation<E, T> peek(Consumer<? super T> action) {
+        Objects.requireNonNull(action, "action must not be null");
+        if (isValid()) {
+            getValue().ifPresent(action);
+        }
+        return this;
+    }
+
+    // ==================== Value Extraction | 值提取 ====================
+
+    /**
+     * Get the value if Valid, or throw a mapped exception if Invalid
+     * 如果有效则获取值，如果无效则抛出映射的异常
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>
+     * String name = validation.getOrElseThrow(errors -&gt;
+     *     new IllegalArgumentException("Validation failed: " + errors));
+     * </pre>
+     *
+     * @param exceptionMapper function to create exception from errors - 从错误创建异常的函数
+     * @return the value if Valid - 如果有效则返回值
+     * @throws RuntimeException mapped exception if Invalid - 如果无效则抛出映射的异常
+     */
+    default T getOrElseThrow(Function<? super List<E>, ? extends RuntimeException> exceptionMapper) {
+        Objects.requireNonNull(exceptionMapper, "exceptionMapper must not be null");
+        if (isValid()) {
+            return getValue().orElse(null);
+        }
+        throw exceptionMapper.apply(getErrors());
+    }
+
     // ==================== Conversion | 转换 ====================
+
+    /**
+     * Convert to Try monad
+     * 转换为 Try 单子
+     *
+     * <p>Valid becomes Try.success(value). Invalid becomes Try.failure with
+     * an OpenFunctionalException containing the error messages.</p>
+     * <p>Valid 变为 Try.success(value)。Invalid 变为 Try.failure，
+     * 包含错误消息的 OpenFunctionalException。</p>
+     *
+     * @return Try containing the value or failure - 包含值或失败的 Try
+     */
+    default Try<T> toTry() {
+        if (isValid()) {
+            return Try.success(getValue().orElse(null));
+        }
+        String message = "Validation failed with errors: " + getErrors();
+        return Try.failure(new OpenFunctionalException(message));
+    }
+
+    /**
+     * Convert to Option monad
+     * 转换为 Option 单子
+     *
+     * <p>Valid becomes Option.of(value). Invalid becomes Option.none().</p>
+     * <p>Valid 变为 Option.of(value)。Invalid 变为 Option.none()。</p>
+     *
+     * @return Option containing the value or none - 包含值或空的 Option
+     */
+    default Option<T> toOption() {
+        if (isValid()) {
+            return Option.of(getValue().orElse(null));
+        }
+        return Option.none();
+    }
+
+    /**
+     * Convert to Stream
+     * 转换为 Stream
+     *
+     * <p>Valid becomes Stream.of(value). Invalid becomes Stream.empty().</p>
+     * <p>Valid 变为 Stream.of(value)。Invalid 变为 Stream.empty()。</p>
+     *
+     * @return Stream containing the value or empty - 包含值或空的 Stream
+     */
+    default Stream<T> stream() {
+        if (isValid()) {
+            T val = getValue().orElse(null);
+            return val != null ? Stream.of(val) : Stream.empty();
+        }
+        return Stream.empty();
+    }
 
     /**
      * Convert to Either (errors as Left, value as Right)
@@ -246,7 +380,7 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
             Validation<E, T2> v2,
             BiFunction<T1, T2, R> combiner) {
         if (v1.isValid() && v2.isValid()) {
-            return valid(combiner.apply(v1.getValue().get(), v2.getValue().get()));
+            return valid(combiner.apply(v1.getValue().orElse(null), v2.getValue().orElse(null)));
         }
         List<E> errors = new ArrayList<>();
         errors.addAll(v1.getErrors());
@@ -276,9 +410,9 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
             TriFunction<T1, T2, T3, R> combiner) {
         if (v1.isValid() && v2.isValid() && v3.isValid()) {
             return valid(combiner.apply(
-                v1.getValue().get(),
-                v2.getValue().get(),
-                v3.getValue().get()
+                v1.getValue().orElse(null),
+                v2.getValue().orElse(null),
+                v3.getValue().orElse(null)
             ));
         }
         List<E> errors = new ArrayList<>();
@@ -303,7 +437,7 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
 
         for (Validation<E, T> v : validations) {
             if (v.isValid()) {
-                values.add(v.getValue().get());
+                values.add(v.getValue().orElse(null));
             } else {
                 errors.addAll(v.getErrors());
             }
@@ -356,6 +490,12 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
         @Override
         public List<E> getErrors() {
             return List.of();
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <E2> Validation<E2, T> mapError(Function<? super E, ? extends E2> mapper) {
+            return (Validation<E2, T>) this;
         }
 
         @Override
@@ -419,6 +559,17 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
         }
 
         /**
+         * Internal constructor that accepts a pre-validated unmodifiable list to avoid redundant copying.
+         * 内部构造函数，接受预验证的不可变列表以避免冗余复制。
+         *
+         * @param errors      the errors (must already be unmodifiable) - 错误列表（必须已不可变）
+         * @param preCopied   marker flag (always true) - 标记（始终为 true）
+         */
+        Invalid(List<E> errors, boolean preCopied) {
+            this.errors = errors;
+        }
+
+        /**
          * Get the errors
          * 获取错误列表
          *
@@ -449,6 +600,14 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
         }
 
         @Override
+        public <E2> Validation<E2, T> mapError(Function<? super E, ? extends E2> mapper) {
+            // Use stream().map().toList() which already returns an unmodifiable list,
+            // then wrap directly to avoid the extra List.copyOf() in Invalid constructor
+            List<E2> mappedErrors = errors.stream().<E2>map(mapper).toList();
+            return new Invalid<>(mappedErrors, true);
+        }
+
+        @Override
         @SuppressWarnings("unchecked")
         public <U> Validation<E, U> map(Function<? super T, ? extends U> mapper) {
             return (Validation<E, U>) this;
@@ -462,9 +621,10 @@ public sealed interface Validation<E, T> permits Validation.Valid, Validation.In
 
         @Override
         public <U> Validation<E, U> ap(Validation<E, Function<? super T, ? extends U>> vf) {
-            List<E> allErrors = new ArrayList<>(errors);
+            List<E> allErrors = new ArrayList<>(errors.size() + vf.getErrors().size());
+            allErrors.addAll(errors);
             allErrors.addAll(vf.getErrors());
-            return new Invalid<>(allErrors);
+            return new Invalid<>(java.util.Collections.unmodifiableList(allErrors), true);
         }
 
         @Override

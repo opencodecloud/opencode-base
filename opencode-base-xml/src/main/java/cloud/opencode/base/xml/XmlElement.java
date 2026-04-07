@@ -291,15 +291,6 @@ public final class XmlElement implements XmlNode {
      * @return the child element, or null if not found | 子元素，如果未找到则返回 null
      */
     public XmlElement getChild(String name) {
-        NodeList children = element.getElementsByTagName(name);
-        if (children.getLength() > 0) {
-            Node firstChild = children.item(0);
-            // Make sure it's a direct child
-            if (firstChild.getParentNode() == element && firstChild instanceof Element elem) {
-                return XmlElement.of(elem);
-            }
-        }
-        // Search direct children only
         NodeList childNodes = element.getChildNodes();
         for (int i = 0; i < childNodes.getLength(); i++) {
             Node child = childNodes.item(i);

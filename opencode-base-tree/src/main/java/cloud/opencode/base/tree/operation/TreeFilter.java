@@ -1,6 +1,7 @@
 package cloud.opencode.base.tree.operation;
 
 import cloud.opencode.base.tree.Treeable;
+import cloud.opencode.base.tree.exception.TreeException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +42,8 @@ import java.util.function.Predicate;
  */
 public final class TreeFilter {
 
+    private static final int MAX_DEPTH = 1000;
+
     private TreeFilter() {
         // Utility class
     }
@@ -73,7 +76,7 @@ public final class TreeFilter {
             List<T> roots, Predicate<T> predicate) {
         List<T> result = new ArrayList<>();
         for (T root : roots) {
-            T filtered = filterNode(root, predicate);
+            T filtered = filterNode(root, predicate, 0);
             if (filtered != null) {
                 result.add(filtered);
             }
@@ -82,13 +85,17 @@ public final class TreeFilter {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Treeable<T, ID>, ID> T filterNode(T node, Predicate<T> predicate) {
+    private static <T extends Treeable<T, ID>, ID> T filterNode(T node, Predicate<T> predicate, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
+
         List<T> children = node.getChildren();
         List<T> filteredChildren = new ArrayList<>();
 
         if (children != null) {
             for (T child : children) {
-                T filtered = filterNode(child, predicate);
+                T filtered = filterNode(child, predicate, depth + 1);
                 if (filtered != null) {
                     filteredChildren.add(filtered);
                 }
@@ -139,9 +146,10 @@ public final class TreeFilter {
      */
     public static <T extends Treeable<T, ID>, ID> List<T> filterByDepth(
             List<T> roots, int maxDepth) {
+        int clampedDepth = Math.min(maxDepth, MAX_DEPTH);
         List<T> result = new ArrayList<>();
         for (T root : roots) {
-            result.add(filterByDepthNode(root, 0, maxDepth));
+            result.add(filterByDepthNode(root, 0, clampedDepth));
         }
         return result;
     }

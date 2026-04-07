@@ -81,9 +81,12 @@ public final class AllocationUtil {
             }
         }
 
-        int sum = Arrays.stream(ratios).sum();
-        if (sum == 0) {
-            throw new IllegalArgumentException("Sum of ratios cannot be zero");
+        long sum = 0;
+        for (int ratio : ratios) {
+            sum += ratio;
+        }
+        if (sum <= 0) {
+            throw new IllegalArgumentException("Sum of ratios must be positive");
         }
 
         BigDecimal[] amounts = new BigDecimal[ratios.length];
@@ -95,13 +98,14 @@ public final class AllocationUtil {
             amounts[i] = total.amount()
                 .multiply(BigDecimal.valueOf(ratios[i]))
                 .divide(BigDecimal.valueOf(sum), scale, RoundingMode.DOWN);
+
             remainder = remainder.subtract(amounts[i]);
         }
 
         // Assign remainder to the last part
         amounts[ratios.length - 1] = remainder;
 
-        List<Money> result = new ArrayList<>();
+        List<Money> result = new ArrayList<>(amounts.length);
         for (BigDecimal amount : amounts) {
             result.add(Money.of(amount, total.currency()));
         }
@@ -122,7 +126,10 @@ public final class AllocationUtil {
             throw new IllegalArgumentException("Percentages cannot be empty");
         }
 
-        int sum = Arrays.stream(percentages).sum();
+        int sum = 0;
+        for (int p : percentages) {
+            sum += p;
+        }
         if (sum != 100) {
             throw new IllegalArgumentException("Percentages must sum to 100, got: " + sum);
         }
@@ -141,6 +148,9 @@ public final class AllocationUtil {
     public static List<Money> split(Money total, int parts) {
         if (parts <= 0) {
             throw new IllegalArgumentException("Parts must be positive");
+        }
+        if (parts > 10_000) {
+            throw new IllegalArgumentException("Parts must not exceed 10000: " + parts);
         }
         int[] ratios = new int[parts];
         Arrays.fill(ratios, 1);
@@ -185,7 +195,7 @@ public final class AllocationUtil {
         }
         amounts[weights.length - 1] = remainder;
 
-        List<Money> result = new ArrayList<>();
+        List<Money> result = new ArrayList<>(amounts.length);
         for (BigDecimal amount : amounts) {
             result.add(Money.of(amount, total.currency()));
         }
@@ -207,6 +217,9 @@ public final class AllocationUtil {
         if (parts <= 0) {
             throw new IllegalArgumentException("Parts must be positive");
         }
+        if (parts > 10_000) {
+            throw new IllegalArgumentException("Parts must not exceed 10000: " + parts);
+        }
 
         Money totalMinimum = minPerPart.multiply(parts);
         if (total.isLessThan(totalMinimum)) {
@@ -215,7 +228,7 @@ public final class AllocationUtil {
         }
 
         // First, give everyone the minimum
-        List<Money> result = new ArrayList<>();
+        List<Money> result = new ArrayList<>(parts);
         Money remaining = total.subtract(totalMinimum);
 
         // Then split the remainder evenly
@@ -240,6 +253,9 @@ public final class AllocationUtil {
         if (parts <= 0) {
             throw new IllegalArgumentException("Parts must be positive");
         }
+        if (parts > 10_000) {
+            throw new IllegalArgumentException("Parts must not exceed 10000: " + parts);
+        }
 
         int scale = total.currency().getScale();
         BigDecimal divisor = BigDecimal.valueOf(parts);
@@ -250,7 +266,7 @@ public final class AllocationUtil {
         BigDecimal remainder = total.amount().subtract(baseTotal);
         int remainderCents = remainder.movePointRight(scale).intValueExact();
 
-        List<Money> result = new ArrayList<>();
+        List<Money> result = new ArrayList<>(parts);
         BigDecimal centValue = BigDecimal.ONE.movePointLeft(scale);
 
         for (int i = 0; i < parts; i++) {

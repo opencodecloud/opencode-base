@@ -59,6 +59,11 @@ public final class MoneyValidator {
     private static final Pattern AMOUNT_PATTERN = Pattern.compile("-?\\d+(\\.\\d+)?");
 
     /**
+     * Maximum allowed string length for amount input | 金额输入的最大字符串长度
+     */
+    private static final int MAX_INPUT_LENGTH = 50;
+
+    /**
      * Default max decimal places | 默认最大小数位数
      */
     private static final int DEFAULT_MAX_SCALE = 2;
@@ -95,6 +100,11 @@ public final class MoneyValidator {
 
         // Remove whitespace
         amountStr = amountStr.strip();
+
+        // Length guard against DoS via extremely long numeric strings
+        if (amountStr.length() > MAX_INPUT_LENGTH) {
+            throw InvalidAmountException.overflow(amountStr.substring(0, 20) + "...");
+        }
 
         // Validate format
         if (!AMOUNT_PATTERN.matcher(amountStr).matches()) {

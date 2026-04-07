@@ -2,6 +2,7 @@ package cloud.opencode.base.web.internal;
 
 import cloud.opencode.base.web.context.RequestContextHolder;
 
+import java.util.HexFormat;
 import java.util.UUID;
 
 /**
@@ -34,6 +35,8 @@ import java.util.UUID;
  * @since JDK 25, opencode-base-web V1.0.0
  */
 public final class TraceIdResolver {
+
+    private static final HexFormat HEX = HexFormat.of();
 
     private TraceIdResolver() {
         // Utility class
@@ -69,6 +72,15 @@ public final class TraceIdResolver {
      * @return the generated trace ID | 生成的追踪ID
      */
     public static String generateTraceId() {
-        return UUID.randomUUID().toString().replace("-", "");
+        UUID uuid = UUID.randomUUID();
+        // Avoid intermediate toString() + replace() — format directly from the two longs
+        byte[] buf = new byte[16];
+        long msb = uuid.getMostSignificantBits();
+        long lsb = uuid.getLeastSignificantBits();
+        for (int i = 7; i >= 0; i--) {
+            buf[i]     = (byte) (msb & 0xFF); msb >>= 8;
+            buf[i + 8] = (byte) (lsb & 0xFF); lsb >>= 8;
+        }
+        return HEX.formatHex(buf);
     }
 }

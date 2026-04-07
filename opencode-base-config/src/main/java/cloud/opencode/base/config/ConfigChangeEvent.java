@@ -153,12 +153,14 @@ public record ConfigChangeEvent(
 
     // ==================== Object Methods | 对象方法 ====================
 
+    /**
+     * Returns string representation without values to prevent sensitive data leakage in logs.
+     * 返回不含值的字符串表示，防止敏感数据泄漏到日志中。
+     */
     @Override
     public String toString() {
         return "ConfigChangeEvent{" +
                 "key='" + key + '\'' +
-                ", oldValue='" + oldValue + '\'' +
-                ", newValue='" + newValue + '\'' +
                 ", changeType=" + changeType +
                 ", timestamp=" + timestamp +
                 '}';

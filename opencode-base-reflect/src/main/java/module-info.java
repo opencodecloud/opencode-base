@@ -16,6 +16,12 @@
  *   <li>Record Support - Record operations - Record操作</li>
  *   <li>Sealed Class Support - Sealed class operations - 密封类操作</li>
  *   <li>Lambda Support - Method reference parsing - Lambda/方法引用解析</li>
+ *   <li>LambdaAccessor - Near-zero-cost property access via LambdaMetafactory - 基于LambdaMetafactory的近零开销属性访问</li>
+ *   <li>SealedDispatcher - Type-safe sealed class dispatch - 类型安全密封类分发</li>
+ *   <li>RecordMapper - Advanced Record/Bean mapping - 高级Record/Bean映射</li>
+ *   <li>AnnotationMerger - Composed annotation attribute resolution - 组合注解属性解析</li>
+ *   <li>ModuleUtil - Module-system-aware reflection - 模块系统感知反射</li>
+ *   <li>MethodSignature - Method signature matching and override detection - 方法签名匹配和覆盖检测</li>
  * </ul>
  *
  * @author Leon Soo
@@ -36,5 +42,6 @@ module cloud.opencode.base.reflect {
     exports cloud.opencode.base.reflect.record;
     exports cloud.opencode.base.reflect.scan;
     exports cloud.opencode.base.reflect.sealed;
+    exports cloud.opencode.base.reflect.module;
     exports cloud.opencode.base.reflect.type;
 }

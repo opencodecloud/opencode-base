@@ -1,5 +1,6 @@
 package cloud.opencode.base.yml.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-yml V1.0.0
+ * @since JDK 25, opencode-base-yml V1.0.3
  */
 @DisplayName("YmlParseException Tests")
 class YmlParseExceptionTest {
@@ -25,7 +26,24 @@ class YmlParseExceptionTest {
         void shouldSetMessageCorrectly() {
             YmlParseException exception = new YmlParseException("Invalid YAML syntax");
 
-            assertThat(exception.getMessage()).isEqualTo("Invalid YAML syntax");
+            assertThat(exception.getRawMessage()).isEqualTo("Invalid YAML syntax");
+            assertThat(exception.getMessage()).contains("Invalid YAML syntax");
+        }
+
+        @Test
+        @DisplayName("should set error code to YML_PARSE_001")
+        void shouldSetErrorCode() {
+            YmlParseException exception = new YmlParseException("Parse error");
+
+            assertThat(exception.getErrorCode()).isEqualTo("YML_PARSE_001");
+        }
+
+        @Test
+        @DisplayName("should set component to yml")
+        void shouldSetComponentToYml() {
+            YmlParseException exception = new YmlParseException("Parse error");
+
+            assertThat(exception.getComponent()).isEqualTo("yml");
         }
 
         @Test
@@ -62,7 +80,7 @@ class YmlParseExceptionTest {
         void shouldFormatMessageWithLocation() {
             YmlParseException exception = new YmlParseException("Unexpected character", 5, 10);
 
-            assertThat(exception.getMessage()).isEqualTo("Unexpected character (line: 5, column: 10)");
+            assertThat(exception.getRawMessage()).isEqualTo("Unexpected character (line: 5, column: 10)");
         }
 
         @Test
@@ -110,7 +128,7 @@ class YmlParseExceptionTest {
             Throwable cause = new RuntimeException("Scanner error");
             YmlParseException exception = new YmlParseException("Failed to parse YAML", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Failed to parse YAML");
+            assertThat(exception.getRawMessage()).isEqualTo("Failed to parse YAML");
         }
 
         @Test
@@ -160,7 +178,7 @@ class YmlParseExceptionTest {
             Throwable cause = new RuntimeException("Unexpected token");
             YmlParseException exception = new YmlParseException("Parse failed", cause, 12, 8);
 
-            assertThat(exception.getMessage()).isEqualTo("Parse failed (line: 12, column: 8)");
+            assertThat(exception.getRawMessage()).isEqualTo("Parse failed (line: 12, column: 8)");
         }
 
         @Test
@@ -213,6 +231,14 @@ class YmlParseExceptionTest {
         }
 
         @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            YmlParseException exception = new YmlParseException("Test");
+
+            assertThat(exception).isInstanceOf(OpenException.class);
+        }
+
+        @Test
         @DisplayName("should extend RuntimeException")
         void shouldExtendRuntimeException() {
             YmlParseException exception = new YmlParseException("Test");
@@ -226,6 +252,14 @@ class YmlParseExceptionTest {
             assertThatThrownBy(() -> {
                 throw new YmlParseException("Parse error");
             }).isInstanceOf(OpenYmlException.class);
+        }
+
+        @Test
+        @DisplayName("should be catchable as OpenException")
+        void shouldBeCatchableAsOpenException() {
+            assertThatThrownBy(() -> {
+                throw new YmlParseException("Parse error");
+            }).isInstanceOf(OpenException.class);
         }
 
         @Test
@@ -280,7 +314,7 @@ class YmlParseExceptionTest {
         void shouldHandleNullMessage() {
             YmlParseException exception = new YmlParseException(null);
 
-            assertThat(exception.getMessage()).isNull();
+            assertThat(exception.getRawMessage()).isNull();
         }
 
         @Test
@@ -288,7 +322,7 @@ class YmlParseExceptionTest {
         void shouldHandleEmptyMessage() {
             YmlParseException exception = new YmlParseException("");
 
-            assertThat(exception.getMessage()).isEmpty();
+            assertThat(exception.getRawMessage()).isEmpty();
         }
 
         @Test

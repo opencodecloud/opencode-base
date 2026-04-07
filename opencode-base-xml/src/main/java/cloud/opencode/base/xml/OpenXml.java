@@ -3,9 +3,15 @@ package cloud.opencode.base.xml;
 import cloud.opencode.base.xml.bind.XmlBinder;
 import cloud.opencode.base.xml.builder.ElementBuilder;
 import cloud.opencode.base.xml.builder.XmlBuilder;
+import cloud.opencode.base.xml.canonical.XmlCanonicalizer;
+import cloud.opencode.base.xml.diff.DiffEntry;
+import cloud.opencode.base.xml.diff.XmlDiff;
+import cloud.opencode.base.xml.merge.XmlMerge;
 import cloud.opencode.base.xml.namespace.NamespaceUtil;
 import cloud.opencode.base.xml.namespace.OpenNamespaceContext;
+import cloud.opencode.base.xml.path.XmlPath;
 import cloud.opencode.base.xml.sax.SaxParser;
+import cloud.opencode.base.xml.splitter.XmlSplitter;
 import cloud.opencode.base.xml.stax.StaxReader;
 import cloud.opencode.base.xml.stax.StaxWriter;
 import cloud.opencode.base.xml.transform.XmlTransformer;
@@ -17,7 +23,10 @@ import cloud.opencode.base.xml.xpath.OpenXPath;
 
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * OpenXml - Unified facade for XML operations
@@ -36,6 +45,11 @@ import java.util.Map;
  *   <li>XML-to-object binding and marshalling - XML 到对象绑定和编组</li>
  *   <li>SAX and StAX streaming parsers - SAX 和 StAX 流式解析器</li>
  *   <li>Namespace management utilities - 命名空间管理工具</li>
+ *   <li>XML diff and comparison - XML 差异比较</li>
+ *   <li>XML document merging - XML 文档合并</li>
+ *   <li>Dot-notation path access - 点表示法路径访问</li>
+ *   <li>Stream-based XML splitting - 基于流的 XML 拆分</li>
+ *   <li>XML canonicalization - XML 规范化</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -76,7 +90,7 @@ import java.util.Map;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 public final class OpenXml {
 
@@ -473,5 +487,134 @@ public final class OpenXml {
      */
     public static Map<String, String> extractNamespaces(XmlDocument document) {
         return NamespaceUtil.extractNamespaces(document);
+    }
+
+    // ==================== Diff | 比较 ====================
+
+    /**
+     * Computes the differences between two XML strings.
+     * 计算两个 XML 字符串之间的差异。
+     *
+     * @param xml1 the first XML string | 第一个 XML 字符串
+     * @param xml2 the second XML string | 第二个 XML 字符串
+     * @return the list of differences | 差异列表
+     */
+    public static List<DiffEntry> diff(String xml1, String xml2) {
+        return XmlDiff.diff(xml1, xml2);
+    }
+
+    /**
+     * Computes the differences between two XML documents.
+     * 计算两个 XML 文档之间的差异。
+     *
+     * @param doc1 the first document | 第一个文档
+     * @param doc2 the second document | 第二个文档
+     * @return the list of differences | 差异列表
+     */
+    public static List<DiffEntry> diff(XmlDocument doc1, XmlDocument doc2) {
+        return XmlDiff.diff(doc1, doc2);
+    }
+
+    /**
+     * Checks whether two XML strings are structurally equal.
+     * 检查两个 XML 字符串是否结构相等。
+     *
+     * @param xml1 the first XML string | 第一个 XML 字符串
+     * @param xml2 the second XML string | 第二个 XML 字符串
+     * @return true if structurally equal | 如果结构相等则返回 true
+     */
+    public static boolean xmlEquals(String xml1, String xml2) {
+        return XmlDiff.isEqual(xml1, xml2);
+    }
+
+    // ==================== Merge | 合并 ====================
+
+    /**
+     * Merges an overlay document onto a base document.
+     * 将覆盖文档合并到基础文档上。
+     *
+     * @param base    the base document | 基础文档
+     * @param overlay the overlay document | 覆盖文档
+     * @return the merged document | 合并后的文档
+     */
+    public static XmlDocument merge(XmlDocument base, XmlDocument overlay) {
+        return XmlMerge.merge(base, overlay);
+    }
+
+    /**
+     * Merges an overlay XML string onto a base XML string.
+     * 将覆盖 XML 字符串合并到基础 XML 字符串上。
+     *
+     * @param baseXml    the base XML string | 基础 XML 字符串
+     * @param overlayXml the overlay XML string | 覆盖 XML 字符串
+     * @return the merged XML string | 合并后的 XML 字符串
+     */
+    public static String merge(String baseXml, String overlayXml) {
+        return XmlMerge.merge(baseXml, overlayXml);
+    }
+
+    // ==================== Path | 路径访问 ====================
+
+    /**
+     * Accesses an element value using dot-notation path.
+     * 使用点表示法路径访问元素值。
+     *
+     * @param doc  the document | 文档
+     * @param path the dot-notation path (e.g. "root.child.name") | 点表示法路径（例如 "root.child.name"）
+     * @return the element text value | 元素文本值
+     */
+    public static String path(XmlDocument doc, String path) {
+        return XmlPath.getString(doc, path);
+    }
+
+    /**
+     * Accesses an element value using dot-notation path, returning Optional.
+     * 使用点表示法路径访问元素值，返回 Optional。
+     *
+     * @param doc  the document | 文档
+     * @param path the dot-notation path | 点表示法路径
+     * @return the element text value, or empty if not found | 元素文本值，如果未找到则为空
+     */
+    public static Optional<String> pathOptional(XmlDocument doc, String path) {
+        return XmlPath.getOptional(doc, path);
+    }
+
+    // ==================== Split | 拆分 ====================
+
+    /**
+     * Splits an XML input stream by element name and processes each fragment.
+     * 按元素名称拆分 XML 输入流并处理每个片段。
+     *
+     * @param input       the input stream | 输入流
+     * @param elementName the element name to split on | 要拆分的元素名称
+     * @param handler     the fragment handler | 片段处理器
+     */
+    public static void split(InputStream input, String elementName, Consumer<XmlDocument> handler) {
+        XmlSplitter.split(input, elementName, handler);
+    }
+
+    /**
+     * Splits an XML string by element name and collects all fragments.
+     * 按元素名称拆分 XML 字符串并收集所有片段。
+     *
+     * @param xml         the XML string | XML 字符串
+     * @param elementName the element name to split on | 要拆分的元素名称
+     * @return the list of fragments | 片段列表
+     */
+    public static List<XmlDocument> splitAll(String xml, String elementName) {
+        return XmlSplitter.splitAll(xml, elementName);
+    }
+
+    // ==================== Canonicalize | 规范化 ====================
+
+    /**
+     * Produces a canonical XML representation of the given XML string.
+     * 生成给定 XML 字符串的规范化 XML 表示。
+     *
+     * @param xml the XML string | XML 字符串
+     * @return the canonical XML | 规范化的 XML
+     */
+    public static String canonicalize(String xml) {
+        return XmlCanonicalizer.canonicalize(xml);
     }
 }

@@ -7,7 +7,7 @@
     <parent>
         <groupId>cloud.opencode.base</groupId>
         <artifactId>opencode-base-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.3</version>
     </parent>
 
     <artifactId>opencode-base-cache</artifactId>
@@ -21,6 +21,14 @@
         <dependency>
             <groupId>cloud.opencode.base</groupId>
             <artifactId>opencode-base-core</artifactId>
+        </dependency>
+
+        <!-- 布隆过滤器（可选依赖） -->
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-hash</artifactId>
+            <scope>compile</scope>
+            <optional>true</optional>
         </dependency>
 
         <!-- 测试依赖 -->

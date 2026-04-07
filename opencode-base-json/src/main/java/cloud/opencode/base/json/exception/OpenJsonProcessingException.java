@@ -15,6 +15,8 @@
  */
 package cloud.opencode.base.json.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
 import java.io.Serial;
 
 /**
@@ -41,6 +43,7 @@ import java.io.Serial;
  *   <li>Categorized error types (parse, serialization, deserialization, etc.) - 分类错误类型</li>
  *   <li>Optional error location (line, column) tracking - 可选的错误位置（行、列）跟踪</li>
  *   <li>Factory methods for common error scenarios - 常见错误场景的工厂方法</li>
+ *   <li>Extends {@link OpenException} with component="json" - 继承 OpenException，组件名="json"</li>
  * </ul>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -53,7 +56,7 @@ import java.io.Serial;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-json V1.0.0
  */
-public class OpenJsonProcessingException extends RuntimeException {
+public class OpenJsonProcessingException extends OpenException {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -112,7 +115,7 @@ public class OpenJsonProcessingException extends RuntimeException {
      * @param message the detail message - 详细消息
      */
     public OpenJsonProcessingException(String message) {
-        this(message, ErrorType.UNKNOWN, null);
+        this(message, ErrorType.UNKNOWN, (Throwable) null);
     }
 
     /**
@@ -123,7 +126,7 @@ public class OpenJsonProcessingException extends RuntimeException {
      * @param cause   the cause - 原因
      */
     public OpenJsonProcessingException(String message, Throwable cause) {
-        this(message, ErrorType.UNKNOWN, cause);
+        this(message, ErrorType.UNKNOWN, (Throwable) cause);
     }
 
     /**
@@ -146,7 +149,7 @@ public class OpenJsonProcessingException extends RuntimeException {
      * @param cause     the cause - 原因
      */
     public OpenJsonProcessingException(String message, ErrorType errorType, Throwable cause) {
-        super(message, cause);
+        super("json", (errorType != null ? errorType : ErrorType.UNKNOWN).name(), message, cause);
         this.errorType = errorType != null ? errorType : ErrorType.UNKNOWN;
         this.line = -1;
         this.column = -1;
@@ -166,7 +169,7 @@ public class OpenJsonProcessingException extends RuntimeException {
      */
     public OpenJsonProcessingException(String message, ErrorType errorType,
                                        Throwable cause, int line, int column, String source) {
-        super(message, cause);
+        super("json", (errorType != null ? errorType : ErrorType.UNKNOWN).name(), message, cause);
         this.errorType = errorType != null ? errorType : ErrorType.UNKNOWN;
         this.line = line;
         this.column = column;
@@ -248,6 +251,17 @@ public class OpenJsonProcessingException extends RuntimeException {
             return baseMessage + " at " + getLocationString();
         }
         return baseMessage;
+    }
+
+    /**
+     * Returns the raw message without component/error-code prefix or location suffix.
+     * 返回不含组件/错误码前缀和位置后缀的原始消息。
+     *
+     * @return the raw message - 原始消息
+     */
+    @Override
+    public String getRawMessage() {
+        return super.getRawMessage();
     }
 
     // ==================== Factory Methods ====================

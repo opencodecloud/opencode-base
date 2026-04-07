@@ -1,5 +1,6 @@
 package cloud.opencode.base.xml.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 @DisplayName("XmlTransformException Tests")
 class XmlTransformExceptionTest {
@@ -25,7 +26,7 @@ class XmlTransformExceptionTest {
         void constructorWithMessageShouldSetMessage() {
             XmlTransformException exception = new XmlTransformException("Transform error");
 
-            assertThat(exception.getMessage()).isEqualTo("Transform error");
+            assertThat(exception.getMessage()).contains("Transform error");
         }
 
         @Test
@@ -44,7 +45,7 @@ class XmlTransformExceptionTest {
             Throwable cause = new RuntimeException("cause");
             XmlTransformException exception = new XmlTransformException("Transform error", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Transform error");
+            assertThat(exception.getMessage()).contains("Transform error");
             assertThat(exception.getCause()).isEqualTo(cause);
         }
     }
@@ -59,6 +60,14 @@ class XmlTransformExceptionTest {
             XmlTransformException exception = new XmlTransformException("error");
 
             assertThat(exception).isInstanceOf(OpenXmlException.class);
+        }
+
+        @Test
+        @DisplayName("should be instance of OpenException")
+        void shouldBeInstanceOfOpenException() {
+            XmlTransformException exception = new XmlTransformException("error");
+
+            assertThat(exception).isInstanceOf(OpenException.class);
         }
 
         @Test

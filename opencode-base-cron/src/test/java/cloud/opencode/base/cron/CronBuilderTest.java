@@ -276,6 +276,43 @@ class CronBuilderTest {
     }
 
     @Nested
+    @DisplayName("dayOfMonthRange/monthRange 测试")
+    class DayOfMonthRangeAndMonthRangeTests {
+
+        @Test
+        @DisplayName("dayOfMonthRange(10, 20) 生成10-20")
+        void should_build_day_of_month_range() {
+            String expr = CronBuilder.create().dayOfMonthRange(10, 20).at(0, 0).buildExpression();
+            assertThat(expr).contains("10-20");
+        }
+
+        @Test
+        @DisplayName("monthRange(3, 9) 生成3-9")
+        void should_build_month_range() {
+            String expr = CronBuilder.create().monthRange(3, 9).at(0, 0).buildExpression();
+            assertThat(expr).contains("3-9");
+        }
+
+        @Test
+        @DisplayName("dayOfMonthRange 越界应抛出异常")
+        void should_reject_invalid_day_of_month_range() {
+            assertThatThrownBy(() -> CronBuilder.create().dayOfMonthRange(0, 20))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> CronBuilder.create().dayOfMonthRange(1, 32))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("monthRange 越界应抛出异常")
+        void should_reject_invalid_month_range() {
+            assertThatThrownBy(() -> CronBuilder.create().monthRange(0, 9))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> CronBuilder.create().monthRange(1, 13))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("集成测试")
     class IntegrationTests {
 

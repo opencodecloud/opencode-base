@@ -47,6 +47,16 @@ import java.util.*;
  */
 public final class YmlBinder {
 
+    /**
+     * Cache for resolved fields per class to avoid repeated reflection.
+     * Uses WeakHashMap so Class keys don't prevent class unloading and
+     * cache entries are automatically evicted when classes are GC'd.
+     * 每个类的已解析字段缓存，避免重复反射。
+     * 使用 WeakHashMap 确保 Class 键不阻止类卸载，类被 GC 时缓存条目自动回收。
+     */
+    private static final Map<Class<?>, List<Field>> FIELD_CACHE =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
     private YmlBinder() {
         throw new AssertionError("Utility class - do not instantiate");
     }
@@ -165,7 +175,6 @@ public final class YmlBinder {
                 continue;
             }
 
-            field.setAccessible(true);
             try {
                 Object value = field.get(object);
                 if (value != null) {
@@ -216,8 +225,6 @@ public final class YmlBinder {
             if (Modifier.isStatic(field.getModifiers()) || Modifier.isFinal(field.getModifiers())) {
                 continue;
             }
-
-            field.setAccessible(true);
 
             Object value = findValue(field, map);
             if (value != null) {
@@ -303,11 +310,10 @@ public final class YmlBinder {
 
     @SuppressWarnings("unchecked")
     private static <T> T convertSimpleType(Object value, Class<T> type) {
-        String str = value.toString();
-
         if (type == String.class) {
-            return (T) str;
+            return (T) (value instanceof String s ? s : value.toString());
         }
+        String str = value.toString();
         if (type == int.class || type == Integer.class) {
             return (T) Integer.valueOf(str);
         }
@@ -383,13 +389,22 @@ public final class YmlBinder {
     }
 
     private static List<Field> getAllFields(Class<?> type) {
+        List<Field> cached = FIELD_CACHE.get(type);
+        if (cached != null) {
+            return cached;
+        }
         List<Field> fields = new ArrayList<>();
         Class<?> current = type;
         while (current != null && current != Object.class) {
-            fields.addAll(Arrays.asList(current.getDeclaredFields()));
+            for (Field f : current.getDeclaredFields()) {
+                f.setAccessible(true);
+                fields.add(f);
+            }
             current = current.getSuperclass();
         }
-        return fields;
+        List<Field> result = Collections.unmodifiableList(fields);
+        FIELD_CACHE.put(type, result);
+        return result;
     }
 
     private static Object toMapValue(Object value) {

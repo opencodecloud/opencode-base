@@ -2,7 +2,7 @@
 
 **图数据结构与算法库，适用于 Java 25+**
 
-`opencode-base-graph` 提供全面的图库，包括有向/无向/加权图、经典图算法（BFS、DFS、Dijkstra、A*、拓扑排序）、最小生成树、网络流、环检测、社区发现和图序列化。
+`opencode-base-graph` 提供全面的图库，包括有向/无向/加权/不可变图、经典图算法（BFS、DFS、Dijkstra、A*、Bellman-Ford、Floyd-Warshall、拓扑排序）、最小生成树、网络流、环检测、强连通分量、关节点与桥、二部图检测、DAG操作、社区发现、图度量和图序列化。
 
 ## 功能特性
 
@@ -10,25 +10,34 @@
 - **DirectedGraph**：基于邻接表的有向图
 - **UndirectedGraph**：对称边存储的无向图
 - **WeightedGraph**：支持有向和无向模式的加权图
+- **ImmutableGraph**：线程安全的不可变图快照
 
 ### 算法
 - **遍历**：BFS、DFS（递归和迭代栈安全版本）
-- **最短路径**：Dijkstra、自定义启发式的 A*、双向 BFS
+- **最短路径**：Dijkstra、自定义启发式的 A*、双向 BFS、Bellman-Ford（支持负权边）、Floyd-Warshall（全源最短路径）
 - **拓扑排序**：带环检测的 Kahn 算法
 - **环检测**：有向/无向图中的环检测和环查找
 - **连通性**：连通分量、可达性、完全连通检查
+- **强连通分量**：Tarjan 算法，含冷凝图
+- **关节点与桥**：割点和割边检测，用于网络可靠性分析
+- **二部图检测**：2-着色算法，返回分区或奇环证据
+- **DAG操作**：最长路径（关键路径）、传递归约、传递闭包、祖先/后代查询
 - **最小生成树**：Prim 和 Kruskal 算法
 - **网络流**：Ford-Fulkerson（Edmonds-Karp）、最大流、最小割
 - **中心性**：度中心性、介数中心性、接近中心性和 PageRank
 - **社区发现**：图分区和聚类识别
+- **图度量**：密度、直径、半径、离心率、聚类系数
 - **子图**：导出子图提取
 
 ### 高级功能
 - **图构建器**：流式 API 构建图
+- **图比较**：比较两个图，找出新增/删除的顶点和边
+- **图转换**：顶点映射、过滤、反转
 - **图验证**：结构和约束验证
 - **图序列化**：GraphML 和 GEXF 格式导出
 - **布局**：力导向图布局算法
 - **安全性**：栈安全遍历、超时保护、大小限制
+- **并查集**：路径压缩和按秩合并的不相交集数据结构
 
 ## 快速开始
 
@@ -37,7 +46,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-graph</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -67,24 +76,128 @@ List<String> path = OpenGraph.shortestPath(graph, "A", "C");  // [A, B, C]
 ```java
 // 流式图构建
 Graph<String> graph = OpenGraph.<String>directedBuilder()
-    .edge("A", "B", 1.0)
-    .edge("B", "C", 2.0)
-    .edge("A", "C", 4.0)
+    .addEdge("A", "B", 1.0)
+    .addEdge("B", "C", 2.0)
+    .addEdge("A", "C", 4.0)
     .build();
 ```
 
 ### 最短路径算法
 
 ```java
-// Dijkstra - 从源点出发的所有最短距离
+// Dijkstra - 从源点出发的所有最短距离（非负权重）
 Map<String, Double> distances = OpenGraph.dijkstra(graph, "A");
 
 // A* 带启发式函数
 List<String> path = OpenGraph.aStar(graph, "A", "Z",
     (a, b) -> estimateDistance(a, b));
 
+// Bellman-Ford - 支持负权边
+Map<String, Double> distances = OpenGraph.bellmanFord(graph, "A");
+boolean hasNegCycle = OpenGraph.hasNegativeCycle(graph, "A");
+
+// Floyd-Warshall - 全源最短路径
+var result = OpenGraph.allPairsShortestPaths(graph);
+double dist = result.distance("A", "C");
+List<String> path = result.path("A", "C");
+
 // 双向 BFS（适合大型无权图）
 List<String> path = OpenGraph.bidirectionalBfs(graph, "A", "Z");
+```
+
+### 强连通分量
+
+```java
+// 查找所有 SCC（Tarjan 算法）
+List<Set<String>> sccs = OpenGraph.stronglyConnectedComponents(graph);
+
+// 检查是否强连通
+boolean strong = OpenGraph.isStronglyConnected(graph);
+
+// 冷凝图（SCC 的 DAG）
+Graph<Set<String>> dag = OpenGraph.condensation(graph);
+```
+
+### 关节点与桥
+
+```java
+// 查找割点（移除后断开图的顶点）
+Set<String> cutVertices = OpenGraph.articulationPoints(graph);
+
+// 查找桥（移除后断开图的边）
+Set<Edge<String>> bridges = OpenGraph.bridges(graph);
+
+// 检查双连通性
+boolean biconnected = OpenGraph.isBiconnected(graph);
+```
+
+### 二部图检测
+
+```java
+boolean bipartite = OpenGraph.isBipartite(graph);
+var result = OpenGraph.bipartitePartition(graph);
+if (result.bipartite()) {
+    Set<String> left = result.left();
+    Set<String> right = result.right();
+} else {
+    List<String> oddCycle = result.oddCycle();
+}
+```
+
+### DAG 操作
+
+```java
+// 最长路径（关键路径）
+List<String> criticalPath = OpenGraph.longestPath(graph);
+
+// 传递归约（移除冗余边）
+Graph<String> reduced = OpenGraph.transitiveReduction(graph);
+
+// 传递闭包（添加隐含边）
+Graph<String> closure = OpenGraph.transitiveClosure(graph);
+```
+
+### 图度量
+
+```java
+double density = OpenGraph.density(graph);
+int diameter = OpenGraph.diameter(graph);
+var summary = OpenGraph.summary(graph);
+// summary.vertexCount(), summary.edgeCount(), summary.density(),
+// summary.diameter(), summary.radius(), summary.averagePathLength()...
+```
+
+### 不可变图快照
+
+```java
+// 创建线程安全的不可变快照
+Graph<String> snapshot = graph.snapshot();
+// 或: Graph<String> snapshot = OpenGraph.snapshot(graph);
+
+// 原图的修改不影响快照
+graph.addVertex("D");
+assert !snapshot.containsVertex("D");
+```
+
+### 图比较与转换
+
+```java
+// 比较两个图
+var diff = OpenGraph.diff(before, after);
+diff.addedVertices();   // 在 after 中但不在 before 中的顶点
+diff.removedVertices(); // 在 before 中但不在 after 中的顶点
+
+// 转换顶点类型
+Graph<String> stringGraph = OpenGraph.mapVertices(intGraph, String::valueOf);
+
+// 按谓词过滤顶点
+Graph<String> filtered = OpenGraph.filterVertices(graph, v -> v.startsWith("A"));
+
+// 按权重过滤边
+Graph<String> lightweight = OpenGraph.filterEdges(graph, e -> e.weight() < 10.0);
+
+// 反转有向图
+Graph<String> reversed = OpenGraph.reverse(graph);
 ```
 
 ### 拓扑排序与环检测
@@ -155,6 +268,9 @@ int componentCount = OpenGraph.connectedComponentCount(graph);
 | `DirectedGraph` | 基于邻接表的有向图实现 |
 | `UndirectedGraph` | 对称边的无向图实现 |
 | `WeightedGraph` | 支持有向和无向模式的加权图 |
+| `ImmutableGraph` | 线程安全的不可变图快照（深拷贝） |
+| `GraphDiff` | 比较两个图，计算新增/删除/共同的顶点和边 |
+| `GraphTransform` | 图转换：顶点映射、过滤、反转 |
 
 ### 算法包 (`cloud.opencode.base.graph.algorithm`)
 | 类 | 说明 |
@@ -162,16 +278,24 @@ int componentCount = OpenGraph.connectedComponentCount(graph);
 | `GraphTraversalUtil` | BFS 和 DFS 遍历算法 |
 | `SafeGraphTraversalUtil` | 栈安全的迭代式 DFS，避免栈溢出 |
 | `ShortestPathUtil` | Dijkstra 最短路径算法 |
+| `BellmanFordUtil` | Bellman-Ford 最短路径，支持负权边 |
+| `FloydWarshallUtil` | Floyd-Warshall 全源最短路径 |
 | `AStarUtil` | 带自定义启发式函数的 A* 寻路 |
 | `BidirectionalBfsUtil` | 双向 BFS，适用于大图的高效路径查找 |
 | `TopologicalSortUtil` | Kahn 拓扑排序算法 |
 | `CycleDetectionUtil` | 图中的环检测和环查找 |
 | `ConnectedComponentsUtil` | 连通分量分析和可达性 |
+| `StronglyConnectedComponentsUtil` | Tarjan 强连通分量算法，含冷凝图 |
+| `ArticulationPointUtil` | 关节点（割点）和桥（割边）检测 |
+| `BipartiteUtil` | 二部图检测，返回分区或奇环证据 |
+| `DagUtil` | DAG 操作：最长路径、传递归约/闭包、祖先/后代 |
 | `MinimumSpanningTreeUtil` | Prim 和 Kruskal 最小生成树算法 |
 | `NetworkFlowUtil` | Ford-Fulkerson 最大流、最小割和边流量计算 |
 | `CentralityUtil` | 度、介数、接近和 PageRank 中心性 |
 | `CommunityDetectionUtil` | 图分区和社区识别 |
 | `SubgraphUtil` | 导出子图提取 |
+| `GraphMetrics` | 图统计：密度、直径、半径、聚类系数 |
+| `UnionFind` | 路径压缩和按秩合并的并查集 |
 
 ### 构建器包 (`cloud.opencode.base.graph.builder`)
 | 类 | 说明 |
@@ -210,7 +334,7 @@ int componentCount = OpenGraph.connectedComponentCount(graph);
 ### 异常包 (`cloud.opencode.base.graph.exception`)
 | 类 | 说明 |
 |---|------|
-| `GraphException` | 图操作的基础异常 |
+| `GraphException` | 图操作的基础异常（继承 OpenException） |
 | `CycleDetectedException` | 在预期 DAG 中发现环 |
 | `EdgeNotFoundException` | 引用的边未找到 |
 | `VertexNotFoundException` | 引用的顶点未找到 |

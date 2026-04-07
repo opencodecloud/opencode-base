@@ -179,6 +179,49 @@ public final class ResizeOp {
     }
 
     /**
+     * Resize using progressive (multi-step) downscaling for better quality
+     * 使用渐进式（多步骤）缩小以获得更好的质量
+     *
+     * <p>When the target size is less than 50% of the source, this method
+     * performs multiple 50%-halving steps until within 2× of the target,
+     * then does a final precise resize. This produces noticeably sharper
+     * results than a single-step resize for large reductions.</p>
+     * <p>当目标尺寸小于源尺寸的 50% 时，该方法执行多次 50% 减半步骤，
+     * 直到接近目标尺寸 2× 以内，然后进行最终的精确缩放。
+     * 对于大幅缩小操作，效果明显优于单步缩放。</p>
+     *
+     * @param image the source image | 源图片
+     * @param width target width | 目标宽度
+     * @param height target height | 目标高度
+     * @return the resized image with improved quality | 质量更好的缩放后图片
+     */
+    public static BufferedImage resizeProgressive(BufferedImage image, int width, int height) {
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Width and height must be positive");
+        }
+
+        BufferedImage current = image;
+        int currentWidth = current.getWidth();
+        int currentHeight = current.getHeight();
+
+        // Progressive halving: each step halves until within 2× of target
+        // Use division form to avoid int overflow: currentWidth/2 > width ≡ currentWidth > width*2
+        while (currentWidth / 2 > width || currentHeight / 2 > height) {
+            int halfWidth = Math.max(width, currentWidth / 2);
+            int halfHeight = Math.max(height, currentHeight / 2);
+            current = resize(current, halfWidth, halfHeight);
+            currentWidth = current.getWidth();
+            currentHeight = current.getHeight();
+        }
+
+        // Final precise resize
+        if (currentWidth != width || currentHeight != height) {
+            current = resize(current, width, height);
+        }
+        return current;
+    }
+
+    /**
      * Configure graphics for high quality rendering
      * 配置图形以获得高质量渲染
      */

@@ -41,4 +41,6 @@ module cloud.opencode.base.feature {
     exports cloud.opencode.base.feature.security;
     exports cloud.opencode.base.feature.store;
     exports cloud.opencode.base.feature.strategy;
+    exports cloud.opencode.base.feature.lifecycle;
+    exports cloud.opencode.base.feature.testing;
 }

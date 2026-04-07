@@ -45,6 +45,7 @@ public final class FieldMetadata {
     private final int modifiers;
     private final Object constantValue;
     private final List<AnnotationMetadata> annotations;
+    private final String genericType;
 
     /**
      * Create field metadata
@@ -58,11 +59,29 @@ public final class FieldMetadata {
      */
     public FieldMetadata(String fieldName, String fieldType, int modifiers,
                          Object constantValue, List<AnnotationMetadata> annotations) {
+        this(fieldName, fieldType, modifiers, constantValue, annotations, null);
+    }
+
+    /**
+     * Create field metadata with generic type information
+     * 创建带有泛型类型信息的字段元数据
+     *
+     * @param fieldName     field name | 字段名
+     * @param fieldType     field type | 字段类型
+     * @param modifiers     modifier flags | 修饰符标志
+     * @param constantValue constant value | 常量值
+     * @param annotations   field annotations | 字段注解
+     * @param genericType   generic type (e.g. "List&lt;String&gt;") | 泛型类型
+     */
+    public FieldMetadata(String fieldName, String fieldType, int modifiers,
+                         Object constantValue, List<AnnotationMetadata> annotations,
+                         String genericType) {
         this.fieldName = Objects.requireNonNull(fieldName, "Field name must not be null");
         this.fieldType = Objects.requireNonNull(fieldType, "Field type must not be null");
         this.modifiers = modifiers;
         this.constantValue = constantValue;
         this.annotations = annotations != null ? List.copyOf(annotations) : List.of();
+        this.genericType = genericType;
     }
 
     // ==================== Getters ====================
@@ -115,6 +134,16 @@ public final class FieldMetadata {
      */
     public List<AnnotationMetadata> annotations() {
         return annotations;
+    }
+
+    /**
+     * Get generic type (e.g. "List&lt;String&gt;" instead of "List")
+     * 获取泛型类型（如 "List&lt;String&gt;" 而非 "List"）
+     *
+     * @return generic type string or null if not generic | 泛型类型字符串，非泛型字段返回 null
+     */
+    public String getGenericType() {
+        return genericType;
     }
 
     // ==================== Modifier Checks | 修饰符检查 ====================

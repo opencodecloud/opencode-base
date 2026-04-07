@@ -57,6 +57,12 @@ public enum GraphErrorCode {
     NEGATIVE_WEIGHT(2004, "Negative weight edge"),
     /** Invalid graph direction | 无效的图方向 */
     INVALID_DIRECTION(2005, "Invalid graph direction"),
+    /** Negative weight cycle detected | 检测到负权环 */
+    NEGATIVE_CYCLE(2006, "Negative weight cycle detected"),
+    /** Graph is not a DAG | 图不是有向无环图 */
+    NOT_DAG(2007, "Graph is not a DAG"),
+    /** Graph is not bipartite | 图不是二部图 */
+    NOT_BIPARTITE(2008, "Graph is not bipartite"),
 
     // Validation errors 3xxx | 验证错误
     /** Invalid vertex | 无效顶点 */

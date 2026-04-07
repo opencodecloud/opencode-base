@@ -16,6 +16,11 @@
  *   <li>MIME type detection - MIME 类型检测</li>
  *   <li>Batch/parallel operations - 批量/并行操作</li>
  *   <li>File locking utilities - 文件锁定工具</li>
+ *   <li>Gzip/Zip compression - Gzip/Zip 压缩 (V1.0.3)</li>
+ *   <li>Hex dump formatting - 十六进制转储 (V1.0.3)</li>
+ *   <li>Stream adapters (Reader↔InputStream) - 流适配器 (V1.0.3)</li>
+ *   <li>Tail reader and line processor - 尾部读取与行处理 (V1.0.3)</li>
+ *   <li>File-backed output stream - 文件后备输出流 (V1.0.3)</li>
  * </ul>
  *
  * @author Leon Soo
@@ -29,12 +34,15 @@ module cloud.opencode.base.io {
     exports cloud.opencode.base.io;
     exports cloud.opencode.base.io.batch;
     exports cloud.opencode.base.io.checksum;
+    exports cloud.opencode.base.io.compress;
     exports cloud.opencode.base.io.exception;
     exports cloud.opencode.base.io.file;
+    exports cloud.opencode.base.io.hex;
     exports cloud.opencode.base.io.lock;
+    exports cloud.opencode.base.io.progress;
     exports cloud.opencode.base.io.resource;
+    exports cloud.opencode.base.io.serialization;
+    exports cloud.opencode.base.io.source;
     exports cloud.opencode.base.io.stream;
     exports cloud.opencode.base.io.temp;
-    exports cloud.opencode.base.io.progress;
-    exports cloud.opencode.base.io.serialization;
 }

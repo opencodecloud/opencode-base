@@ -153,10 +153,8 @@ public final class ConsistentHash<T> implements NodeLocator<T> {
                 result.add(vnode.data());
             }
 
-            current = entry.getKey() + 1;
-            if (current > ring.lastKey()) {
-                current = ring.firstKey();
-            }
+            Long higher = ring.higherKey(entry.getKey());
+            current = (higher != null) ? higher : ring.firstKey();
             iterations++;
         }
 
@@ -363,14 +361,13 @@ public final class ConsistentHash<T> implements NodeLocator<T> {
      * @return number of keys that would be migrated | 需要迁移的键数量
      */
     public int getMigrationCount(String nodeId, Collection<?> keys) {
-        if (!nodes.containsKey(nodeId)) {
-            throw OpenHashException.nodeNotFound(nodeId);
-        }
-
         int count = 0;
         if (concurrent) {
             lock.readLock().lock();
             try {
+                if (!nodes.containsKey(nodeId)) {
+                    throw OpenHashException.nodeNotFound(nodeId);
+                }
                 for (Object key : keys) {
                     VirtualNode<T> vnode = getVirtualNode(hashKey(key));
                     if (vnode != null && vnode.physicalNodeId().equals(nodeId)) {
@@ -381,6 +378,9 @@ public final class ConsistentHash<T> implements NodeLocator<T> {
                 lock.readLock().unlock();
             }
         } else {
+            if (!nodes.containsKey(nodeId)) {
+                throw OpenHashException.nodeNotFound(nodeId);
+            }
             for (Object key : keys) {
                 VirtualNode<T> vnode = getVirtualNode(hashKey(key));
                 if (vnode != null && vnode.physicalNodeId().equals(nodeId)) {

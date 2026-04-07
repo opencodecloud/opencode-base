@@ -114,11 +114,11 @@ public final class ExceptionConverter {
             );
         }
 
-        // Handle IllegalStateException
+        // Handle IllegalStateException — do not expose internal state details
         if (throwable instanceof IllegalStateException) {
             return new Result<>(
                 CommonResultCode.BUSINESS_ERROR.getCode(),
-                throwable.getMessage(),
+                "Business operation failed",
                 null,
                 false,
                 Instant.now(),
@@ -138,11 +138,11 @@ public final class ExceptionConverter {
             );
         }
 
-        // Handle SecurityException
+        // Handle SecurityException — do not expose security mechanism details
         if (throwable instanceof SecurityException) {
             return new Result<>(
                 CommonResultCode.FORBIDDEN.getCode(),
-                throwable.getMessage(),
+                "Access denied",
                 null,
                 false,
                 Instant.now(),
@@ -150,10 +150,10 @@ public final class ExceptionConverter {
             );
         }
 
-        // Default: Internal error
+        // Default: Internal error — do not expose exception message (may contain SQL, paths, etc.)
         return new Result<>(
             CommonResultCode.INTERNAL_ERROR.getCode(),
-            throwable.getMessage() != null ? throwable.getMessage() : "Internal server error",
+            "Internal server error",
             null,
             false,
             Instant.now(),

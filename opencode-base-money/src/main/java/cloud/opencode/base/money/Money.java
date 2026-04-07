@@ -6,14 +6,16 @@ import cloud.opencode.base.money.format.ChineseUtil;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Money
- * 金额
+ * Money - Immutable monetary amount with currency
+ * 金额 - 带货币的不可变金额
  *
- * <p>Immutable record representing a monetary amount with currency.</p>
- * <p>表示带货币的金额的不可变记录。</p>
+ * <p>Immutable record representing a monetary amount with currency.
+ * All arithmetic operations return new Money instances.</p>
+ * <p>表示带货币的金额的不可变记录。所有算术运算返回新的 Money 实例。</p>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
@@ -27,6 +29,15 @@ import java.util.Objects;
  * Money diff = m1.subtract(Money.of("25.25"));
  * Money product = m1.multiply(2);
  *
+ * // Percentage operations
+ * Money tax = m1.percent(13);           // 13% of m1
+ * Money withTax = m1.addPercent(13);    // m1 + 13%
+ * Money sale = m1.subtractPercent(20);  // m1 - 20%
+ *
+ * // Comparison
+ * Money bigger = Money.max(m1, m3);
+ * Money clamped = m1.clamp(Money.of("10"), Money.of("80"));
+ *
  * // Format
  * System.out.println(m1.format());  // ¥100.50
  * System.out.println(m1.toChineseUpperCase());  // 壹佰元伍角
@@ -36,7 +47,9 @@ import java.util.Objects;
  * <ul>
  *   <li>Immutable monetary amount with currency - 带货币的不可变金额</li>
  *   <li>Arithmetic: add, subtract, multiply, divide - 算术运算: 加减乘除</li>
- *   <li>Factory methods: of(), ofCents(), zero() - 工厂方法</li>
+ *   <li>Percentage: percent, addPercent, subtractPercent - 百分比运算</li>
+ *   <li>Comparison: min, max, clamp - 比较: 最小值、最大值、夹紧</li>
+ *   <li>Factory methods: of(), ofCents(), ofMinorUnits(), zero() - 工厂方法</li>
  *   <li>Formatting and Chinese uppercase conversion - 格式化和中文大写转换</li>
  *   <li>Comparable for ordering - 支持排序的Comparable</li>
  * </ul>
@@ -55,6 +68,8 @@ import java.util.Objects;
  * @since JDK 25, opencode-base-money V1.0.0
  */
 public record Money(BigDecimal amount, Currency currency) implements Comparable<Money> {
+
+    private static final BigDecimal HUNDRED = new BigDecimal("100");
 
     /**
      * Canonical constructor with validation
@@ -159,6 +174,27 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
     }
 
     /**
+     * Create money from minor units (smallest currency unit) for any currency
+     * 从最小货币单位创建金额（支持任意币种）
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Money.ofMinorUnits(10050, Currency.CNY)  // ¥100.50
+     * Money.ofMinorUnits(10050, Currency.USD)  // $100.50
+     * Money.ofMinorUnits(1000, Currency.JPY)   // ¥1000 (JPY has scale 0)
+     * }</pre>
+     *
+     * @param minorUnits the amount in minor units | 最小单位金额
+     * @param currency the currency | 货币
+     * @return the money | 金额
+     * @since V1.0.3
+     */
+    public static Money ofMinorUnits(long minorUnits, Currency currency) {
+        Objects.requireNonNull(currency, "Currency must not be null");
+        return new Money(BigDecimal.valueOf(minorUnits, currency.getScale()), currency);
+    }
+
+    /**
      * Create zero money with currency
      * 创建零金额
      *
@@ -187,6 +223,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      *
      * @param other the other money | 另一个金额
      * @return the sum | 和
+     * @throws CurrencyMismatchException if currencies differ | 如果币种不同
      */
     public Money add(Money other) {
         assertSameCurrency(other);
@@ -199,6 +236,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      *
      * @param other the other money | 另一个金额
      * @return the difference | 差
+     * @throws CurrencyMismatchException if currencies differ | 如果币种不同
      */
     public Money subtract(Money other) {
         assertSameCurrency(other);
@@ -213,6 +251,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * @return the product | 积
      */
     public Money multiply(BigDecimal multiplier) {
+        Objects.requireNonNull(multiplier, "Multiplier must not be null");
         BigDecimal result = amount.multiply(multiplier)
                 .setScale(currency.getScale(), RoundingMode.HALF_UP);
         return new Money(result, currency);
@@ -246,8 +285,13 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      *
      * @param divisor the divisor | 除数
      * @return the quotient | 商
+     * @throws ArithmeticException if divisor is zero | 如果除数为零
      */
     public Money divide(BigDecimal divisor) {
+        Objects.requireNonNull(divisor, "Divisor must not be null");
+        if (divisor.compareTo(BigDecimal.ZERO) == 0) {
+            throw new ArithmeticException("Division by zero");
+        }
         return new Money(amount.divide(divisor, currency.getScale(), RoundingMode.HALF_UP), currency);
     }
 
@@ -303,12 +347,174 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
         return new Money(amount.setScale(currency.getScale(), RoundingMode.HALF_UP), currency);
     }
 
+    // ============ Percentage Operations | 百分比运算 ============
+
+    /**
+     * Calculate a percentage of this money
+     * 计算此金额的百分比
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Money.of("100").percent(13)           // ¥13.00 (13% of 100)
+     * Money.of("200").percent(new BigDecimal("7.5")) // ¥15.00 (7.5% of 200)
+     * }</pre>
+     *
+     * @param percentRate the percentage rate (e.g. 13 for 13%) | 百分比率（如 13 表示 13%）
+     * @return the percentage amount | 百分比金额
+     * @since V1.0.3
+     */
+    public Money percent(BigDecimal percentRate) {
+        Objects.requireNonNull(percentRate, "Percent rate must not be null");
+        BigDecimal result = amount.multiply(percentRate)
+                .divide(HUNDRED, currency.getScale(), RoundingMode.HALF_UP);
+        return new Money(result, currency);
+    }
+
+    /**
+     * Calculate a percentage of this money
+     * 计算此金额的百分比
+     *
+     * @param percentRate the percentage rate (e.g. 13 for 13%) | 百分比率
+     * @return the percentage amount | 百分比金额
+     * @since V1.0.3
+     */
+    public Money percent(int percentRate) {
+        return percent(BigDecimal.valueOf(percentRate));
+    }
+
+    /**
+     * Add a percentage to this money (markup)
+     * 在此金额上加百分比（加价）
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Money.of("100").addPercent(13)  // ¥113.00 (100 + 13%)
+     * Money.of("200").addPercent(10)  // ¥220.00 (200 + 10%)
+     * }</pre>
+     *
+     * @param percentRate the percentage rate (e.g. 13 for 13%) | 百分比率
+     * @return the money with percentage added | 加上百分比后的金额
+     * @since V1.0.3
+     */
+    public Money addPercent(BigDecimal percentRate) {
+        return add(percent(percentRate));
+    }
+
+    /**
+     * Add a percentage to this money (markup)
+     * 在此金额上加百分比（加价）
+     *
+     * @param percentRate the percentage rate (e.g. 13 for 13%) | 百分比率
+     * @return the money with percentage added | 加上百分比后的金额
+     * @since V1.0.3
+     */
+    public Money addPercent(int percentRate) {
+        return addPercent(BigDecimal.valueOf(percentRate));
+    }
+
+    /**
+     * Subtract a percentage from this money (discount)
+     * 从此金额减去百分比（折扣）
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Money.of("100").subtractPercent(20)  // ¥80.00 (100 - 20%)
+     * Money.of("200").subtractPercent(15)  // ¥170.00 (200 - 15%)
+     * }</pre>
+     *
+     * @param percentRate the percentage rate (e.g. 20 for 20% off) | 百分比率（如 20 表示打八折）
+     * @return the money with percentage subtracted | 减去百分比后的金额
+     * @since V1.0.3
+     */
+    public Money subtractPercent(BigDecimal percentRate) {
+        return subtract(percent(percentRate));
+    }
+
+    /**
+     * Subtract a percentage from this money (discount)
+     * 从此金额减去百分比（折扣）
+     *
+     * @param percentRate the percentage rate (e.g. 20 for 20% off) | 百分比率
+     * @return the money with percentage subtracted | 减去百分比后的金额
+     * @since V1.0.3
+     */
+    public Money subtractPercent(int percentRate) {
+        return subtractPercent(BigDecimal.valueOf(percentRate));
+    }
+
     // ============ Comparison | 比较 ============
 
     @Override
     public int compareTo(Money other) {
         assertSameCurrency(other);
         return amount.compareTo(other.amount);
+    }
+
+    /**
+     * Return the greater of two money values
+     * 返回两个金额中较大的
+     *
+     * @param a the first money | 第一个金额
+     * @param b the second money | 第二个金额
+     * @return the greater money | 较大的金额
+     * @throws CurrencyMismatchException if currencies differ | 如果币种不同
+     * @since V1.0.3
+     */
+    public static Money max(Money a, Money b) {
+        Objects.requireNonNull(a, "First money must not be null");
+        Objects.requireNonNull(b, "Second money must not be null");
+        return a.isGreaterOrEqual(b) ? a : b;
+    }
+
+    /**
+     * Return the lesser of two money values
+     * 返回两个金额中较小的
+     *
+     * @param a the first money | 第一个金额
+     * @param b the second money | 第二个金额
+     * @return the lesser money | 较小的金额
+     * @throws CurrencyMismatchException if currencies differ | 如果币种不同
+     * @since V1.0.3
+     */
+    public static Money min(Money a, Money b) {
+        Objects.requireNonNull(a, "First money must not be null");
+        Objects.requireNonNull(b, "Second money must not be null");
+        return a.isLessOrEqual(b) ? a : b;
+    }
+
+    /**
+     * Clamp this money to the given range [min, max]
+     * 将此金额夹紧到给定范围 [min, max]
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Money.of("150").clamp(Money.of("10"), Money.of("100"))  // ¥100.00
+     * Money.of("5").clamp(Money.of("10"), Money.of("100"))    // ¥10.00
+     * Money.of("50").clamp(Money.of("10"), Money.of("100"))   // ¥50.00
+     * }</pre>
+     *
+     * @param min the minimum bound | 最小边界
+     * @param max the maximum bound | 最大边界
+     * @return the clamped money | 夹紧后的金额
+     * @throws CurrencyMismatchException if currencies differ | 如果币种不同
+     * @throws IllegalArgumentException if min > max | 如果最小值大于最大值
+     * @since V1.0.3
+     */
+    public Money clamp(Money min, Money max) {
+        Objects.requireNonNull(min, "Min must not be null");
+        Objects.requireNonNull(max, "Max must not be null");
+        assertSameCurrency(min);
+        assertSameCurrency(max);
+        if (min.amount.compareTo(max.amount) > 0) {
+            throw new IllegalArgumentException("Min must not be greater than max");
+        }
+        if (this.amount.compareTo(min.amount) < 0) {
+            return min;
+        }
+        if (this.amount.compareTo(max.amount) > 0) {
+            return max;
+        }
+        return this;
     }
 
     /**
@@ -362,7 +568,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * @return true if positive | 如果为正返回true
      */
     public boolean isPositive() {
-        return amount.compareTo(BigDecimal.ZERO) > 0;
+        return amount.signum() > 0;
     }
 
     /**
@@ -372,7 +578,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * @return true if negative | 如果为负返回true
      */
     public boolean isNegative() {
-        return amount.compareTo(BigDecimal.ZERO) < 0;
+        return amount.signum() < 0;
     }
 
     /**
@@ -382,7 +588,29 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * @return true if zero | 如果为零返回true
      */
     public boolean isZero() {
-        return amount.compareTo(BigDecimal.ZERO) == 0;
+        return amount.signum() == 0;
+    }
+
+    /**
+     * Check if non-negative (zero or positive)
+     * 是否非负（零或正数）
+     *
+     * @return true if non-negative | 如果非负返回true
+     * @since V1.0.3
+     */
+    public boolean isNonNegative() {
+        return amount.signum() >= 0;
+    }
+
+    /**
+     * Check if non-positive (zero or negative)
+     * 是否非正（零或负数）
+     *
+     * @return true if non-positive | 如果非正返回true
+     * @since V1.0.3
+     */
+    public boolean isNonPositive() {
+        return amount.signum() <= 0;
     }
 
     // ============ Conversion | 转换 ============
@@ -392,6 +620,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * 转换为分（最小单位）
      *
      * @return the cents | 分
+     * @throws ArithmeticException if amount too large | 如果金额过大
      */
     public long toCents() {
         BigDecimal cents = amount.movePointRight(currency.getScale()).setScale(0, RoundingMode.HALF_UP);
@@ -403,6 +632,18 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
     }
 
     /**
+     * Convert to minor units (smallest unit) — alias for toCents()
+     * 转换为最小货币单位 — toCents() 的别名
+     *
+     * @return the minor units | 最小单位
+     * @throws ArithmeticException if amount too large | 如果金额过大
+     * @since V1.0.3
+     */
+    public long toMinorUnits() {
+        return toCents();
+    }
+
+    /**
      * Convert to target currency
      * 转换为目标货币
      *
@@ -411,6 +652,8 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * @return the converted money | 转换后的金额
      */
     public Money convertTo(Currency target, BigDecimal rate) {
+        Objects.requireNonNull(target, "Target currency must not be null");
+        Objects.requireNonNull(rate, "Exchange rate must not be null");
         return new Money(
             amount.multiply(rate).setScale(target.getScale(), RoundingMode.HALF_UP),
             target
@@ -436,7 +679,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
      * @return the formatted number | 格式化的数字
      */
     public String formatNumber() {
-        NumberFormat nf = NumberFormat.getNumberInstance();
+        NumberFormat nf = NumberFormat.getNumberInstance(Locale.ROOT);
         nf.setMinimumFractionDigits(currency.getScale());
         nf.setMaximumFractionDigits(currency.getScale());
         return nf.format(amount);

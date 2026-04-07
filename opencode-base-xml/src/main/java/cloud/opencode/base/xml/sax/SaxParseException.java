@@ -2,6 +2,8 @@ package cloud.opencode.base.xml.sax;
 
 import cloud.opencode.base.xml.exception.XmlParseException;
 
+import java.io.Serial;
+
 /**
  * SAX Parse Exception - Exception thrown during SAX parsing
  * SAX 解析异常 - SAX 解析期间抛出的异常
@@ -32,9 +34,12 @@ import cloud.opencode.base.xml.exception.XmlParseException;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 public class SaxParseException extends XmlParseException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public SaxParseException(String message, int line, int column) {
         super(message, line, column);

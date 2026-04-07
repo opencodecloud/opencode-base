@@ -280,7 +280,10 @@ class OAuth2TokenTest {
                     .accessToken("access123")
                     .build();
 
-            assertThat(token.toString()).contains("access123");
+            // toString should NOT contain sensitive access token (redacted)
+            assertThat(token.toString()).doesNotContain("access123");
+            assertThat(token.toString()).contains("tokenType=Bearer");
+            assertThat(token.toString()).contains("OAuth2Token[");
         }
     }
 }

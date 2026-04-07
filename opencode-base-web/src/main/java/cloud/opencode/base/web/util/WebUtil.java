@@ -120,9 +120,10 @@ public final class WebUtil {
 
     public static boolean isPrivateIp(String ip) {
         if (!isValidIp(ip)) return false;
-        String[] parts = ip.split("\\.");
-        int first = Integer.parseInt(parts[0]);
-        int second = Integer.parseInt(parts[1]);
+        int[] octets = parseIpOctets(ip);
+        if (octets == null) return false;
+        int first = octets[0];
+        int second = octets[1];
         return first == 10 ||
                (first == 172 && second >= 16 && second <= 31) ||
                (first == 192 && second == 168) ||
@@ -133,13 +134,13 @@ public final class WebUtil {
         if (ip == null || ip.isBlank()) {
             throw new IllegalArgumentException("Invalid IP address: " + ip);
         }
-        String[] parts = ip.split("\\.");
-        if (parts.length != 4) {
+        int[] octets = parseIpOctets(ip);
+        if (octets == null) {
             throw new IllegalArgumentException("Invalid IP address: " + ip);
         }
         long result = 0;
         for (int i = 0; i < 4; i++) {
-            int octet = Integer.parseInt(parts[i]);
+            int octet = octets[i];
             if (octet < 0 || octet > 255) {
                 throw new IllegalArgumentException("Invalid IP address: " + ip);
             }
@@ -149,10 +150,34 @@ public final class WebUtil {
     }
 
     public static String longToIp(long ip) {
-        return String.format("%d.%d.%d.%d",
-            (ip >> 24) & 0xFF,
-            (ip >> 16) & 0xFF,
-            (ip >> 8) & 0xFF,
-            ip & 0xFF);
+        return String.valueOf((ip >> 24) & 0xFF) + '.'
+             + ((ip >> 16) & 0xFF) + '.'
+             + ((ip >> 8) & 0xFF) + '.'
+             + (ip & 0xFF);
+    }
+
+    /**
+     * Parses IPv4 string into 4 octets using indexOf — avoids regex split allocation.
+     */
+    private static int[] parseIpOctets(String ip) {
+        int[] octets = new int[4];
+        int start = 0;
+        for (int i = 0; i < 3; i++) {
+            int dot = ip.indexOf('.', start);
+            if (dot < 0) return null;
+            try {
+                octets[i] = Integer.parseInt(ip.substring(start, dot));
+            } catch (NumberFormatException e) {
+                return null;
+            }
+            start = dot + 1;
+        }
+        if (start >= ip.length()) return null;
+        try {
+            octets[3] = Integer.parseInt(ip.substring(start));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        return octets;
     }
 }

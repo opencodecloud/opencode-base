@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.LongAdder;
  * <ul>
  *   <li>Thread-safe state management with AtomicReference - 使用AtomicReference的线程安全状态管理</li>
  *   <li>Lock-free borrow counting with LongAdder - 使用LongAdder的无锁借用计数</li>
- *   <li>Volatile timing fields for visibility - Volatile时间字段保证可见性</li>
+ *   <li>Zero-allocation nanoTime timestamps on hot path - 热路径上零分配的nanoTime时间戳</li>
  *   <li>CAS-based state transitions - 基于CAS的状态转换</li>
  * </ul>
  *
@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.LongAdder;
  * <ul>
  *   <li>State transitions: O(1) CAS operation - 状态转换: O(1) CAS操作</li>
  *   <li>Counter updates: O(1) LongAdder - 计数更新: O(1) LongAdder</li>
+ *   <li>markBorrowed/markReturned: zero allocation (nanoTime) - markBorrowed/markReturned: 零分配 (nanoTime)</li>
  * </ul>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -54,9 +55,10 @@ public class DefaultPooledObject<T> implements PooledObject<T> {
 
     private final T object;
     private final Instant createInstant;
-    private volatile Instant lastBorrowInstant;
-    private volatile Instant lastReturnInstant;
-    private volatile Instant lastUseInstant;
+    private final long createNanoTime;
+    private volatile long lastBorrowNanos;
+    private volatile long lastReturnNanos;
+    private volatile long lastUseNanos;
     private final AtomicReference<PooledObjectState> state;
     private final LongAdder borrowCount;
 
@@ -68,10 +70,13 @@ public class DefaultPooledObject<T> implements PooledObject<T> {
      */
     public DefaultPooledObject(T object) {
         this.object = object;
+        // Capture nanoTime BEFORE Instant.now() so that nanoTime-derived instants
+        // are never behind wall clock (avoids test ordering issues)
+        this.createNanoTime = System.nanoTime();
         this.createInstant = Instant.now();
-        this.lastBorrowInstant = createInstant;
-        this.lastReturnInstant = createInstant;
-        this.lastUseInstant = createInstant;
+        this.lastBorrowNanos = createNanoTime;
+        this.lastReturnNanos = createNanoTime;
+        this.lastUseNanos = createNanoTime;
         this.state = new AtomicReference<>(PooledObjectState.IDLE);
         this.borrowCount = new LongAdder();
     }
@@ -88,17 +93,17 @@ public class DefaultPooledObject<T> implements PooledObject<T> {
 
     @Override
     public Instant getLastBorrowInstant() {
-        return lastBorrowInstant;
+        return createInstant.plusNanos(lastBorrowNanos - createNanoTime);
     }
 
     @Override
     public Instant getLastReturnInstant() {
-        return lastReturnInstant;
+        return createInstant.plusNanos(lastReturnNanos - createNanoTime);
     }
 
     @Override
     public Instant getLastUseInstant() {
-        return lastUseInstant;
+        return createInstant.plusNanos(lastUseNanos - createNanoTime);
     }
 
     @Override
@@ -113,11 +118,10 @@ public class DefaultPooledObject<T> implements PooledObject<T> {
 
     @Override
     public Duration getActiveDuration() {
-        Instant now = Instant.now();
         if (state.get() == PooledObjectState.ALLOCATED) {
-            return Duration.between(lastBorrowInstant, now);
+            return Duration.ofNanos(System.nanoTime() - lastBorrowNanos);
         }
-        return Duration.between(lastBorrowInstant, lastReturnInstant);
+        return Duration.ofNanos(lastReturnNanos - lastBorrowNanos);
     }
 
     @Override
@@ -125,7 +129,7 @@ public class DefaultPooledObject<T> implements PooledObject<T> {
         if (state.get() != PooledObjectState.IDLE) {
             return Duration.ZERO;
         }
-        return Duration.between(lastReturnInstant, Instant.now());
+        return Duration.ofNanos(System.nanoTime() - lastReturnNanos);
     }
 
     @Override
@@ -134,22 +138,36 @@ public class DefaultPooledObject<T> implements PooledObject<T> {
     }
 
     /**
-     * Marks the object as borrowed.
-     * 标记对象已被借用。
+     * Marks the object as borrowed (zero-allocation).
+     * 标记对象已被借用（零分配）。
      */
     public void markBorrowed() {
-        lastBorrowInstant = Instant.now();
-        lastUseInstant = lastBorrowInstant;
+        long now = System.nanoTime();
+        lastBorrowNanos = now;
+        lastUseNanos = now;
         borrowCount.increment();
     }
 
     /**
-     * Marks the object as returned.
-     * 标记对象已归还。
+     * Marks the object as borrowed with a pre-captured nanoTime (avoids extra System.nanoTime() call).
+     * 使用预捕获的 nanoTime 标记对象已被借用（避免额外的 System.nanoTime() 调用）。
+     *
+     * @param nanoTime the pre-captured nanoTime value - 预捕获的 nanoTime 值
+     */
+    public void markBorrowed(long nanoTime) {
+        lastBorrowNanos = nanoTime;
+        lastUseNanos = nanoTime;
+        borrowCount.increment();
+    }
+
+    /**
+     * Marks the object as returned (zero-allocation).
+     * 标记对象已归还（零分配）。
      */
     public void markReturned() {
-        lastReturnInstant = Instant.now();
-        lastUseInstant = lastReturnInstant;
+        long now = System.nanoTime();
+        lastReturnNanos = now;
+        lastUseNanos = now;
     }
 
     /**

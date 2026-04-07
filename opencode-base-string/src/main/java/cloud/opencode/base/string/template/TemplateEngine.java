@@ -125,26 +125,28 @@ public final class TemplateEngine {
             return template;
         }
 
+        // append(template, start, end) avoids intermediate String allocation from substring().
+        // append(template, start, end) 避免 substring() 的中间 String 分配。
         StringBuilder result = new StringBuilder(template.length());
         int pos = 0;
 
         while (pos < template.length()) {
             int start = template.indexOf(variablePrefix, pos);
             if (start == -1) {
-                result.append(template.substring(pos));
+                result.append(template, pos, template.length());
                 break;
             }
 
-            // Append text before variable
-            result.append(template.substring(pos, start));
+            // Append text before variable — no substring allocation
+            result.append(template, pos, start);
 
             int end = template.indexOf(variableSuffix, start + variablePrefix.length());
             if (end == -1) {
-                result.append(template.substring(start));
+                result.append(template, start, template.length());
                 break;
             }
 
-            // Extract variable name
+            // Variable name still needs substring (short-lived, needed for map lookup)
             String varExpr = template.substring(start + variablePrefix.length(), end);
             Object value = resolveVariable(varExpr, context);
             result.append(value != null ? value.toString() : "");

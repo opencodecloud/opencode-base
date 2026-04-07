@@ -29,9 +29,9 @@ class EventListenerExceptionTest {
         void testMessageOnlyConstructor() {
             EventListenerException ex = new EventListenerException("Listener error");
 
-            assertThat(ex.getMessage()).isEqualTo("Listener error");
+            assertThat(ex.getRawMessage()).isEqualTo("Listener error");
             assertThat(ex.getCause()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.LISTENER_ERROR);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.LISTENER_ERROR);
         }
 
         @Test
@@ -41,9 +41,9 @@ class EventListenerExceptionTest {
 
             EventListenerException ex = new EventListenerException("Listener error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Listener error");
+            assertThat(ex.getRawMessage()).isEqualTo("Listener error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.LISTENER_ERROR);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.LISTENER_ERROR);
         }
 
         @Test
@@ -55,10 +55,10 @@ class EventListenerExceptionTest {
             EventListenerException ex = new EventListenerException(
                     "Listener error", cause, event, EventErrorCode.REGISTRATION_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("Listener error");
+            assertThat(ex.getRawMessage()).isEqualTo("Listener error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getEvent()).isEqualTo(event);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.REGISTRATION_FAILED);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.REGISTRATION_FAILED);
         }
     }
 

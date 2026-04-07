@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.geo.Coordinate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,8 +28,9 @@ class CoordinateOutOfRangeExceptionTest {
         void testMessageOnlyConstructor() {
             CoordinateOutOfRangeException ex = new CoordinateOutOfRangeException("Out of range");
 
-            assertThat(ex.getMessage()).isEqualTo("Out of range");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
+            assertThat(ex.getRawMessage()).isEqualTo("Out of range");
+            assertThat(ex.getMessage()).contains("Out of range");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
         }
 
         @Test
@@ -37,9 +39,10 @@ class CoordinateOutOfRangeExceptionTest {
             Coordinate coord = Coordinate.wgs84(200, 100);
             CoordinateOutOfRangeException ex = new CoordinateOutOfRangeException("Out of range", coord);
 
-            assertThat(ex.getMessage()).isEqualTo("Out of range");
+            assertThat(ex.getRawMessage()).isEqualTo("Out of range");
+            assertThat(ex.getMessage()).contains("Out of range");
             assertThat(ex.getCoordinate()).isEqualTo(coord);
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
         }
     }
 
@@ -53,7 +56,7 @@ class CoordinateOutOfRangeExceptionTest {
             CoordinateOutOfRangeException ex = CoordinateOutOfRangeException.forLongitude(200.0);
 
             assertThat(ex.getMessage()).contains("Longitude").contains("-180").contains("180").contains("200.0");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
         }
 
         @Test
@@ -62,7 +65,7 @@ class CoordinateOutOfRangeExceptionTest {
             CoordinateOutOfRangeException ex = CoordinateOutOfRangeException.forLatitude(100.0);
 
             assertThat(ex.getMessage()).contains("Latitude").contains("-90").contains("90").contains("100.0");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.COORDINATE_OUT_OF_RANGE);
         }
     }
 
@@ -76,6 +79,14 @@ class CoordinateOutOfRangeExceptionTest {
             CoordinateOutOfRangeException ex = new CoordinateOutOfRangeException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            CoordinateOutOfRangeException ex = new CoordinateOutOfRangeException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

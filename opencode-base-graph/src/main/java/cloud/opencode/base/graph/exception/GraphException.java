@@ -1,5 +1,9 @@
 package cloud.opencode.base.graph.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.util.Objects;
+
 /**
  * Graph Exception
  * 图异常基类
@@ -11,6 +15,7 @@ package cloud.opencode.base.graph.exception;
  * <ul>
  *   <li>Carries {@link GraphErrorCode} for programmatic error handling - 携带GraphErrorCode用于程序化错误处理</li>
  *   <li>Base class for all graph exceptions - 所有图异常的基类</li>
+ *   <li>Extends {@link OpenException} for unified exception hierarchy - 继承OpenException统一异常体系</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -18,7 +23,7 @@ package cloud.opencode.base.graph.exception;
  * try {
  *     OpenGraph.topologicalSort(graph);
  * } catch (GraphException e) {
- *     GraphErrorCode code = e.getErrorCode();
+ *     GraphErrorCode code = e.getGraphErrorCode();
  * }
  * }</pre>
  *
@@ -31,11 +36,11 @@ package cloud.opencode.base.graph.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-graph V1.0.0
+ * @since JDK 25, opencode-base-graph V1.0.3
  */
-public class GraphException extends RuntimeException {
+public class GraphException extends OpenException {
 
-    private final GraphErrorCode errorCode;
+    private final GraphErrorCode graphErrorCode;
 
     /**
      * Create graph exception
@@ -45,8 +50,8 @@ public class GraphException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public GraphException(String message, GraphErrorCode errorCode) {
-        super(message);
-        this.errorCode = errorCode;
+        super("Graph", Objects.requireNonNull(errorCode, "errorCode must not be null").getCode() + "", message);
+        this.graphErrorCode = errorCode;
     }
 
     /**
@@ -58,17 +63,17 @@ public class GraphException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public GraphException(String message, Throwable cause, GraphErrorCode errorCode) {
-        super(message, cause);
-        this.errorCode = errorCode;
+        super("Graph", Objects.requireNonNull(errorCode, "errorCode must not be null").getCode() + "", message, cause);
+        this.graphErrorCode = errorCode;
     }
 
     /**
-     * Get the error code
-     * 获取错误码
+     * Get the graph error code
+     * 获取图错误码
      *
-     * @return error code | 错误码
+     * @return graph error code | 图错误码
      */
-    public GraphErrorCode getErrorCode() {
-        return errorCode;
+    public GraphErrorCode getGraphErrorCode() {
+        return graphErrorCode;
     }
 }

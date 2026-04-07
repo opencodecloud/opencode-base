@@ -29,7 +29,7 @@ class NoPathExceptionTest {
             assertThat(ex.getMessage()).contains("No path exists");
             assertThat(ex.getMessage()).contains("A");
             assertThat(ex.getMessage()).contains("B");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.NO_PATH);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.NO_PATH);
         }
     }
 
@@ -85,8 +85,8 @@ class NoPathExceptionTest {
         void testErrorCode() {
             NoPathException ex = new NoPathException("A", "B");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.NO_PATH);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(2002);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.NO_PATH);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(2002);
         }
     }
 }

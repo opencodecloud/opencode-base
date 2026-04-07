@@ -40,7 +40,7 @@ import java.lang.annotation.*;
  * @since JDK 25, opencode-base-xml V1.0.0
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD, ElementType.METHOD})
+@Target({ElementType.FIELD, ElementType.METHOD, ElementType.RECORD_COMPONENT})
 @Documented
 public @interface XmlAttribute {
 

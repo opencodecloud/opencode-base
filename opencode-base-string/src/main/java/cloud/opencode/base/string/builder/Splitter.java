@@ -185,7 +185,10 @@ public final class Splitter {
         }
 
         private int indexOf(CharSequence seq, String target, int start) {
-            String str = seq.toString();
+            // If seq is already a String, avoid the toString() call (which for other
+            // CharSequence types allocates a new String on every indexOf invocation).
+            // 如果 seq 已经是 String，直接使用；否则 toString() 会在每次 indexOf 时分配新 String。
+            String str = (seq instanceof String s) ? s : seq.toString();
             return str.indexOf(target, start);
         }
     }

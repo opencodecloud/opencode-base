@@ -212,13 +212,20 @@ public final class CaseUtil {
             return NamingCase.CAMEL_CASE; // Default
         }
 
-        boolean hasUnderscore = name.contains("_");
-        boolean hasHyphen = name.contains("-");
-        boolean hasDot = name.contains(".");
-        boolean hasSlash = name.contains("/");
-        boolean hasSpace = name.contains(" ");
-        boolean hasLower = name.chars().anyMatch(Character::isLowerCase);
-        boolean hasUpper = name.chars().anyMatch(Character::isUpperCase);
+        // Single-pass detection of character classes (avoids two IntStream pipelines).
+        // 单次遍历检测字符类别（避免两次 IntStream 管道及自动装箱开销）。
+        boolean hasUnderscore = false, hasHyphen = false, hasDot = false;
+        boolean hasSlash = false, hasSpace = false, hasLower = false, hasUpper = false;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c == '_') hasUnderscore = true;
+            else if (c == '-') hasHyphen = true;
+            else if (c == '.') hasDot = true;
+            else if (c == '/') hasSlash = true;
+            else if (c == ' ') hasSpace = true;
+            if (Character.isLowerCase(c)) hasLower = true;
+            else if (Character.isUpperCase(c)) hasUpper = true;
+        }
         boolean startsWithUpper = Character.isUpperCase(name.charAt(0));
 
         // Check separator-based cases

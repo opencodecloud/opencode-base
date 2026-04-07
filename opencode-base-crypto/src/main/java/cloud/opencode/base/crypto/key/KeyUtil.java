@@ -1,6 +1,7 @@
 package cloud.opencode.base.crypto.key;
 
 import cloud.opencode.base.crypto.exception.OpenKeyException;
+import cloud.opencode.base.crypto.util.SecureEraser;
 
 import javax.crypto.SecretKey;
 import java.security.Key;
@@ -73,14 +74,18 @@ public final class KeyUtil {
         if (key instanceof SecretKey) {
             byte[] encoded = key.getEncoded();
             if (encoded != null) {
-                return encoded.length * 8;
+                int size = encoded.length * 8;
+                SecureEraser.erase(encoded);
+                return size;
             }
         }
 
         // Fallback to encoded format
         byte[] encoded = key.getEncoded();
         if (encoded != null) {
-            return encoded.length * 8;
+            int size = encoded.length * 8;
+            SecureEraser.erase(encoded);
+            return size;
         }
 
         throw new OpenKeyException("Unable to determine key size for algorithm: " + key.getAlgorithm());

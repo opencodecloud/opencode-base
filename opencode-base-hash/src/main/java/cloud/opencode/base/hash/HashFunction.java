@@ -143,4 +143,55 @@ public interface HashFunction {
      * @return algorithm name | 算法名称
      */
     String name();
+
+    /**
+     * Computes hash of an InputStream
+     * 计算输入流的哈希
+     *
+     * <p>Reads the stream in 8KB chunks without loading the entire content into memory.
+     * The stream is NOT closed by this method.</p>
+     * <p>以8KB块读取流，不会将全部内容加载到内存。此方法不关闭流。</p>
+     *
+     * @param inputStream input stream | 输入流
+     * @return hash code | 哈希码
+     * @throws OpenHashException if reading fails | 如果读取失败
+     */
+    default HashCode hashInputStream(java.io.InputStream inputStream) {
+        java.util.Objects.requireNonNull(inputStream, "inputStream");
+        try {
+            Hasher hasher = newHasher();
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = inputStream.read(buffer)) != -1) {
+                hasher.putBytes(buffer, 0, read);
+            }
+            return hasher.hash();
+        } catch (java.io.IOException e) {
+            throw new cloud.opencode.base.hash.exception.OpenHashException(
+                    "Failed to hash input stream", e);
+        }
+    }
+
+    /**
+     * Computes hash of a file
+     * 计算文件的哈希
+     *
+     * <p>Reads the file in 8KB chunks without loading the entire content into memory.</p>
+     * <p>以8KB块读取文件，不会将全部内容加载到内存。</p>
+     *
+     * @param path file path | 文件路径
+     * @return hash code | 哈希码
+     * @throws OpenHashException if reading fails | 如果读取失败
+     */
+    default HashCode hashFile(java.nio.file.Path path) {
+        java.util.Objects.requireNonNull(path, "path");
+        try (java.io.InputStream is = java.nio.file.Files.newInputStream(path)) {
+            return hashInputStream(is);
+        } catch (cloud.opencode.base.hash.exception.OpenHashException e) {
+            throw e;
+        } catch (java.io.IOException e) {
+            throw new cloud.opencode.base.hash.exception.OpenHashException(
+                    "Failed to hash file: " + path.getFileName() + " - " + e.getMessage(), e);
+        }
+    }
 }

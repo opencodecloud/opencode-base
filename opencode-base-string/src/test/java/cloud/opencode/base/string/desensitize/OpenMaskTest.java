@@ -71,9 +71,12 @@ class OpenMaskTest {
         }
 
         @Test
-        @DisplayName("Should handle short username")
+        @DisplayName("Should mask single-char username for security (regression fix)")
         void shouldHandleShortUsername() {
-            assertThat(OpenMask.email("a@example.com")).isEqualTo("a@example.com");
+            // Single-char prefix must be masked — returning it unmasked leaks the address.
+            // 单字符前缀必须掩码，原样返回会泄漏地址。
+            assertThat(OpenMask.email("a@example.com")).isEqualTo("*@example.com");
+            assertThat(OpenMask.email("ab@example.com")).isEqualTo("a*@example.com");
         }
 
         @Test

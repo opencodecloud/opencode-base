@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ class FenceNotFoundExceptionTest {
 
             assertThat(ex.getMessage()).contains("Fence not found").contains("test-fence");
             assertThat(ex.getFenceId()).isEqualTo("test-fence");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.FENCE_NOT_FOUND);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.FENCE_NOT_FOUND);
         }
     }
 
@@ -63,6 +64,14 @@ class FenceNotFoundExceptionTest {
             FenceNotFoundException ex = new FenceNotFoundException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            FenceNotFoundException ex = new FenceNotFoundException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

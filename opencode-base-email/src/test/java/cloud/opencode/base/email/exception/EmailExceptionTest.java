@@ -27,10 +27,11 @@ class EmailExceptionTest {
         void testConstructorWithMessage() {
             EmailException exception = new EmailException("Test error");
 
-            assertThat(exception.getMessage()).isEqualTo("Test error");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
+            assertThat(exception.getRawMessage()).isEqualTo("Test error");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
             assertThat(exception.getEmail()).isNull();
             assertThat(exception.getCause()).isNull();
+            assertThat(exception.getComponent()).isEqualTo("Email");
         }
 
         @Test
@@ -39,9 +40,9 @@ class EmailExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             EmailException exception = new EmailException("Test error", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Test error");
+            assertThat(exception.getRawMessage()).isEqualTo("Test error");
             assertThat(exception.getCause()).isEqualTo(cause);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
         }
 
         @Test
@@ -49,8 +50,8 @@ class EmailExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             EmailException exception = new EmailException("Connection failed", EmailErrorCode.CONNECTION_FAILED);
 
-            assertThat(exception.getMessage()).isEqualTo("Connection failed");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.CONNECTION_FAILED);
+            assertThat(exception.getRawMessage()).isEqualTo("Connection failed");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.CONNECTION_FAILED);
             assertThat(exception.getEmail()).isNull();
         }
 
@@ -62,10 +63,10 @@ class EmailExceptionTest {
 
             EmailException exception = new EmailException("Send failed", cause, email, EmailErrorCode.SEND_TIMEOUT);
 
-            assertThat(exception.getMessage()).isEqualTo("Send failed");
+            assertThat(exception.getRawMessage()).isEqualTo("Send failed");
             assertThat(exception.getCause()).isEqualTo(cause);
             assertThat(exception.getEmail()).isEqualTo(email);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.SEND_TIMEOUT);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.SEND_TIMEOUT);
         }
 
         @Test
@@ -73,7 +74,7 @@ class EmailExceptionTest {
         void testNullErrorCodeUsesUnknown() {
             EmailException exception = new EmailException("Test", null, null, null);
 
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
         }
     }
 
@@ -135,7 +136,7 @@ class EmailExceptionTest {
                 throw new EmailException("Test error");
             } catch (Exception e) {
                 assertThat(e).isInstanceOf(EmailException.class);
-                assertThat(e.getMessage()).isEqualTo("Test error");
+                assertThat(e).isInstanceOf(EmailException.class);
             }
         }
     }

@@ -2,7 +2,7 @@
 
 **哈希工具库，适用于 Java 25+**
 
-`opencode-base-hash` 提供统一的哈希函数和基于哈希的数据结构 API，包括非加密哈希（MurmurHash3、xxHash、FNV-1a、CRC32）、加密哈希（MD5、SHA 系列、SHA-3）、布隆过滤器、一致性哈希环和用于文本相似度的 SimHash。
+`opencode-base-hash` 提供统一的哈希函数和基于哈希的数据结构 API，包括非加密哈希（MurmurHash3、xxHash、FNV-1a、CRC32、SipHash、Adler32）、加密哈希（MD5、SHA 系列、SHA-3）、HMAC 消息认证（HMAC-SHA256/384/512）、布隆过滤器、一致性哈希环、用于文本相似度的 SimHash 以及零分配哈希码组合工具。
 
 ## 功能特性
 
@@ -11,10 +11,13 @@
 - **xxHash**：高性能 64 位哈希，支持种子
 - **FNV-1a**：32 位和 64 位 Fowler-Noll-Vo 哈希
 - **CRC32**：CRC32 和 CRC32C (Castagnoli) 校验
+- **Adler32**：快速校验和（比 CRC32 更轻量）
+- **SipHash-2-4**：抗哈希洪泛攻击的密钥哈希（64位）
 - **MD5**：仅用于校验（非加密安全）
 - **SHA-1**：仅用于校验（非加密安全）
-- **SHA-256 / SHA-512**：加密哈希函数
+- **SHA-256 / SHA-384 / SHA-512**：加密哈希函数
 - **SHA3-256 / SHA3-512**：最新 SHA-3 标准
+- **HMAC**：HMAC-MD5、HMAC-SHA1、HMAC-SHA256、HMAC-SHA384、HMAC-SHA512
 
 ### 数据结构
 - **BloomFilter**：概率性集合成员检测，可配置误判率
@@ -23,9 +26,11 @@
 - **SimHash**：用于文本相似度检测的局部敏感哈希
 
 ### 工具
-- **HashCode**：统一的哈希结果，支持 int、long、字节数组和十六进制字符串访问
+- **HashCode**：统一的哈希结果，支持 int、long、字节数组、十六进制和 Base64 访问
+- **HashCodes**：零分配哈希码组合器，用于高效 `hashCode()` 实现
 - **Funnel**：类型安全的哈希输入序列化接口
 - **Hasher**：流式哈希构建器，支持增量哈希
+- **文件/流哈希**：便捷方法直接哈希文件和 InputStream
 - **有序/无序组合**：组合多个哈希码
 
 ## 快速开始
@@ -35,7 +40,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-hash</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -46,20 +51,31 @@ import cloud.opencode.base.hash.*;
 
 // 使用 MurmurHash3 哈希字符串
 HashCode hash = OpenHash.murmur3_128().hashUtf8("Hello World");
-System.out.println(hash.toString());  // 十六进制字符串
+System.out.println(hash.toHex());     // 十六进制字符串
+System.out.println(hash.toBase64());  // URL安全Base64
 
 // 使用不同算法哈希
 HashCode murmur = OpenHash.murmur3_32().hashUtf8("data");
 HashCode xx = OpenHash.xxHash64().hashUtf8("data");
 HashCode sha = OpenHash.sha256().hashUtf8("data");
+HashCode sip = OpenHash.sipHash24().hashUtf8("data");
 
-// 哈希字节数组
-byte[] data = "Hello".getBytes();
-HashCode hash = OpenHash.hash(data, OpenHash.murmur3_128());
+// HMAC 消息认证
+byte[] key = "secret".getBytes();
+HashCode hmac = OpenHash.hmacSha256(key).hashUtf8("message");
 
-// 组合哈希码
+// 哈希文件
+HashCode fileHash = OpenHash.sha256().hashFile(Path.of("data.bin"));
+
+// 哈希输入流
+HashCode streamHash = OpenHash.sha256().hashInputStream(inputStream);
+
+// 零分配 hashCode() 组合
+int hash = HashCodes.combine(name.hashCode(), age, active ? 1 : 0);
+int hash2 = HashCodes.start().add(name).add(age).add(active).result();
+
+// 组合 HashCode 对象
 HashCode combined = OpenHash.combineOrdered(hash1, hash2, hash3);
-HashCode xored = OpenHash.combineUnordered(hash1, hash2, hash3);
 ```
 
 ### 布隆过滤器
@@ -68,7 +84,7 @@ HashCode xored = OpenHash.combineUnordered(hash1, hash2, hash3);
 // 创建布隆过滤器
 BloomFilter<String> filter = OpenHash.<String>bloomFilter(Funnel.STRING_FUNNEL)
     .expectedInsertions(1_000_000)
-    .falsePositiveRate(0.01)
+    .fpp(0.01)
     .build();
 
 // 添加元素
@@ -95,11 +111,11 @@ ConsistentHash<String> ring = OpenHash.<String>consistentHash()
     .addNode("server1", "192.168.1.1")
     .addNode("server2", "192.168.1.2")
     .addNode("server3", "192.168.1.3")
-    .virtualNodes(150)
+    .virtualNodeCount(150)
     .build();
 
 // 将键路由到节点
-String server = ring.getNode("user:12345").getData();  // "192.168.1.x"
+String server = ring.get("user:12345");  // "192.168.1.x"
 
 // 动态添加/移除节点
 ring.addNode("server4", "192.168.1.4");
@@ -115,8 +131,8 @@ SimHash simHash = OpenHash.simHash()
     .build();
 
 // 计算指纹
-Fingerprint fp1 = simHash.hash("The quick brown fox");
-Fingerprint fp2 = simHash.hash("The quick brown dog");
+Fingerprint fp1 = simHash.fingerprint("The quick brown fox");
+Fingerprint fp2 = simHash.fingerprint("The quick brown dog");
 
 // 比较相似度（汉明距离）
 int distance = fp1.hammingDistance(fp2);
@@ -140,8 +156,9 @@ HashCode hash = hasher.hash();
 | 类 | 说明 |
 |---|------|
 | `OpenHash` | 主门面类，提供所有哈希函数和数据结构的工厂方法 |
-| `HashFunction` | 哈希函数实现接口 |
-| `HashCode` | 不可变哈希结果，支持 int、long、字节数组和十六进制字符串访问 |
+| `HashFunction` | 哈希函数实现接口（含 `hashFile`/`hashInputStream`） |
+| `HashCode` | 不可变哈希结果，支持 int、long、字节数组、十六进制和 Base64 访问 |
+| `HashCodes` | 零分配哈希码组合器，用于 `hashCode()` 实现 |
 | `Hasher` | 流式哈希构建器，支持增量输入 |
 | `Funnel` | 类型安全的序列化接口，将对象转换为哈希输入 |
 
@@ -153,7 +170,10 @@ HashCode hash = hasher.hash();
 | `XxHashFunction` | xxHash 64 位高性能哈希 |
 | `Fnv1aHashFunction` | FNV-1a 32 位和 64 位哈希 |
 | `Crc32HashFunction` | CRC32 和 CRC32C (Castagnoli) 实现 |
-| `MessageDigestHashFunction` | 基于 JDK MessageDigest 的哈希（MD5、SHA-1、SHA-256、SHA-512、SHA3） |
+| `Adler32HashFunction` | Adler-32 校验和 |
+| `SipHashFunction` | SipHash-2-4 密钥哈希（抗哈希洪泛攻击） |
+| `HmacHashFunction` | HMAC-MD5、HMAC-SHA1、HMAC-SHA256、HMAC-SHA384、HMAC-SHA512 |
+| `MessageDigestHashFunction` | 基于 JDK MessageDigest 的哈希（MD5、SHA-1、SHA-256、SHA-384、SHA-512、SHA3） |
 
 ### 布隆过滤器包 (`cloud.opencode.base.hash.bloom`)
 | 类 | 说明 |

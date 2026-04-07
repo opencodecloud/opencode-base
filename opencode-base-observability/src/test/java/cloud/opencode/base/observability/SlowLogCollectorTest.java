@@ -1,5 +1,6 @@
 package cloud.opencode.base.observability;
 
+import cloud.opencode.base.observability.exception.ObservabilityException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -66,13 +67,27 @@ class SlowLogCollectorTest {
         }
 
         @Test
-        @DisplayName("非正数最大条目数抛出 IllegalArgumentException")
+        @DisplayName("非正数最大条目数抛出 ObservabilityException")
         void nonPositiveMaxEntriesThrows() {
-            assertThatIllegalArgumentException()
-                    .isThrownBy(() -> SlowLogCollector.create(Duration.ofMillis(10), 0));
+            assertThatThrownBy(() -> SlowLogCollector.create(Duration.ofMillis(10), 0))
+                    .isInstanceOf(ObservabilityException.class);
 
-            assertThatIllegalArgumentException()
-                    .isThrownBy(() -> SlowLogCollector.create(Duration.ofMillis(10), -1));
+            assertThatThrownBy(() -> SlowLogCollector.create(Duration.ofMillis(10), -1))
+                    .isInstanceOf(ObservabilityException.class);
+        }
+
+        @Test
+        @DisplayName("负值阈值抛出 ObservabilityException（防止全量记录 DoS）")
+        void negativeThresholdThrows() {
+            assertThatThrownBy(() -> SlowLogCollector.create(Duration.ofMillis(-1)))
+                    .isInstanceOf(ObservabilityException.class);
+        }
+
+        @Test
+        @DisplayName("零阈值抛出 ObservabilityException（防止全量记录 DoS）")
+        void zeroThresholdThrows() {
+            assertThatThrownBy(() -> SlowLogCollector.create(Duration.ZERO))
+                    .isInstanceOf(ObservabilityException.class);
         }
     }
 
@@ -196,12 +211,12 @@ class SlowLogCollectorTest {
         }
 
         @Test
-        @DisplayName("负数限制抛出 IllegalArgumentException")
+        @DisplayName("负数限制抛出 ObservabilityException")
         void negativeLimitThrows() {
             SlowLogCollector collector = SlowLogCollector.create();
 
-            assertThatIllegalArgumentException()
-                    .isThrownBy(() -> collector.getEntries(-1));
+            assertThatThrownBy(() -> collector.getEntries(-1))
+                    .isInstanceOf(ObservabilityException.class);
         }
 
         @Test

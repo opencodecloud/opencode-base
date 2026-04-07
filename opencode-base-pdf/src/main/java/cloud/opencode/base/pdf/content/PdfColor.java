@@ -154,7 +154,13 @@ public record PdfColor(float red, float green, float blue, float alpha, ColorMod
      * @return PdfColor instance | PdfColor 实例
      */
     public static PdfColor hex(String hex) {
+        if (hex == null) {
+            throw new IllegalArgumentException("hex color must not be null");
+        }
         String h = hex.startsWith("#") ? hex.substring(1) : hex;
+        if (h.length() < 6) {
+            throw new IllegalArgumentException("hex color must have at least 6 hex digits, got: " + hex);
+        }
         int r = Integer.parseInt(h.substring(0, 2), 16);
         int g = Integer.parseInt(h.substring(2, 4), 16);
         int b = Integer.parseInt(h.substring(4, 6), 16);

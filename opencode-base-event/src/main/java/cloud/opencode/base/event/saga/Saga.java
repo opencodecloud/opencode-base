@@ -282,7 +282,7 @@ public final class Saga<T> {
                         } catch (Exception e) {
                             throw new EventException("Saga step action failed", e);
                         }
-                    });
+                    }, VIRTUAL_EXECUTOR);
 
                     future.get(effectiveTimeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
                 } else {

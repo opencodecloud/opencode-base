@@ -7,13 +7,14 @@
 ## 功能特性
 
 ### Monad 类型
-- **Try**：异常安全计算，支持 `map`、`flatMap`、`recover`
-- **Either**：不相交联合类型（Left = 错误，Right = 成功）
-- **Option**：空值安全容器（Some/None），替代 Optional
-- **Validation**：累积错误验证（收集所有错误，而非仅第一个）
+- **Try**：异常安全计算，支持 `map`、`flatMap`、`recover`、`fold`、`andFinally`、`mapFailure`
+- **Either**：不相交联合类型（Left = 错误，Right = 成功），支持 `filterOrElse`、`toOption`、`toTry`、`toValidation`
+- **Option**：空值安全容器（Some/None），支持 `contains`、`exists`、`zip`、`toTry`、`toValidation`
+- **Validation**：累积错误验证，支持 `mapError`、`peek`、`getOrElseThrow`、`toTry`、`toOption`
 - **Lazy**：延迟计算与记忆化
 - **Sequence**：惰性序列操作
 - **Trampoline**：栈安全的递归计算
+- **Unit**：单例无值类型（void 的值等价物）
 
 ### 模式匹配
 - **类型匹配**：按类类型匹配并提取
@@ -24,8 +25,10 @@
 - **组合**：`compose`、`andThen` 用于函数链接
 - **柯里化**：将多参数函数转换为柯里化形式
 - **记忆化**：缓存函数结果，支持可配置的 LRU 容量
-- **受检函数**：`CheckedFunction`、`CheckedBiFunction`、`CheckedBiConsumer`
+- **受检函数**：`CheckedFunction`、`CheckedBiFunction`、`CheckedBiConsumer`、`CheckedConsumer`、`CheckedRunnable`
+- **函数提升**：`lift()` / `liftTry()` 将可抛异常函数转换为返回 Option/Try 的安全函数
 - **TriFunction**：三参数函数接口
+- **Unit**：用于泛型 API 的 void 等价值类型
 
 ### 光学组件
 - **Lens**：用于 Record 和对象的不可变嵌套更新
@@ -53,7 +56,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-functional</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -129,12 +132,67 @@ Map<String, Object> map = OpenFunctional.recordToMap(person);
 Validation<String, Integer> v1 = OpenFunctional.valid(42);
 Validation<String, Integer> v2 = OpenFunctional.invalid("must be positive");
 
-// 组合验证
-Validation<List<String>, User> result = Validation.combine(
+// 组合验证（组合器作为最后一个参数）
+Validation<String, User> result = Validation.combine(
     validateName(name),
     validateAge(age),
-    validateEmail(email)
-).apply(User::new);
+    validateEmail(email),
+    User::new
+);
+```
+
+### Monad 互操作 (V1.0.3)
+
+```java
+// 在 Monad 类型之间自由转换
+Either<String, Integer> either = Either.right(42);
+Option<Integer> option = either.toOption();        // Some(42)
+Try<Integer> tryVal = either.toTry();              // Success(42)
+Validation<String, Integer> valid = either.toValidation(); // Valid(42)
+
+// 带回退的过滤
+Either<String, Integer> filtered = either.filterOrElse(
+    x -> x > 0,
+    () -> "must be positive"
+);
+
+// Stream 集成
+long count = either.stream().count();  // 1
+```
+
+### 函数提升 (V1.0.3)
+
+```java
+// 将可抛异常函数提升为安全包装
+Function<String, Option<Integer>> safeParse = OpenFunctional.lift(Integer::parseInt);
+safeParse.apply("123");   // Some(123)
+safeParse.apply("abc");   // None
+
+Function<String, Try<Integer>> tryParse = OpenFunctional.liftTry(Integer::parseInt);
+tryParse.apply("123");    // Success(123)
+tryParse.apply("abc");    // Failure(NumberFormatException)
+```
+
+### 受检函数接口 (V1.0.3)
+
+```java
+// 可抛受检异常的消费者
+CheckedConsumer<Path> writer = path -> Files.writeString(path, "data");
+Consumer<Path> safe = writer.unchecked();  // 包装为 OpenFunctionalException
+
+// 可抛受检异常的运行器
+CheckedRunnable task = () -> Thread.sleep(100);
+Runnable safeTask = task.unchecked();
+```
+
+### Unit 类型 (V1.0.3)
+
+```java
+// 在 Void 无法实例化时使用 Unit
+Function<String, Unit> logger = s -> { System.out.println(s); return Unit.INSTANCE; };
+
+// 或使用 ignore 辅助方法
+items.stream().map(Unit.ignore()).collect(toList());
 ```
 
 ## 类参考
@@ -155,6 +213,7 @@ Validation<List<String>, User> result = Validation.combine(
 | `Sequence` | 带函数式转换的惰性序列 |
 | `Trampoline` | 通过蹦床实现的栈安全递归计算 |
 | `For` | 用于 Monad 组合的 for 推导式支持 |
+| `Unit` | 单例无值类型，用于泛型 API（void 的值等价物） |
 
 ### 模式包 (`cloud.opencode.base.functional.pattern`)
 | 类 | 说明 |
@@ -170,6 +229,8 @@ Validation<List<String>, User> result = Validation.combine(
 | `CheckedFunction` | 可抛出受检异常的函数 |
 | `CheckedBiFunction` | 可抛出受检异常的双参函数 |
 | `CheckedBiConsumer` | 可抛出受检异常的双参消费者 |
+| `CheckedConsumer` | 可抛出受检异常的消费者 |
+| `CheckedRunnable` | 可抛出受检异常的可运行接口 |
 | `TriFunction` | 三参数函数接口 |
 
 ### 光学包 (`cloud.opencode.base.functional.optics`)

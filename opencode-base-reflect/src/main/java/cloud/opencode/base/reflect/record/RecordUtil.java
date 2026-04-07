@@ -101,7 +101,7 @@ public final class RecordUtil {
      */
     public static java.lang.reflect.RecordComponent[] getRecordComponents(Class<?> recordClass) {
         requireRecord(recordClass);
-        return COMPONENT_CACHE.computeIfAbsent(recordClass, Class::getRecordComponents);
+        return COMPONENT_CACHE.computeIfAbsent(recordClass, Class::getRecordComponents).clone();
     }
 
     /**
@@ -303,10 +303,14 @@ public final class RecordUtil {
      * @return the record instance | record实例
      */
     public static <T extends Record> T newInstance(Class<T> recordClass, Object... values) {
-        Constructor<T> constructor = getCanonicalConstructor(recordClass);
         try {
-            constructor.setAccessible(true);
-            return constructor.newInstance(values);
+            // Resolve fresh constructor to avoid mutating the cached one's accessibility
+            Class<?>[] paramTypes = getComponentTypes(recordClass);
+            Constructor<T> ctor = recordClass.getDeclaredConstructor(paramTypes);
+            ctor.setAccessible(true);
+            return ctor.newInstance(values);
+        } catch (NoSuchMethodException e) {
+            throw new OpenReflectException("Canonical constructor not found for " + recordClass.getName(), e);
         } catch (Exception e) {
             throw new OpenReflectException("Failed to create record instance", e);
         }

@@ -1,5 +1,7 @@
 package cloud.opencode.base.money.exception;
 
+import java.io.Serial;
+
 /**
  * Invalid Amount Exception
  * 无效金额异常
@@ -30,6 +32,9 @@ package cloud.opencode.base.money.exception;
  * @since JDK 25, opencode-base-money V1.0.0
  */
 public class InvalidAmountException extends MoneyException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final String invalidValue;
 
@@ -103,11 +108,10 @@ public class InvalidAmountException extends MoneyException {
      * @return the exception | 异常
      */
     public static InvalidAmountException precisionError(String value, int maxScale) {
-        InvalidAmountException ex = new InvalidAmountException(
+        return new InvalidAmountException(
             String.format("Amount precision exceeds %d decimal places: %s", maxScale, value),
             MoneyErrorCode.AMOUNT_PRECISION_ERROR
         );
-        return ex;
     }
 
     /**

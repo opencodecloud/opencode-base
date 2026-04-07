@@ -66,7 +66,12 @@ import java.util.function.Function;
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-cache V1.0.0
+ * @deprecated Use {@link cloud.opencode.base.cache.multilevel.MultiLevelCache} instead.
+ * This class will be removed in a future version.
+ * 已废弃，请使用 {@link cloud.opencode.base.cache.multilevel.MultiLevelCache} 替代。
+ * 此类将在未来版本中移除。
  */
+@Deprecated(since = "1.0.3", forRemoval = true)
 public class LayeredCache<K, V> implements Cache<K, V> {
 
     private final Cache<K, V> l1;

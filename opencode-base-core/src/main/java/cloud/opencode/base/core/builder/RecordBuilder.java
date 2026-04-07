@@ -2,6 +2,7 @@ package cloud.opencode.base.core.builder;
 
 import cloud.opencode.base.core.reflect.RecordUtil;
 
+import java.lang.reflect.RecordComponent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -75,13 +76,36 @@ public class RecordBuilder<T extends Record> implements Builder<T> {
     }
 
     /**
-     * Creates a builder from an existing record instance
-     * 从现有 Record 创建构建器
+     * Creates a builder from an existing record instance.
+     * Uses {@link RecordComponent#getName()} which reliably returns real component names
+     * regardless of the {@code -parameters} compiler option.
+     * 从现有 Record 创建构建器。
+     * 使用 {@link RecordComponent#getName()} 获取真实组件名，不依赖 {@code -parameters} 编译选项。
+     *
+     * @param record the source record instance | 源 Record 实例
+     * @param <T> the record type | Record 类型
+     * @return a new builder pre-populated with the record's component values |
+     *         预填充了 Record 组件值的新构建器
+     * @throws IllegalStateException if record component names appear to be synthetic
+     *         (e.g. "arg0"), which would indicate a JVM bug or bytecode manipulation |
+     *         如果组件名为合成名（如 "arg0"），表明 JVM 异常或字节码被篡改
      */
     public static <T extends Record> RecordBuilder<T> from(T record) {
         @SuppressWarnings("unchecked")
         Class<T> clazz = (Class<T>) record.getClass();
         RecordBuilder<T> builder = new RecordBuilder<>(clazz);
+
+        // Validate that component names are real (not synthetic arg0, arg1, ...).
+        // RecordComponent.getName() should always return real names in standard JVMs,
+        // but we guard defensively against bytecode manipulation or non-standard runtimes.
+        RecordComponent[] rcs = clazz.getRecordComponents();
+        if (rcs.length > 0 && rcs[0].getName().matches("arg\\d+")) {
+            throw new IllegalStateException(
+                    "Record component names appear to be synthetic (e.g. 'arg0') for class "
+                            + clazz.getName() + ". This may indicate bytecode manipulation or "
+                            + "a non-standard JVM. RecordBuilder.from() requires real component names.");
+        }
+
         Map<String, Object> map = RecordUtil.toMap(record);
         builder.components.putAll(map);
         return builder;

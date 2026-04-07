@@ -26,7 +26,7 @@ import java.util.List;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: No - 线程安全: 否</li>
+ *   <li>Thread-safe: Yes (stateless) - 线程安全: 是（无状态）</li>
  * </ul>
  *
  * <p><strong>Performance | 性能特性:</strong></p>
@@ -58,10 +58,10 @@ public class GeoHashEncoder implements GeoHash {
                     "GeoHash precision must be between 1 and 12, got: " + precision);
         }
 
-        double[] latRange = {-90.0, 90.0};
-        double[] lngRange = {-180.0, 180.0};
+        double latMin = -90.0, latMax = 90.0;
+        double lngMin = -180.0, lngMax = 180.0;
 
-        StringBuilder hash = new StringBuilder();
+        StringBuilder hash = new StringBuilder(precision);
         boolean isEven = true;
         int bit = 0;
         int ch = 0;
@@ -69,20 +69,20 @@ public class GeoHashEncoder implements GeoHash {
         while (hash.length() < precision) {
             double mid;
             if (isEven) {
-                mid = (lngRange[0] + lngRange[1]) / 2;
+                mid = (lngMin + lngMax) / 2;
                 if (longitude >= mid) {
                     ch |= BITS[bit];
-                    lngRange[0] = mid;
+                    lngMin = mid;
                 } else {
-                    lngRange[1] = mid;
+                    lngMax = mid;
                 }
             } else {
-                mid = (latRange[0] + latRange[1]) / 2;
+                mid = (latMin + latMax) / 2;
                 if (latitude >= mid) {
                     ch |= BITS[bit];
-                    latRange[0] = mid;
+                    latMin = mid;
                 } else {
-                    latRange[1] = mid;
+                    latMax = mid;
                 }
             }
 

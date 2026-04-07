@@ -3,8 +3,8 @@ package cloud.opencode.base.i18n.provider;
 import cloud.opencode.base.i18n.spi.MessageProvider;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -40,9 +40,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public class CachingMessageProvider implements MessageProvider {
 
     private final MessageProvider delegate;
-    private final Map<CacheKey, CacheEntry> cache;
+    private final ConcurrentHashMap<String, CacheEntry> cache;
     private final int maxSize;
-    private final Duration ttl;
+    private final long ttlNanos;
     private final AtomicLong hits = new AtomicLong();
     private final AtomicLong misses = new AtomicLong();
 
@@ -67,34 +67,39 @@ public class CachingMessageProvider implements MessageProvider {
     public CachingMessageProvider(MessageProvider delegate, int cacheSize, Duration ttl) {
         this.delegate = delegate;
         this.maxSize = cacheSize;
-        this.ttl = ttl;
-        // Use access-order LinkedHashMap for LRU eviction, wrapped with synchronization
-        this.cache = Collections.synchronizedMap(
-            new LinkedHashMap<>(cacheSize, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<CacheKey, CacheEntry> eldest) {
-                    return size() > maxSize || eldest.getValue().isExpired();
-                }
-            }
-        );
+        this.ttlNanos = ttl.toNanos();
+        this.cache = new ConcurrentHashMap<>(cacheSize);
     }
 
     @Override
     public Optional<String> getMessageTemplate(String key, Locale locale) {
-        CacheKey cacheKey = new CacheKey(key, locale);
+        String cacheKey = key + '\0' + locale.toLanguageTag();
 
         CacheEntry entry = cache.get(cacheKey);
-        if (entry != null && !entry.isExpired()) {
+        long now = System.nanoTime();
+        if (entry != null && now - entry.createdNanos < ttlNanos) {
             hits.incrementAndGet();
-            return entry.value();
+            return entry.value;
         }
 
         misses.incrementAndGet();
         Optional<String> value = delegate.getMessageTemplate(key, locale);
 
-        // LRU eviction is handled automatically by LinkedHashMap.removeEldestEntry
-        cache.put(cacheKey, new CacheEntry(value, Instant.now().plus(ttl)));
+        if (cache.size() >= maxSize && entry == null) {
+            evict();
+        }
+        cache.put(cacheKey, new CacheEntry(value, now));
         return value;
+    }
+
+    private void evict() {
+        int toRemove = Math.max(1, maxSize / 10);
+        var it = cache.keySet().iterator();
+        while (it.hasNext() && toRemove > 0) {
+            it.next();
+            it.remove();
+            toRemove--;
+        }
     }
 
     @Override
@@ -151,12 +156,6 @@ public class CachingMessageProvider implements MessageProvider {
         cache.clear();
     }
 
-    private record CacheKey(String key, Locale locale) {
-    }
-
-    private record CacheEntry(Optional<String> value, Instant expiry) {
-        boolean isExpired() {
-            return Instant.now().isAfter(expiry);
-        }
+    private record CacheEntry(Optional<String> value, long createdNanos) {
     }
 }

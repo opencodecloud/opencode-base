@@ -27,7 +27,7 @@
  * </ul>
  *
  * @author Leon Soo
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 module cloud.opencode.base.xml {
     // Required modules
@@ -51,4 +51,9 @@ module cloud.opencode.base.xml {
     exports cloud.opencode.base.xml.transform;
     exports cloud.opencode.base.xml.validate;
     exports cloud.opencode.base.xml.xpath;
+    exports cloud.opencode.base.xml.diff;
+    exports cloud.opencode.base.xml.merge;
+    exports cloud.opencode.base.xml.path;
+    exports cloud.opencode.base.xml.splitter;
+    exports cloud.opencode.base.xml.canonical;
 }

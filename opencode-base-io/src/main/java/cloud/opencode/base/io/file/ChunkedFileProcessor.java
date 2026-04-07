@@ -210,24 +210,13 @@ public final class ChunkedFileProcessor {
         }
 
         /**
-         * Returns a defensive copy of the chunk data.
-         * 返回块数据的防御性副本。
+         * Gets a read-only ByteBuffer view of the data.
+         * 获取数据的只读ByteBuffer视图。
          *
-         * @return a copy of the data - 数据副本
-         */
-        @Override
-        public byte[] data() {
-            return data.clone();
-        }
-
-        /**
-         * Gets a ByteBuffer view of the data.
-         * 获取数据的ByteBuffer视图。
-         *
-         * @return a ByteBuffer - ByteBuffer
+         * @return a read-only ByteBuffer - 只读ByteBuffer
          */
         public ByteBuffer toByteBuffer() {
-            return ByteBuffer.wrap(data.clone(), 0, size);
+            return ByteBuffer.wrap(data, 0, size).asReadOnlyBuffer();
         }
 
         /**

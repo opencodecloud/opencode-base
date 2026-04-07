@@ -1,6 +1,7 @@
 package cloud.opencode.base.deepclone.cloner;
 
 import cloud.opencode.base.deepclone.CloneContext;
+import cloud.opencode.base.deepclone.ClonePolicy;
 import cloud.opencode.base.deepclone.exception.OpenDeepCloneException;
 import cloud.opencode.base.deepclone.strategy.FieldCloneStrategy;
 
@@ -8,9 +9,9 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Reflection-based deep cloner
@@ -43,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: Yes (stateless, field cache uses ConcurrentHashMap) - 线程安全: 是（无状态，字段缓存使用ConcurrentHashMap）</li>
+ *   <li>Thread-safe: Yes (stateless, field cache uses synchronizedMap) - 线程安全: 是（无状态，字段缓存使用synchronizedMap）</li>
  * </ul>
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
@@ -59,16 +60,28 @@ public final class ReflectiveCloner extends AbstractCloner {
     private static final int MAX_CACHE_SIZE = 1024;
 
     /**
-     * Field cache (bounded LRU via access-order LinkedHashMap wrapped in ConcurrentHashMap)
+     * Field cache (bounded LRU via access-order LinkedHashMap)
      * 字段缓存（通过访问顺序 LinkedHashMap 实现有界 LRU）
      */
-    private static final Map<Class<?>, Field[]> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Field[]> FIELD_CACHE =
+            Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Class<?>, Field[]> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
 
     /**
-     * Constructor cache (bounded)
-     * 构造器缓存（有界）
+     * Constructor cache (bounded LRU)
+     * 构造器缓存（有界 LRU）
      */
-    private static final Map<Class<?>, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Constructor<?>> CONSTRUCTOR_CACHE =
+            Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Class<?>, Constructor<?>> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
 
     /**
      * Configuration
@@ -172,17 +185,16 @@ public final class ReflectiveCloner extends AbstractCloner {
             try {
                 Constructor<?> ctor = type.getDeclaredConstructor();
                 ctor.setAccessible(true);
-                // Evict an entry if cache is full before adding
-                if (CONSTRUCTOR_CACHE.size() >= MAX_CACHE_SIZE) {
-                    var it = CONSTRUCTOR_CACHE.keySet().iterator();
-                    if (it.hasNext()) {
-                        CONSTRUCTOR_CACHE.remove(it.next());
-                    }
-                }
                 CONSTRUCTOR_CACHE.put(type, ctor);
                 return ctor.newInstance();
             } catch (NoSuchMethodException e) {
                 // No default constructor - try Unsafe
+            }
+
+            // STRICT policy: do not fallback to Unsafe
+            if (policy == ClonePolicy.STRICT) {
+                throw new OpenDeepCloneException(type, null,
+                        "No default constructor (STRICT policy forbids Unsafe fallback)");
             }
 
             // Try Unsafe if no default constructor
@@ -207,16 +219,7 @@ public final class ReflectiveCloner extends AbstractCloner {
         if (!config.useFieldCache()) {
             return getAllFields(type);
         }
-        Field[] cached = FIELD_CACHE.computeIfAbsent(type, this::getAllFields);
-        // Trim cache if over limit (best-effort, no lock needed)
-        // 超过限制时修剪缓存（尽力而为，无需加锁）
-        if (FIELD_CACHE.size() > MAX_CACHE_SIZE) {
-            var it = FIELD_CACHE.keySet().iterator();
-            if (it.hasNext()) {
-                FIELD_CACHE.remove(it.next());
-            }
-        }
-        return cached;
+        return FIELD_CACHE.computeIfAbsent(type, this::getAllFields);
     }
 
     /**
@@ -251,6 +254,11 @@ public final class ReflectiveCloner extends AbstractCloner {
      */
     private void copyField(Field field, Object source, Object target, CloneContext context) {
         try {
+            // Apply FieldFilter if set
+            if (fieldFilter != null && !fieldFilter.accept(field)) {
+                return;
+            }
+
             // Determine strategy from annotations
             FieldCloneStrategy strategy = config.respectAnnotations()
                     ? FieldCloneStrategy.fromAnnotations(field)
@@ -266,6 +274,10 @@ public final class ReflectiveCloner extends AbstractCloner {
 
             field.set(target, clonedValue);
         } catch (IllegalAccessException e) {
+            if (context.isLenient()) {
+                context.addWarning("Field access failed: " + field.getName() + " in " + source.getClass().getName());
+                return;
+            }
             throw OpenDeepCloneException.fieldAccessFailed(field.getName(), source.getClass(), e);
         }
     }

@@ -34,7 +34,7 @@ import java.util.function.Consumer;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: No - 线程安全: 否</li>
+ *   <li>Thread-safe: Yes (delegates to thread-safe executor) - 线程安全: 是（委托给线程安全执行器）</li>
  * </ul>
  *
  * @author Leon Soo

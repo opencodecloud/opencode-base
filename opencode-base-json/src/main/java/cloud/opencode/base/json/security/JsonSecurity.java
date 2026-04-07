@@ -81,6 +81,9 @@ public final class JsonSecurity {
      * Dangerous property names that may indicate injection attempts
      * 可能表示注入尝试的危险属性名
      */
+    private static final int MAX_MASK_PATTERN_CACHE_SIZE = 256;
+    private static final Map<String, Pattern> PATTERN_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
     private static final Set<String> DANGEROUS_KEYS = Set.of(
             "__proto__", "constructor", "prototype",
             "$where", "$regex", "$gt", "$lt", "$ne",
@@ -128,7 +131,7 @@ public final class JsonSecurity {
             case NAME -> maskName(value, maskChar);
             case ADDRESS -> maskAddress(value, maskChar);
             case FULL -> repeat(maskChar, 6);
-            case CUSTOM -> value; // Custom handled separately
+            case CUSTOM -> repeat(maskChar, value.length());
         };
     }
 
@@ -180,9 +183,20 @@ public final class JsonSecurity {
         if (pattern == null || pattern.isEmpty()) {
             return value;
         }
+        if (pattern.length() > 1000) {
+            throw new IllegalArgumentException("Pattern length exceeds maximum of 1000 characters");
+        }
         try {
             // Compile pattern to validate it before use
-            Pattern compiledPattern = Pattern.compile(pattern);
+            Pattern compiledPattern = PATTERN_CACHE.get(pattern);
+            if (compiledPattern == null) {
+                compiledPattern = Pattern.compile(pattern);
+                if (PATTERN_CACHE.size() < MAX_MASK_PATTERN_CACHE_SIZE) {
+                    PATTERN_CACHE.putIfAbsent(pattern, compiledPattern);
+                    Pattern existing = PATTERN_CACHE.get(pattern);
+                    if (existing != null) compiledPattern = existing;
+                }
+            }
             // Use Matcher.quoteReplacement to escape $ and \ in replacement
             String safeReplacement = replacement != null ? Matcher.quoteReplacement(replacement) : "";
             return compiledPattern.matcher(value).replaceAll(safeReplacement);
@@ -211,7 +225,7 @@ public final class JsonSecurity {
         // Format: t***@example.com
         int atIndex = value.indexOf('@');
         if (atIndex <= 1) {
-            return value;
+            return repeat(maskChar, value.length());
         }
         return value.charAt(0) + repeat(maskChar, 3) + value.substring(atIndex);
     }
@@ -241,7 +255,10 @@ public final class JsonSecurity {
     }
 
     private static String repeat(char c, int count) {
-        return String.valueOf(c).repeat(Math.max(0, count));
+        if (count <= 0) return "";
+        char[] chars = new char[count];
+        java.util.Arrays.fill(chars, c);
+        return new String(chars);
     }
 
     // ==================== Validation ====================
@@ -255,6 +272,9 @@ public final class JsonSecurity {
      * @throws OpenJsonProcessingException if depth exceeds limit - 如果深度超过限制
      */
     public static void validateDepth(JsonNode node, int maxDepth) {
+        if (maxDepth < 0) {
+            throw new IllegalArgumentException("maxDepth must be non-negative");
+        }
         int depth = calculateDepth(node, 0);
         if (depth > maxDepth) {
             throw OpenJsonProcessingException.configError(
@@ -271,6 +291,9 @@ public final class JsonSecurity {
      * @throws OpenJsonProcessingException if size exceeds limit - 如果大小超过限制
      */
     public static void validateSize(JsonNode node, int maxSize) {
+        if (maxSize < 0) {
+            throw new IllegalArgumentException("maxSize must be non-negative");
+        }
         int size = calculateSize(node);
         if (size > maxSize) {
             throw OpenJsonProcessingException.configError(
@@ -365,6 +388,7 @@ public final class JsonSecurity {
         }
         // Guard against stack overflow on extremely deep structures
         if (depth > DEFAULT_MAX_DEPTH) {
+            found.add(path.isEmpty() ? "<depth exceeded>" : path + "/<depth exceeded>");
             return;
         }
 
@@ -412,7 +436,10 @@ public final class JsonSecurity {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#x27;")
-                .replace("/", "&#x2F;");
+                .replace("/", "&#x2F;")
+                .replace("\uFF1C", "&lt;")   // fullwidth <
+                .replace("\uFF1E", "&gt;")   // fullwidth >
+                .replace("\uFF06", "&amp;");  // fullwidth &
     }
 
     /**

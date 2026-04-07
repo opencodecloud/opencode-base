@@ -49,6 +49,8 @@ public enum FeatureErrorCode {
     NOT_FOUND(1001, "Feature not found", "功能不存在"),
     ALREADY_EXISTS(1002, "Feature already exists", "功能已存在"),
     INVALID_KEY(1003, "Invalid feature key", "无效的功能键"),
+    EXPIRED(1004, "Feature expired", "功能已过期"),
+    GROUP_NOT_FOUND(1005, "Feature group not found", "功能组不存在"),
 
     // Configuration errors (2xxx)
     INVALID_STRATEGY(2001, "Invalid strategy", "无效策略"),

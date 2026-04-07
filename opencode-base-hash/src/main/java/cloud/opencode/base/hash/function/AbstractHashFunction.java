@@ -94,6 +94,7 @@ public abstract class AbstractHashFunction implements HashFunction {
 
     @Override
     public HashCode hashBytes(byte[] input) {
+        java.util.Objects.requireNonNull(input, "input");
         return hashBytes(input, 0, input.length);
     }
 

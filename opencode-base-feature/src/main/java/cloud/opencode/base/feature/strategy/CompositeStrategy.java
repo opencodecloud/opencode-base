@@ -123,12 +123,20 @@ public class CompositeStrategy implements EnableStrategy {
 
         if (requireAll) {
             // AND logic: all must pass
-            return strategies.stream()
-                .allMatch(s -> s.isEnabled(feature, context));
+            for (EnableStrategy s : strategies) {
+                if (!s.isEnabled(feature, context)) {
+                    return false;
+                }
+            }
+            return true;
         } else {
             // OR logic: any must pass
-            return strategies.stream()
-                .anyMatch(s -> s.isEnabled(feature, context));
+            for (EnableStrategy s : strategies) {
+                if (s.isEnabled(feature, context)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

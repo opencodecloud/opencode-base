@@ -9,6 +9,14 @@ import java.io.Serial;
  * <p>Base exception for all OpenCode components with error code and component name support.</p>
  * <p>所有组件异常都应继承此类，支持错误码和组件名称，便于异常分类和定位。</p>
  *
+ * <p><strong>Important | 重要说明:</strong>
+ * Note that {@link OpenIllegalArgumentException} and {@link OpenIllegalStateException} do NOT extend this class.
+ * They extend {@link IllegalArgumentException} and {@link IllegalStateException} respectively,
+ * so {@code catch(OpenException e)} will NOT catch those exceptions.</p>
+ * <p>注意：{@link OpenIllegalArgumentException} 和 {@link OpenIllegalStateException} 并不继承此类。
+ * 它们分别继承自 {@link IllegalArgumentException} 和 {@link IllegalStateException}，
+ * 因此 {@code catch(OpenException e)} 无法捕获这两类异常。</p>
+ *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>Error code support - 错误码支持</li>

@@ -2,29 +2,38 @@
 
 **Modern parallel computing utilities for JDK 25+**
 
-`opencode-base-parallel` is a comprehensive parallel computing library leveraging JDK 25 virtual threads and structured concurrency (JEP 499). It provides parallel execution, batch processing, async pipelines, rate limiting, deadline propagation, and structured concurrency scopes.
+`opencode-base-parallel` is a comprehensive parallel computing library leveraging JDK 25 virtual threads and ScopedValue. It provides parallel execution, batch processing, async pipelines, rate limiting, deadline propagation, and future aggregation utilities.
 
 ## Features
 
-### Core Features
-- **Virtual Thread Execution**: All parallel tasks run on virtual threads by default
-- **Parallel Map**: Concurrent mapping with configurable parallelism and timeout
-- **Batch Processing**: Partition-based parallel batch processing with progress tracking
-- **Async Pipeline**: Fluent async pipeline composition with error handling
-- **Future Combination**: Combine 2 or 3 futures with combiner functions
+### Core Parallel Execution
+- **runAll / invokeAll / invokeAny**: Parallel task execution with timeout support
+- **parallelMap**: Concurrent mapping with configurable parallelism and timeout
+- **parallelForEach**: Bounded-concurrency forEach for side-effect operations
+- **parallelMapSettled**: Partial-success parallel map returning `ParallelResult`
+- **forEachAsCompleted**: Process results in completion order (fastest first)
 
-### Structured Concurrency (JEP 499)
-- **invokeAll / invokeAny**: Structured task execution with fail-fast and first-success policies
-- **Parallel Combine**: Type-safe parallel combination of 2 or 3 tasks
-- **Scoped Values**: ScopedValue-based context propagation across structured tasks
-- **Race**: Race multiple tasks, returning the first to complete
+### Future Aggregation (Futures)
+- **allAsList**: Collect all future results into a list (fail-fast)
+- **successfulAsList**: Collect only successful results, ignore failures
+- **settleAll**: Collect both successes and failures into `ParallelResult`
+- **firstSuccessful**: Race futures, return first success, cancel losers
+- **withTimeout**: Add timeout to any CompletableFuture
+
+### Batch Processing
+- **BatchProcessor**: Configurable parallel batch processor with progress tracking
+- **PartitionUtil**: List partitioning utility for batch processing
+
+### Executors
+- **VirtualExecutor**: Virtual thread executor with concurrency limiting and statistics
+- **HybridExecutor**: Auto-routing executor for mixed IO/CPU workloads
+- **RateLimitedExecutor**: Token bucket rate-limited task executor
+- **TokenBucketRateLimiter**: Standalone non-blocking rate limiter primitive
 
 ### Advanced Features
-- **Rate Limiting**: Token bucket rate limiter with burst capacity
-- **Deadline Propagation**: ScopedValue-based deadline context for virtual threads
-- **Scheduled Scope**: Delayed, periodic, and deadline-based task scheduling
-- **CPU-Bound Executor**: Platform thread executor optimized for CPU-intensive work
-- **Hybrid Executor**: Auto-routing executor for mixed IO/CPU workloads
+- **AsyncPipeline**: Fluent async pipeline composition with error handling
+- **DeadlineContext**: ScopedValue-based deadline propagation for virtual threads
+- **ScopedContext**: ScopedValue-based context propagation (trace ID, user ID, tenant ID)
 
 ## Quick Start
 
@@ -33,7 +42,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-parallel</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -55,7 +64,7 @@ List<String> results = OpenParallel.invokeAll(
     () -> fetchFromServiceB()
 );
 
-// First to complete wins
+// First to complete wins (cancels remaining)
 String fastest = OpenParallel.invokeAny(
     () -> fetchFromPrimary(),
     () -> fetchFromBackup()
@@ -72,35 +81,67 @@ List<Result> processed = OpenParallel.parallelMap(items, item -> process(item), 
 List<Result> results = OpenParallel.parallelMap(items, this::process, 10, Duration.ofSeconds(30));
 ```
 
-### Structured Concurrency (JEP 499)
+### Partial Success with ParallelResult (V1.0.3)
 
 ```java
-import cloud.opencode.base.parallel.OpenStructured;
+import cloud.opencode.base.parallel.ParallelResult;
 
-// All must succeed (fail-fast)
-List<String> results = OpenStructured.invokeAll(List.of(
-    () -> fetchA(),
-    () -> fetchB(),
-    () -> fetchC()
-));
+// Collect both successes and failures instead of throwing
+ParallelResult<Result> result = OpenParallel.parallelMapSettled(
+    items, item -> riskyProcess(item), 10);
 
-// First success wins (cancel others)
-String result = OpenStructured.invokeAny(List.of(
-    () -> fetchFromPrimary(),
-    () -> fetchFromBackup()
-));
+System.out.println("Succeeded: " + result.successCount());
+System.out.println("Failed: " + result.failureCount());
 
-// Parallel combine two tasks
-Result result = OpenStructured.parallel(
-    () -> fetchUser(),
-    () -> fetchOrders(),
-    (user, orders) -> new Result(user, orders)
-);
+// Get successes, or throw if any failed
+List<Result> values = result.getOrThrow();
 
-// Race
-String winner = OpenStructured.race(
-    () -> queryDatabaseA(),
-    () -> queryDatabaseB()
+// Or handle partial failures gracefully
+if (result.hasFailures()) {
+    log.warn("{}/{} tasks failed", result.failureCount(), result.totalCount());
+    result.failures().forEach(e -> log.warn("Failure: ", e));
+}
+```
+
+### Future Aggregation (V1.0.3)
+
+```java
+import cloud.opencode.base.parallel.Futures;
+
+// Collect all results (like Guava Futures.allAsList)
+CompletableFuture<List<String>> all = Futures.allAsList(future1, future2, future3);
+
+// Collect only successful results
+CompletableFuture<List<String>> successes = Futures.successfulAsList(futures);
+
+// Settle all - get both successes and failures
+CompletableFuture<ParallelResult<String>> settled = Futures.settleAll(futures);
+
+// Race - first successful wins, cancel losers
+CompletableFuture<String> first = Futures.firstSuccessful(futures);
+
+// Add timeout to any future
+CompletableFuture<String> timed = Futures.withTimeout(future, Duration.ofSeconds(5));
+```
+
+### Parallel ForEach (V1.0.3)
+
+```java
+// Apply action to each item with bounded concurrency
+OpenParallel.parallelForEach(urls, 20, url -> download(url));
+
+// With timeout
+OpenParallel.parallelForEach(urls, 20, url -> download(url), Duration.ofSeconds(60));
+```
+
+### Completion-Order Processing (V1.0.3)
+
+```java
+// Process results as they complete (fastest first)
+OpenParallel.forEachAsCompleted(
+    List.of(() -> slowQuery(), () -> fastQuery(), () -> mediumQuery()),
+    10,  // max concurrency
+    result -> display(result)
 );
 ```
 
@@ -123,11 +164,12 @@ import cloud.opencode.base.parallel.batch.BatchProcessor;
 OpenParallel.processBatch(items, 100, batch -> repository.saveAll(batch));
 
 // Configurable batch processor
-BatchProcessor.builder()
-    .batchSize(100)
-    .parallelism(10)
-    .build()
-    .process(items, batch -> repository.saveAll(batch));
+try (var processor = BatchProcessor.builder()
+        .batchSize(100)
+        .parallelism(10)
+        .build()) {
+    processor.process(items, batch -> repository.saveAll(batch));
+}
 ```
 
 ### Rate Limiting
@@ -136,8 +178,9 @@ BatchProcessor.builder()
 import cloud.opencode.base.parallel.executor.RateLimitedExecutor;
 
 // 100 requests per second, burst of 20
-RateLimitedExecutor executor = OpenParallel.rateLimited(100, 20);
-executor.submit(() -> callApi());
+try (var executor = OpenParallel.rateLimited(100, 20)) {
+    executor.submit(() -> callApi());
+}
 ```
 
 ### Deadline Propagation
@@ -148,49 +191,111 @@ import cloud.opencode.base.parallel.deadline.DeadlineContext;
 DeadlineContext.withTimeout(Duration.ofSeconds(5), () -> {
     // All operations in this scope can check the deadline
     Optional<Duration> remaining = DeadlineContext.remaining();
-    if (remaining.isPresent() && remaining.get().isNegative()) {
+    if (DeadlineContext.isExpired()) {
         throw new TimeoutException("Deadline exceeded");
     }
 });
 ```
 
-### Scheduled Scope
+### Hybrid Executor (IO + CPU)
 
 ```java
-try (var scope = OpenParallel.<String>scheduledScope()) {
-    scope.fork(() -> fetchA());
-    scope.forkDelayed(Duration.ofSeconds(1), () -> fetchB());
-    List<String> results = scope.joinAll();
+import cloud.opencode.base.parallel.executor.HybridExecutor;
+import cloud.opencode.base.parallel.executor.CpuBound;
+
+try (var executor = HybridExecutor.create()) {
+    executor.execute(() -> fetchFromNetwork());            // IO pool (virtual threads)
+    executor.execute((CpuBound) () -> computeHash(data));  // CPU pool (platform threads)
 }
 ```
 
-## Class Reference
+## API Reference
+
+### OpenParallel — Main Facade
+
+| Method | Description |
+|--------|-------------|
+| `runAll(Runnable...)` | Run all tasks in parallel, wait for completion |
+| `runAll(Collection<Runnable>)` | Run all tasks in parallel |
+| `runAll(Collection<Runnable>, Duration)` | Run all tasks with timeout |
+| `invokeAll(Supplier<T>...)` | Invoke all suppliers, collect results |
+| `invokeAll(Collection<Supplier<T>>)` | Invoke all suppliers, collect results |
+| `invokeAll(Collection<Supplier<T>>, Duration)` | Invoke all with timeout |
+| `invokeAny(Supplier<T>...)` | Return first completed result, cancel remaining |
+| `invokeAny(Collection<Supplier<T>>)` | Return first completed result, cancel remaining |
+| `parallelForEach(Collection, int, Consumer)` | Bounded-concurrency forEach |
+| `parallelForEach(Collection, int, Consumer, Duration)` | Bounded forEach with timeout |
+| `parallelMap(List, Function)` | Parallel map using virtual threads |
+| `parallelMap(List, Function, int)` | Parallel map with concurrency limit |
+| `parallelMap(List, Function, int, Duration)` | Parallel map with concurrency limit and timeout |
+| `parallelMapSettled(List, Function, int)` | Parallel map collecting successes + failures |
+| `forEachAsCompleted(List<Supplier>, Consumer)` | Process results in completion order |
+| `forEachAsCompleted(List<Supplier>, int, Consumer)` | Completion-order processing with bounded concurrency |
+| `processBatch(List, int, Consumer)` | Parallel batch processing |
+| `processBatchAndCollect(List, int, Function)` | Parallel batch processing with result collection |
+| `pipeline(Supplier)` | Create async pipeline from supplier |
+| `pipeline(CompletableFuture)` | Create async pipeline from future |
+| `combine(CF, CF, BiFunction)` | Combine two futures |
+| `combine(CF, CF, CF, TriFunction)` | Combine three futures |
+| `async(Supplier)` / `async(Runnable)` | Submit async task |
+| `delay(Duration, Supplier)` | Delayed execution |
+| `rateLimited(double)` / `rateLimited(double, long)` | Create rate-limited executor |
+| `invokeAllRateLimited(double, Supplier...)` | Execute with rate limiting |
+| `getExecutor()` | Get the shared virtual thread executor |
+
+### ParallelResult&lt;T&gt; — Partial Success Container
+
+| Method | Description |
+|--------|-------------|
+| `of(List<T>, List<Throwable>)` | Create from successes and failures |
+| `allSucceeded(List<T>)` | Create all-success result |
+| `allFailed(List<Throwable>)` | Create all-failure result |
+| `successes()` | Get success results (unmodifiable) |
+| `failures()` | Get failure exceptions (unmodifiable) |
+| `hasFailures()` | Check if any failures exist |
+| `isAllSuccessful()` | Check if all tasks succeeded |
+| `isAllFailed()` | Check if all tasks failed |
+| `successCount()` / `failureCount()` / `totalCount()` | Get counts |
+| `throwIfAnyFailed()` | Throw if any failure exists |
+| `throwIfAllFailed()` | Throw only if all failed |
+| `getOrThrow()` | Return successes or throw |
+
+### Futures — CompletableFuture Aggregation
+
+| Method | Description |
+|--------|-------------|
+| `allAsList(CompletableFuture...)` | Collect all results into list (fail-fast) |
+| `allAsList(List<CompletableFuture>)` | Collect all results into list (fail-fast) |
+| `successfulAsList(List<CompletableFuture>)` | Collect only successful results |
+| `settleAll(List<CompletableFuture>)` | Collect successes + failures into ParallelResult |
+| `firstSuccessful(List<CompletableFuture>)` | First success wins, cancel losers |
+| `withTimeout(CompletableFuture, Duration)` | Add timeout to future |
+
+### Class Overview
 
 | Class | Description |
 |-------|-------------|
-| `OpenParallel` | Main facade - parallel execution, batch, pipeline, rate limiting, scheduling |
-| `OpenStructured` | Structured concurrency facade (JEP 499) - invokeAll, invokeAny, parallel, race |
+| `OpenParallel` | Main facade - parallel execution, batch, pipeline, rate limiting |
+| `ParallelResult` | Immutable container for partial success results (successes + failures) |
+| `Futures` | CompletableFuture aggregation utilities (allAsList, settleAll, firstSuccessful) |
 | `BatchProcessor` | Configurable parallel batch processor with progress tracking |
 | `PartitionUtil` | List partitioning utility for batch processing |
 | `OpenParallelException` | Exception type for parallel operation failures |
-| `ExecutorConfig` | Configuration record for executor settings |
+| `ExecutorConfig` | Configuration for executor settings |
 | `VirtualExecutor` | Virtual thread executor with concurrency limiting and statistics |
-| `CpuBound` | Platform thread executor optimized for CPU-intensive tasks |
+| `CpuBound` | Marker interface for CPU-intensive tasks |
 | `HybridExecutor` | Auto-routing executor for mixed IO/CPU workloads |
-| `TokenBucketRateLimiter` | Token bucket rate limiter implementation |
+| `TokenBucketRateLimiter` | Standalone non-blocking token bucket rate limiter |
 | `RateLimitedExecutor` | Rate-limited task executor with token bucket algorithm |
 | `AsyncPipeline` | Fluent async pipeline with chaining and error handling |
 | `TriFunction` | Three-argument function interface for combining three results |
-| `ScheduledScope` | Structured scope with delayed and periodic task scheduling |
 | `ScopedContext` | ScopedValue-based context propagation for structured tasks |
-| `StructuredScope` | Wrapper for JDK StructuredTaskScope with shutdown policies |
-| `TaskResult` | Result record for structured task execution |
 | `DeadlineContext` | ScopedValue-based deadline propagation for virtual threads |
 
 ## Requirements
 
-- Java 25+ (uses virtual threads, structured concurrency JEP 499, ScopedValue, records)
-- No external dependencies
+- Java 25+ (uses virtual threads, ScopedValue, records)
+- No external dependencies (only depends on opencode-base-core)
 
 ## License
 

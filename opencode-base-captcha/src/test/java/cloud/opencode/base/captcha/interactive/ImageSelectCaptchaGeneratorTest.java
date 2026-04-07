@@ -198,14 +198,11 @@ class ImageSelectCaptchaGeneratorTest {
         }
 
         @Test
-        @DisplayName("metadata contains targetIndices list")
-        void metadataContainsTargetIndices() {
+        @DisplayName("metadata does not contain targetIndices (security)")
+        void metadataDoesNotContainTargetIndices() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            assertThat(captcha.metadata()).containsKey("targetIndices");
-            @SuppressWarnings("unchecked")
-            List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
-            assertThat(indices).isNotEmpty();
+            assertThat(captcha.metadata()).doesNotContainKey("targetIndices");
         }
 
         @Test
@@ -226,7 +223,7 @@ class ImageSelectCaptchaGeneratorTest {
 
             assertThat(captcha.metadata()).containsKeys(
                     "width", "height", "gridSize", "cellSize", "gap",
-                    "targetCategory", "targetCount", "targetIndices", "prompt"
+                    "targetCategory", "targetCount", "prompt"
             );
         }
     }
@@ -281,13 +278,21 @@ class ImageSelectCaptchaGeneratorTest {
     @DisplayName("Target Indices Tests")
     class TargetIndicesTests {
 
+        private List<Integer> parseIndicesFromAnswer(Captcha captcha) {
+            String[] parts = captcha.answer().split(",");
+            List<Integer> indices = new java.util.ArrayList<>();
+            for (String part : parts) {
+                indices.add(Integer.parseInt(part));
+            }
+            return indices;
+        }
+
         @Test
         @DisplayName("target indices are within grid bounds (0-8)")
         void targetIndicesWithinBounds() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            @SuppressWarnings("unchecked")
-            List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
+            List<Integer> indices = parseIndicesFromAnswer(captcha);
             int gridSize = (Integer) captcha.metadata().get("gridSize");
             int totalCells = gridSize * gridSize;
 
@@ -301,8 +306,7 @@ class ImageSelectCaptchaGeneratorTest {
         void targetIndicesAreUnique() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            @SuppressWarnings("unchecked")
-            List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
+            List<Integer> indices = parseIndicesFromAnswer(captcha);
 
             Set<Integer> uniqueIndices = new HashSet<>(indices);
             assertThat(uniqueIndices).hasSize(indices.size());
@@ -313,8 +317,7 @@ class ImageSelectCaptchaGeneratorTest {
         void targetIndicesAreSorted() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            @SuppressWarnings("unchecked")
-            List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
+            List<Integer> indices = parseIndicesFromAnswer(captcha);
 
             for (int i = 0; i < indices.size() - 1; i++) {
                 assertThat(indices.get(i)).isLessThanOrEqualTo(indices.get(i + 1));
@@ -327,8 +330,7 @@ class ImageSelectCaptchaGeneratorTest {
             Captcha captcha = generator.generate(defaultConfig);
 
             int targetCount = (Integer) captcha.metadata().get("targetCount");
-            @SuppressWarnings("unchecked")
-            List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
+            List<Integer> indices = parseIndicesFromAnswer(captcha);
 
             assertThat(indices).hasSize(targetCount);
         }
@@ -338,8 +340,7 @@ class ImageSelectCaptchaGeneratorTest {
         void targetIndicesConsistentlyValid() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            @SuppressWarnings("unchecked")
-            List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
+            List<Integer> indices = parseIndicesFromAnswer(captcha);
 
             assertThat(indices).isNotEmpty();
             assertThat(indices).allMatch(idx -> idx >= 0 && idx < 9);
@@ -373,19 +374,17 @@ class ImageSelectCaptchaGeneratorTest {
         }
 
         @Test
-        @DisplayName("answer matches target indices in metadata")
-        void answerMatchesTargetIndices() {
+        @DisplayName("answer indices are valid grid positions")
+        void answerIndicesAreValidGridPositions() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            @SuppressWarnings("unchecked")
-            List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
+            int gridSize = (Integer) captcha.metadata().get("gridSize");
+            int totalCells = gridSize * gridSize;
 
             String[] parts = captcha.answer().split(",");
-            assertThat(parts).hasSize(indices.size());
-
-            for (int i = 0; i < parts.length; i++) {
-                int answerIndex = Integer.parseInt(parts[i]);
-                assertThat(answerIndex).isEqualTo(indices.get(i));
+            for (String part : parts) {
+                int index = Integer.parseInt(part);
+                assertThat(index).isBetween(0, totalCells - 1);
             }
         }
 
@@ -604,15 +603,13 @@ class ImageSelectCaptchaGeneratorTest {
         @Test
         @DisplayName("generates different target indices each time")
         void generatesDifferentTargetIndices() {
-            Set<String> allIndices = new HashSet<>();
+            Set<String> allAnswers = new HashSet<>();
             for (int i = 0; i < 20; i++) {
                 Captcha captcha = generator.generate(defaultConfig);
-                @SuppressWarnings("unchecked")
-                List<Integer> indices = (List<Integer>) captcha.metadata().get("targetIndices");
-                allIndices.add(indices.toString());
+                allAnswers.add(captcha.answer());
             }
 
-            assertThat(allIndices.size()).isGreaterThan(5);
+            assertThat(allAnswers.size()).isGreaterThan(5);
         }
 
         @Test

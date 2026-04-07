@@ -11,6 +11,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -604,6 +607,130 @@ class OpenFeatureTest {
             assertThatThrownBy(() -> features.setStore(null))
                     .isInstanceOf(NullPointerException.class)
                     .hasMessageContaining("null");
+        }
+    }
+
+    @Nested
+    @DisplayName("分组操作测试")
+    class GroupOperationTests {
+
+        @Test
+        @DisplayName("按组获取功能")
+        void testGetByGroup() {
+            features.register(Feature.builder("f1").group("payment").build());
+            features.register(Feature.builder("f2").group("payment").build());
+            features.register(Feature.builder("f3").group("marketing").build());
+
+            List<Feature> paymentFeatures = features.getByGroup("payment");
+
+            assertThat(paymentFeatures).hasSize(2);
+            assertThat(paymentFeatures).extracting(Feature::key)
+                    .containsExactlyInAnyOrder("f1", "f2");
+        }
+
+        @Test
+        @DisplayName("按组获取空结果")
+        void testGetByGroupEmpty() {
+            features.register(Feature.builder("f1").group("payment").build());
+
+            List<Feature> result = features.getByGroup("nonexistent");
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("启用组中所有功能")
+        void testEnableGroup() {
+            features.register(Feature.builder("f1").group("payment").defaultEnabled(false).build());
+            features.register(Feature.builder("f2").group("payment").defaultEnabled(false).build());
+            features.register(Feature.builder("f3").group("marketing").defaultEnabled(false).build());
+
+            features.enableGroup("payment");
+
+            assertThat(features.getOrThrow("f1").defaultEnabled()).isTrue();
+            assertThat(features.getOrThrow("f2").defaultEnabled()).isTrue();
+            assertThat(features.getOrThrow("f3").defaultEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("禁用组中所有功能")
+        void testDisableGroup() {
+            features.register(Feature.builder("f1").group("payment").defaultEnabled(true).build());
+            features.register(Feature.builder("f2").group("payment").defaultEnabled(true).build());
+            features.register(Feature.builder("f3").group("marketing").defaultEnabled(true).build());
+
+            features.disableGroup("payment");
+
+            assertThat(features.getOrThrow("f1").defaultEnabled()).isFalse();
+            assertThat(features.getOrThrow("f2").defaultEnabled()).isFalse();
+            assertThat(features.getOrThrow("f3").defaultEnabled()).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("快照操作测试")
+    class SnapshotOperationTests {
+
+        @Test
+        @DisplayName("创建快照")
+        void testSnapshot() {
+            features.register(Feature.builder("f1").alwaysOn().build());
+            features.register(Feature.builder("f2").alwaysOff().build());
+
+            FeatureSnapshot snapshot = features.snapshot();
+
+            assertThat(snapshot.size()).isEqualTo(2);
+            assertThat(snapshot.contains("f1")).isTrue();
+            assertThat(snapshot.contains("f2")).isTrue();
+            assertThat(snapshot.timestamp()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("从快照恢复")
+        void testRestore() {
+            features.register(Feature.builder("f1").alwaysOn().build());
+            features.register(Feature.builder("f2").alwaysOff().build());
+
+            FeatureSnapshot snapshot = features.snapshot();
+
+            features.clear();
+            features.register(Feature.builder("f3").build());
+
+            assertThat(features.size()).isEqualTo(1);
+
+            features.restore(snapshot);
+
+            assertThat(features.size()).isEqualTo(2);
+            assertThat(features.exists("f1")).isTrue();
+            assertThat(features.exists("f2")).isTrue();
+            assertThat(features.exists("f3")).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("过期功能测试")
+    class ExpiredFeatureTests {
+
+        @Test
+        @DisplayName("过期功能isEnabled返回false")
+        void testExpiredFeatureReturnsFalse() {
+            features.register(Feature.builder("test")
+                    .alwaysOn()
+                    .expiresAt(Instant.now().minus(Duration.ofHours(1)))
+                    .build());
+
+            assertThat(features.isEnabled("test")).isFalse();
+        }
+
+        @Test
+        @DisplayName("未过期功能正常评估")
+        void testNonExpiredFeatureEvaluates() {
+            features.register(Feature.builder("test")
+                    .alwaysOn()
+                    .expiresAt(Instant.now().plus(Duration.ofHours(1)))
+                    .build());
+
+            assertThat(features.isEnabled("test")).isTrue();
         }
     }
 }

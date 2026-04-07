@@ -91,7 +91,9 @@ public final class Suppliers {
      * @param <T>      the type of value supplied
      * @return a memoizing supplier
      * @throws NullPointerException if delegate is null
+     * @deprecated Use {@link Lazy#of(java.util.function.Supplier)} instead, which is virtual-thread safe.
      */
+    @Deprecated(since = "1.0.3")
     public static <T> Supplier<T> memoize(Supplier<T> delegate) {
         Objects.requireNonNull(delegate, "delegate must not be null");
 
@@ -119,7 +121,9 @@ public final class Suppliers {
      * @return a memoizing supplier with expiration
      * @throws NullPointerException     if delegate or unit is null
      * @throws IllegalArgumentException if duration is not positive
+     * @deprecated Use {@link Lazy#of(java.util.function.Supplier)} instead, which is virtual-thread safe.
      */
+    @Deprecated(since = "1.0.3")
     public static <T> Supplier<T> memoizeWithExpiration(Supplier<T> delegate, long duration, TimeUnit unit) {
         Objects.requireNonNull(delegate, "delegate must not be null");
         Objects.requireNonNull(unit, "unit must not be null");
@@ -142,7 +146,9 @@ public final class Suppliers {
      * @return a memoizing supplier with expiration
      * @throws NullPointerException     if delegate or duration is null
      * @throws IllegalArgumentException if duration is not positive
+     * @deprecated Use {@link Lazy#of(java.util.function.Supplier)} instead, which is virtual-thread safe.
      */
+    @Deprecated(since = "1.0.3")
     public static <T> Supplier<T> memoizeWithExpiration(Supplier<T> delegate, Duration duration) {
         Objects.requireNonNull(duration, "duration must not be null");
         return memoizeWithExpiration(delegate, duration.toNanos(), TimeUnit.NANOSECONDS);
@@ -277,9 +283,12 @@ public final class Suppliers {
                     if (expirationNanos == 0 || now - expirationNanos >= 0) {
                         T t = delegate.get();
                         value = t;
-                        // Calculate expiration time
+                        // Calculate expiration time, saturating on overflow
                         nanos = now + durationNanos;
-                        // Handle overflow by using Long.MAX_VALUE
+                        if (((now ^ nanos) & (durationNanos ^ nanos)) < 0) {
+                            // Overflow detected — saturate to Long.MAX_VALUE
+                            nanos = Long.MAX_VALUE;
+                        }
                         expirationNanos = (nanos == 0) ? 1 : nanos;
                         return t;
                     }

@@ -5,20 +5,19 @@ import cloud.opencode.base.email.attachment.ByteArrayAttachment;
 import cloud.opencode.base.email.exception.EmailErrorCode;
 import cloud.opencode.base.email.exception.EmailReceiveException;
 import cloud.opencode.base.email.internal.EmailReceiver;
+import cloud.opencode.base.email.protocol.ProtocolException;
+import cloud.opencode.base.email.protocol.imap.ImapClient;
+import cloud.opencode.base.email.protocol.mime.MimeParser;
+import cloud.opencode.base.email.protocol.mime.ParsedMessage;
 import cloud.opencode.base.email.query.EmailQuery;
-import jakarta.mail.*;
-import jakarta.mail.internet.InternetAddress;
-import jakarta.mail.internet.MimeBodyPart;
-import jakarta.mail.internet.MimeMessage;
-import jakarta.mail.search.*;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * IMAP Email Receiver Implementation
@@ -81,10 +80,34 @@ public class ImapEmailReceiver implements EmailReceiver {
 
     private static final System.Logger logger = System.getLogger(ImapEmailReceiver.class.getName());
 
+    /**
+     * Date formatter for IMAP SEARCH date criteria (dd-MMM-yyyy).
+     * IMAP SEARCH 日期条件的日期格式化器（dd-MMM-yyyy）。
+     */
+    private static final DateTimeFormatter IMAP_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
+
+    /**
+     * Pattern to extract FLAGS from an IMAP FETCH response line.
+     * 从 IMAP FETCH 响应行中提取 FLAGS 的正则表达式。
+     */
+    private static final Pattern FLAGS_PATTERN = Pattern.compile("FLAGS \\(([^)]*)\\)");
+
+    /**
+     * Pattern to extract RFC822.SIZE from an IMAP FETCH response line.
+     * 从 IMAP FETCH 响应行中提取 RFC822.SIZE 的正则表达式。
+     */
+    private static final Pattern SIZE_PATTERN = Pattern.compile("RFC822\\.SIZE (\\d+)");
+
+    /**
+     * Pattern to extract the raw BODY[] literal from an IMAP FETCH response.
+     * 从 IMAP FETCH 响应中提取原始 BODY[] 字面量的正则表达式。
+     */
+    private static final Pattern BODY_LITERAL_PATTERN = Pattern.compile("\\{(\\d+)\\}\r?\n");
+
     private final EmailReceiveConfig config;
-    private Session session;
-    private Store store;
-    private final Map<String, Folder> openFolders = new HashMap<>();
+    private ImapClient client;
+    private String currentFolder;
 
     /**
      * Create IMAP receiver with configuration
@@ -108,81 +131,63 @@ public class ImapEmailReceiver implements EmailReceiver {
             return;
         }
 
-        Properties props = new Properties();
-        String protocol = config.getStoreProtocol();
-
-        props.put("mail.store.protocol", protocol);
-        props.put("mail." + protocol + ".host", config.host());
-        props.put("mail." + protocol + ".port", String.valueOf(config.port()));
-
-        if (config.ssl()) {
-            props.put("mail." + protocol + ".ssl.enable", "true");
-        }
-
-        if (config.starttls()) {
-            props.put("mail." + protocol + ".starttls.enable", "true");
-            props.put("mail." + protocol + ".starttls.required", "true");
-        }
-
-        // OAuth2 XOAUTH2 mechanism for Gmail/Outlook
-        if (config.hasOAuth2()) {
-            props.put("mail." + protocol + ".auth.mechanisms", "XOAUTH2");
-        }
-
-        props.put("mail." + protocol + ".connectiontimeout",
-                String.valueOf(config.connectionTimeout().toMillis()));
-        props.put("mail." + protocol + ".timeout",
-                String.valueOf(config.timeout().toMillis()));
-
-        session = Session.getInstance(props);
-        session.setDebug(config.debug());
-
         try {
-            store = session.getStore(protocol);
+            client = new ImapClient(
+                    config.host(),
+                    config.port(),
+                    config.ssl(),
+                    config.starttls(),
+                    config.connectionTimeout(),
+                    config.timeout()
+            );
+            client.connect();
+
             if (config.requiresAuth()) {
-                // Use OAuth2 token if configured, otherwise use password
-                String credential = config.hasOAuth2()
-                        ? config.oauth2Token()
-                        : config.password();
-                store.connect(config.host(), config.port(), config.username(), credential);
-            } else {
-                store.connect();
+                if (config.hasOAuth2()) {
+                    client.authenticateXOAuth2(config.username(), config.oauth2Token());
+                } else {
+                    client.login(config.username(), config.password());
+                }
             }
-        } catch (AuthenticationFailedException e) {
-            throw new EmailReceiveException("Authentication failed", e, EmailErrorCode.AUTH_FAILED);
-        } catch (MessagingException e) {
-            throw new EmailReceiveException("Failed to connect to mail server", e, EmailErrorCode.CONNECTION_FAILED);
+        } catch (ProtocolException e) {
+            // Clean up on failure
+            if (client != null) {
+                try {
+                    client.close();
+                } catch (Exception ignored) {
+                    // Ignore close errors during cleanup
+                }
+                client = null;
+            }
+            if (e.isAuthenticationFailure()) {
+                throw new EmailReceiveException("Authentication failed", e, EmailErrorCode.AUTH_FAILED);
+            }
+            throw new EmailReceiveException("Failed to connect to mail server", e,
+                    EmailErrorCode.CONNECTION_FAILED);
         }
     }
 
     @Override
     public void disconnect() {
-        // Close all open folders
-        for (Folder folder : openFolders.values()) {
+        if (client != null) {
             try {
-                if (folder.isOpen()) {
-                    folder.close(true);
-                }
-            } catch (MessagingException e) {
+                client.logout();
+            } catch (ProtocolException e) {
+                // Ignore logout errors, fall through to close
+            }
+            try {
+                client.close();
+            } catch (Exception e) {
                 // Ignore close errors
             }
+            client = null;
+            currentFolder = null;
         }
-        openFolders.clear();
-
-        // Close store
-        if (store != null && store.isConnected()) {
-            try {
-                store.close();
-            } catch (MessagingException e) {
-                // Ignore close errors
-            }
-        }
-        store = null;
     }
 
     @Override
     public boolean isConnected() {
-        return store != null && store.isConnected();
+        return client != null && client.isConnected();
     }
 
     @Override
@@ -199,53 +204,91 @@ public class ImapEmailReceiver implements EmailReceiver {
         ensureConnected();
 
         String folderName = query.folder() != null ? query.folder() : config.defaultFolder();
-        Folder folder = getFolder(folderName, Folder.READ_WRITE);
 
         try {
-            SearchTerm searchTerm = buildSearchTerm(query);
-            Message[] messages;
+            selectFolder(folderName);
 
-            if (searchTerm != null) {
-                messages = folder.search(searchTerm);
+            // Build IMAP SEARCH criteria from query
+            String criteria = buildSearchCriteria(query);
+            List<Integer> seqNums = client.search(criteria);
+
+            if (seqNums.isEmpty()) {
+                return List.of();
+            }
+
+            // Fetch and parse messages — batch fetch when sequence numbers are contiguous
+            // 获取并解析消息 — 序列号连续时使用批量获取
+            List<ReceivedEmail> allEmails = new ArrayList<>(seqNums.size());
+            int min = Collections.min(seqNums);
+            int max = Collections.max(seqNums);
+            Set<Integer> seqSet = (seqNums.size() > 1) ? new HashSet<>(seqNums) : null;
+            boolean contiguous = (max - min + 1 == seqNums.size());
+
+            if (contiguous) {
+                // Contiguous range — single FETCH round trip
+                // 连续范围 — 单次 FETCH 往返
+                try {
+                    Map<Integer, String> fetched = client.fetchRange(min, max,
+                            "(BODY[] FLAGS RFC822.SIZE)");
+                    for (int seq : seqNums) {
+                        try {
+                            String fetchResponse = fetched.get(seq);
+                            if (fetchResponse == null) {
+                                continue;
+                            }
+                            ReceivedEmail email = parseFetchResponse(fetchResponse, seq, folderName);
+                            if (email != null) {
+                                allEmails.add(email);
+                            }
+                        } catch (Exception e) {
+                            logger.log(System.Logger.Level.WARNING,
+                                    "Failed to parse message at sequence " + seq, e);
+                        }
+                    }
+                } catch (ProtocolException e) {
+                    // Fall back to individual fetch on batch failure
+                    // 批量获取失败时回退到单条获取
+                    logger.log(System.Logger.Level.WARNING,
+                            "Batch fetch failed, falling back to individual fetch", e);
+                    fetchIndividually(seqNums, folderName, allEmails);
+                }
             } else {
-                messages = folder.getMessages();
+                // Non-contiguous — individual fetch (existing behavior)
+                // 非连续 — 逐条获取（现有行为）
+                fetchIndividually(seqNums, folderName, allEmails);
             }
 
             // Apply sorting
-            messages = sortMessages(messages, query.sortOrder());
+            sortEmails(allEmails, query.sortOrder());
 
             // Apply pagination
-            int start = Math.min(query.offset(), messages.length);
-            int end = Math.min(start + query.limit(), messages.length);
+            int start = Math.min(query.offset(), allEmails.size());
+            int end = Math.min(start + query.limit(), allEmails.size());
+            List<ReceivedEmail> result = new ArrayList<>(allEmails.subList(start, end));
 
-            List<ReceivedEmail> result = new ArrayList<>();
-            for (int i = start; i < end; i++) {
-                try {
-                    ReceivedEmail email = parseMessage(messages[i], folderName);
-                    result.add(email);
-
-                    // Apply post-receive actions
-                    if (config.markAsReadAfterReceive()) {
-                        messages[i].setFlag(Flags.Flag.SEEN, true);
+            // Post-receive actions: mark as read and/or delete
+            if (config.markAsReadAfterReceive() || config.deleteAfterReceive()) {
+                for (ReceivedEmail email : result) {
+                    int seq = email.messageNumber();
+                    try {
+                        if (config.markAsReadAfterReceive()) {
+                            client.store(seq, "+FLAGS", "(\\Seen)");
+                        }
+                        if (config.deleteAfterReceive()) {
+                            client.store(seq, "+FLAGS", "(\\Deleted)");
+                        }
+                    } catch (ProtocolException e) {
+                        logger.log(System.Logger.Level.WARNING,
+                                "Failed to update flags for message " + seq, e);
                     }
-                    if (config.deleteAfterReceive()) {
-                        messages[i].setFlag(Flags.Flag.DELETED, true);
-                    }
-                } catch (Exception e) {
-                    // Log and skip problematic messages
-                    // 记录日志并跳过有问题的消息
-                    logger.log(System.Logger.Level.WARNING,
-                            "Failed to parse message at index " + i, e);
+                }
+                if (config.deleteAfterReceive()) {
+                    client.expunge();
                 }
             }
 
-            // Expunge if any messages were marked for deletion
-            if (config.deleteAfterReceive()) {
-                folder.expunge();
-            }
-
             return result;
-        } catch (MessagingException e) {
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to receive emails", e, EmailErrorCode.UNKNOWN);
         }
     }
@@ -258,28 +301,33 @@ public class ImapEmailReceiver implements EmailReceiver {
             return null;
         }
 
-        String folderName = config.defaultFolder();
-        Folder folder = getFolder(folderName, Folder.READ_ONLY);
-
         try {
-            SearchTerm searchTerm = new MessageIDTerm(messageId);
-            Message[] messages = folder.search(searchTerm);
+            // Search in default folder first
+            String folderName = config.defaultFolder();
+            selectFolder(folderName);
 
-            if (messages.length == 0) {
-                // Try other folders
-                for (String altFolder : listFolders()) {
-                    if (altFolder.equals(folderName)) continue;
-                    Folder alt = getFolder(altFolder, Folder.READ_ONLY);
-                    messages = alt.search(searchTerm);
-                    if (messages.length > 0) {
-                        return parseMessage(messages[0], altFolder);
-                    }
-                }
-                return null;
+            String searchCriteria = "HEADER Message-ID \"" + escapeSearchValue(messageId) + "\"";
+            List<Integer> seqNums = client.search(searchCriteria);
+
+            if (!seqNums.isEmpty()) {
+                String fetchResponse = client.fetch(seqNums.getFirst(), "(BODY[] FLAGS RFC822.SIZE)");
+                return parseFetchResponse(fetchResponse, seqNums.getFirst(), folderName);
             }
 
-            return parseMessage(messages[0], folderName);
-        } catch (MessagingException e) {
+            // Try other folders
+            for (String altFolder : listFolders()) {
+                if (altFolder.equals(folderName)) continue;
+                selectFolder(altFolder);
+                seqNums = client.search(searchCriteria);
+                if (!seqNums.isEmpty()) {
+                    String fetchResponse = client.fetch(seqNums.getFirst(),
+                            "(BODY[] FLAGS RFC822.SIZE)");
+                    return parseFetchResponse(fetchResponse, seqNums.getFirst(), altFolder);
+                }
+            }
+
+            return null;
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to receive email by ID: " + messageId, e);
         }
     }
@@ -288,9 +336,9 @@ public class ImapEmailReceiver implements EmailReceiver {
     public int getMessageCount(String folder) {
         ensureConnected();
         try {
-            Folder f = getFolder(folder, Folder.READ_ONLY);
-            return f.getMessageCount();
-        } catch (MessagingException e) {
+            examineFolder(folder);
+            return client.getMessageCount();
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to get message count", e);
         }
     }
@@ -299,40 +347,40 @@ public class ImapEmailReceiver implements EmailReceiver {
     public int getUnreadCount(String folder) {
         ensureConnected();
         try {
-            Folder f = getFolder(folder, Folder.READ_ONLY);
-            return f.getUnreadMessageCount();
-        } catch (MessagingException e) {
+            examineFolder(folder);
+            return client.getUnreadCount();
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to get unread count", e);
         }
     }
 
     @Override
     public void markAsRead(String messageId) {
-        setMessageFlag(messageId, Flags.Flag.SEEN, true);
+        setMessageFlag(messageId, "+FLAGS", "(\\Seen)");
     }
 
     @Override
     public void markAsUnread(String messageId) {
-        setMessageFlag(messageId, Flags.Flag.SEEN, false);
+        setMessageFlag(messageId, "-FLAGS", "(\\Seen)");
     }
 
     @Override
     public void setFlagged(String messageId, boolean flagged) {
-        setMessageFlag(messageId, Flags.Flag.FLAGGED, flagged);
+        setMessageFlag(messageId, flagged ? "+FLAGS" : "-FLAGS", "(\\Flagged)");
     }
 
     @Override
     public void delete(String messageId) {
         ensureConnected();
-        Message message = findMessage(messageId);
-        if (message == null) {
+        int seq = findMessageSeq(messageId);
+        if (seq < 0) {
             throw EmailReceiveException.messageNotFound(messageId);
         }
 
         try {
-            message.setFlag(Flags.Flag.DELETED, true);
-            message.getFolder().expunge();
-        } catch (MessagingException e) {
+            client.store(seq, "+FLAGS", "(\\Deleted)");
+            client.expunge();
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to delete message: " + messageId, e);
         }
     }
@@ -341,22 +389,19 @@ public class ImapEmailReceiver implements EmailReceiver {
     public void moveToFolder(String messageId, String targetFolder) {
         ensureConnected();
 
-        Message message = findMessage(messageId);
-        if (message == null) {
+        int seq = findMessageSeq(messageId);
+        if (seq < 0) {
             throw EmailReceiveException.messageNotFound(messageId);
         }
 
         try {
-            Folder source = message.getFolder();
-            Folder target = getFolder(targetFolder, Folder.READ_WRITE);
-
-            // Copy to target
-            source.copyMessages(new Message[]{message}, target);
+            // Copy to target folder
+            client.copy(seq, targetFolder);
 
             // Delete from source
-            message.setFlag(Flags.Flag.DELETED, true);
-            source.expunge();
-        } catch (MessagingException e) {
+            client.store(seq, "+FLAGS", "(\\Deleted)");
+            client.expunge();
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to move message to folder: " + targetFolder, e);
         }
     }
@@ -365,17 +410,23 @@ public class ImapEmailReceiver implements EmailReceiver {
     public List<String> listFolders() {
         ensureConnected();
         try {
-            Folder defaultFolder = store.getDefaultFolder();
-            Folder[] folders = defaultFolder.list("*");
+            List<String[]> folders = client.list("", "*");
 
-            List<String> result = new ArrayList<>();
-            for (Folder folder : folders) {
-                if ((folder.getType() & Folder.HOLDS_MESSAGES) != 0) {
-                    result.add(folder.getFullName());
+            List<String> result = new ArrayList<>(folders.size());
+            for (String[] folderInfo : folders) {
+                String flags = folderInfo[0];
+                String name = folderInfo[2];
+                // Filter out folders with \Noselect flag
+                if (!flags.contains("\\Noselect")) {
+                    // Remove quotes from folder name if present
+                    if (name.startsWith("\"") && name.endsWith("\"")) {
+                        name = name.substring(1, name.length() - 1);
+                    }
+                    result.add(name);
                 }
             }
             return result;
-        } catch (MessagingException e) {
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to list folders", e);
         }
     }
@@ -388,360 +439,391 @@ public class ImapEmailReceiver implements EmailReceiver {
         }
     }
 
-    private Folder getFolder(String folderName, int mode) {
-        try {
-            Folder folder = openFolders.get(folderName);
-            if (folder != null && folder.isOpen()) {
-                // Check if we need to upgrade from READ_ONLY to READ_WRITE
-                if (mode == Folder.READ_WRITE && folder.getMode() == Folder.READ_ONLY) {
-                    folder.close(false);
-                    try {
-                        folder.open(mode);
-                    } catch (MessagingException e) {
-                        openFolders.remove(folderName);
-                        throw e;
-                    }
-                }
-                return folder;
-            }
-
-            folder = store.getFolder(folderName);
-            if (!folder.exists()) {
-                throw EmailReceiveException.folderNotFound(folderName);
-            }
-
-            folder.open(mode);
-            openFolders.put(folderName, folder);
-            return folder;
-        } catch (MessagingException e) {
-            throw new EmailReceiveException("Failed to open folder: " + folderName, e,
-                    EmailErrorCode.FOLDER_ACCESS_DENIED);
+    /**
+     * Select a folder (READ_WRITE) if not already selected.
+     * 选择文件夹（读写模式），如果尚未选择。
+     */
+    private void selectFolder(String folderName) throws ProtocolException {
+        if (!folderName.equals(currentFolder)) {
+            client.select(folderName);
+            currentFolder = folderName;
         }
     }
 
-    private SearchTerm buildSearchTerm(EmailQuery query) {
-        List<SearchTerm> terms = new ArrayList<>();
+    /**
+     * Examine a folder (READ_ONLY) without changing the selected folder state.
+     * 以只读模式检查文件夹，不改变已选择的文件夹状态。
+     */
+    private void examineFolder(String folderName) throws ProtocolException {
+        client.examine(folderName);
+        // examine does not change the selected state for write operations
+        currentFolder = null;
+    }
+
+    /**
+     * Build IMAP SEARCH criteria string from EmailQuery.
+     * 从 EmailQuery 构建 IMAP SEARCH 条件字符串。
+     */
+    private String buildSearchCriteria(EmailQuery query) {
+        List<String> parts = new ArrayList<>(8);
 
         if (query.unreadOnly()) {
-            terms.add(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
+            parts.add("UNSEEN");
         }
 
         if (query.flaggedOnly()) {
-            terms.add(new FlagTerm(new Flags(Flags.Flag.FLAGGED), true));
+            parts.add("FLAGGED");
         }
 
         if (!query.includeDeleted()) {
-            terms.add(new FlagTerm(new Flags(Flags.Flag.DELETED), false));
+            parts.add("NOT DELETED");
         }
 
         if (query.fromDate() != null) {
-            Date date = Date.from(query.fromDate().atZone(ZoneId.systemDefault()).toInstant());
-            terms.add(new ReceivedDateTerm(ComparisonTerm.GE, date));
+            parts.add("SINCE " + formatImapDate(query.fromDate()));
         }
 
         if (query.toDate() != null) {
-            Date date = Date.from(query.toDate().atZone(ZoneId.systemDefault()).toInstant());
-            terms.add(new ReceivedDateTerm(ComparisonTerm.LE, date));
+            parts.add("BEFORE " + formatImapDate(query.toDate()));
         }
 
         if (query.from() != null && !query.from().isEmpty()) {
-            List<SearchTerm> fromTerms = new ArrayList<>();
-            for (String from : query.from()) {
-                fromTerms.add(new FromStringTerm(from));
+            if (query.from().size() == 1) {
+                parts.add("FROM \"" + escapeSearchValue(query.from().iterator().next()) + "\"");
+            } else {
+                // Build OR chain for multiple from addresses
+                List<String> fromList = new ArrayList<>(query.from());
+                String orChain = buildOrChain("FROM", fromList);
+                parts.add(orChain);
             }
-            terms.add(new OrTerm(fromTerms.toArray(new SearchTerm[0])));
         }
 
         if (query.to() != null && !query.to().isEmpty()) {
-            List<SearchTerm> toTerms = new ArrayList<>();
-            for (String to : query.to()) {
-                toTerms.add(new RecipientStringTerm(Message.RecipientType.TO, to));
+            if (query.to().size() == 1) {
+                parts.add("TO \"" + escapeSearchValue(query.to().iterator().next()) + "\"");
+            } else {
+                List<String> toList = new ArrayList<>(query.to());
+                String orChain = buildOrChain("TO", toList);
+                parts.add(orChain);
             }
-            terms.add(new OrTerm(toTerms.toArray(new SearchTerm[0])));
         }
 
         if (query.subjectContains() != null) {
-            terms.add(new SubjectTerm(query.subjectContains()));
+            parts.add("SUBJECT \"" + escapeSearchValue(query.subjectContains()) + "\"");
         }
 
         if (query.bodyContains() != null) {
-            terms.add(new BodyTerm(query.bodyContains()));
+            parts.add("BODY \"" + escapeSearchValue(query.bodyContains()) + "\"");
         }
 
-        if (terms.isEmpty()) {
+        if (parts.isEmpty()) {
+            return "ALL";
+        }
+
+        return String.join(" ", parts);
+    }
+
+    /**
+     * Build an OR chain for IMAP SEARCH: OR key "a" OR key "b" key "c"
+     * 构建 IMAP SEARCH 的 OR 链：OR key "a" OR key "b" key "c"
+     */
+    private String buildOrChain(String key, List<String> values) {
+        if (values.size() == 1) {
+            return key + " \"" + escapeSearchValue(values.getFirst()) + "\"";
+        }
+        if (values.size() == 2) {
+            return "OR " + key + " \"" + escapeSearchValue(values.get(0)) + "\" "
+                    + key + " \"" + escapeSearchValue(values.get(1)) + "\"";
+        }
+        // Recursive OR: OR key "first" (rest)
+        return "OR " + key + " \"" + escapeSearchValue(values.getFirst()) + "\" "
+                + buildOrChain(key, values.subList(1, values.size()));
+    }
+
+    /**
+     * Format a LocalDateTime as IMAP date string (dd-MMM-yyyy).
+     * 将 LocalDateTime 格式化为 IMAP 日期字符串（dd-MMM-yyyy）。
+     */
+    private String formatImapDate(LocalDateTime date) {
+        return date.format(IMAP_DATE_FORMAT);
+    }
+
+    /**
+     * Escape special characters in IMAP SEARCH string values.
+     * 转义 IMAP SEARCH 字符串值中的特殊字符。
+     */
+    private String escapeSearchValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        // Reject characters that could inject IMAP commands
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '\r' || c == '\n' || c == '\0') {
+                throw new IllegalArgumentException(
+                        "Invalid character in search value: 0x" + Integer.toHexString(c));
+            }
+        }
+        // Escape backslashes and double quotes
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /**
+     * Parse a FETCH response into a ReceivedEmail.
+     * 将 FETCH 响应解析为 ReceivedEmail。
+     */
+    private ReceivedEmail parseFetchResponse(String fetchResponse, int seq, String folderName) {
+        if (fetchResponse == null || fetchResponse.isBlank()) {
             return null;
         }
 
-        if (terms.size() == 1) {
-            return terms.getFirst();
+        // Extract FLAGS from the response
+        EmailFlags flags = parseFlagsFromResponse(fetchResponse);
+
+        // Extract RFC822.SIZE from the response
+        long size = parseSizeFromResponse(fetchResponse);
+
+        // Extract the raw message body from the BODY[] literal
+        String rawMessage = extractBodyLiteral(fetchResponse);
+        if (rawMessage == null || rawMessage.isBlank()) {
+            return null;
         }
 
-        return new AndTerm(terms.toArray(new SearchTerm[0]));
-    }
+        // Parse the raw MIME message
+        ParsedMessage parsed = MimeParser.parse(rawMessage);
 
-    private Message[] sortMessages(Message[] messages, EmailQuery.SortOrder sortOrder) {
-        if (sortOrder == null || messages.length <= 1) {
-            return messages;
-        }
-
-        Comparator<Message> comparator = switch (sortOrder) {
-            case NEWEST_FIRST -> (m1, m2) -> {
-                try {
-                    Date d1 = m1.getReceivedDate();
-                    Date d2 = m2.getReceivedDate();
-                    if (d1 == null) return 1;
-                    if (d2 == null) return -1;
-                    return d2.compareTo(d1);
-                } catch (MessagingException e) {
-                    return 0;
-                }
-            };
-            case OLDEST_FIRST -> (m1, m2) -> {
-                try {
-                    Date d1 = m1.getReceivedDate();
-                    Date d2 = m2.getReceivedDate();
-                    if (d1 == null) return 1;
-                    if (d2 == null) return -1;
-                    return d1.compareTo(d2);
-                } catch (MessagingException e) {
-                    return 0;
-                }
-            };
-            case SUBJECT_ASC -> (m1, m2) -> {
-                try {
-                    String s1 = m1.getSubject();
-                    String s2 = m2.getSubject();
-                    if (s1 == null) return 1;
-                    if (s2 == null) return -1;
-                    return s1.compareToIgnoreCase(s2);
-                } catch (MessagingException e) {
-                    return 0;
-                }
-            };
-            case SUBJECT_DESC -> (m1, m2) -> {
-                try {
-                    String s1 = m1.getSubject();
-                    String s2 = m2.getSubject();
-                    if (s1 == null) return 1;
-                    if (s2 == null) return -1;
-                    return s2.compareToIgnoreCase(s1);
-                } catch (MessagingException e) {
-                    return 0;
-                }
-            };
-            case SENDER_ASC, SENDER_DESC -> (m1, m2) -> {
-                try {
-                    Address[] a1 = m1.getFrom();
-                    Address[] a2 = m2.getFrom();
-                    String s1 = a1 != null && a1.length > 0 ? a1[0].toString() : "";
-                    String s2 = a2 != null && a2.length > 0 ? a2[0].toString() : "";
-                    int result = s1.compareToIgnoreCase(s2);
-                    return sortOrder == EmailQuery.SortOrder.SENDER_DESC ? -result : result;
-                } catch (MessagingException e) {
-                    return 0;
-                }
-            };
-        };
-
-        List<Message> sorted = new ArrayList<>(Arrays.asList(messages));
-        sorted.sort(comparator);
-        return sorted.toArray(new Message[0]);
-    }
-
-    private ReceivedEmail parseMessage(Message message, String folderName) throws MessagingException {
+        // Build ReceivedEmail from ParsedMessage
         ReceivedEmail.Builder builder = ReceivedEmail.builder()
                 .folder(folderName)
-                .messageNumber(message.getMessageNumber());
+                .messageNumber(seq)
+                .messageId(parsed.messageId())
+                .from(parsed.from())
+                .fromName(parsed.fromName())
+                .to(parsed.to() != null ? parsed.to() : List.of())
+                .cc(parsed.cc() != null ? parsed.cc() : List.of())
+                .bcc(parsed.bcc() != null ? parsed.bcc() : List.of())
+                .replyTo(parsed.replyTo())
+                .subject(parsed.subject())
+                .textContent(parsed.textContent())
+                .htmlContent(parsed.htmlContent())
+                .sentDate(parsed.sentDate())
+                .receivedDate(parsed.receivedDate())
+                .flags(flags)
+                .size(size > 0 ? size : parsed.size())
+                .headers(parsed.headers() != null ? parsed.headers() : Map.of());
 
-        // Message ID
-        if (message instanceof MimeMessage mimeMessage) {
-            builder.messageId(mimeMessage.getMessageID());
-        }
-
-        // From
-        Address[] from = message.getFrom();
-        if (from != null && from.length > 0) {
-            if (from[0] instanceof InternetAddress ia) {
-                builder.from(ia.getAddress());
-                builder.fromName(ia.getPersonal());
-            } else {
-                builder.from(from[0].toString());
+        // Convert ParsedAttachments to Attachments
+        if (parsed.attachments() != null && !parsed.attachments().isEmpty()) {
+            List<Attachment> attachments = new ArrayList<>(parsed.attachments().size());
+            for (ParsedMessage.ParsedAttachment pa : parsed.attachments()) {
+                if (pa.fileName() != null && pa.data() != null) {
+                    attachments.add(ByteArrayAttachment.of(
+                            pa.fileName(),
+                            pa.data(),
+                            pa.contentType()
+                    ));
+                }
             }
+            builder.attachments(attachments);
         }
-
-        // To
-        builder.to(parseAddresses(message.getRecipients(Message.RecipientType.TO)));
-
-        // CC
-        builder.cc(parseAddresses(message.getRecipients(Message.RecipientType.CC)));
-
-        // BCC
-        builder.bcc(parseAddresses(message.getRecipients(Message.RecipientType.BCC)));
-
-        // Reply-To
-        Address[] replyTo = message.getReplyTo();
-        if (replyTo != null && replyTo.length > 0) {
-            if (replyTo[0] instanceof InternetAddress ia) {
-                builder.replyTo(ia.getAddress());
-            } else {
-                builder.replyTo(replyTo[0].toString());
-            }
-        }
-
-        // Subject
-        builder.subject(message.getSubject());
-
-        // Dates
-        if (message.getSentDate() != null) {
-            builder.sentDate(message.getSentDate().toInstant());
-        }
-        if (message.getReceivedDate() != null) {
-            builder.receivedDate(message.getReceivedDate().toInstant());
-        }
-
-        // Flags
-        builder.flags(EmailFlags.from(message.getFlags()));
-
-        // Size
-        builder.size(message.getSize());
-
-        // Headers
-        Map<String, String> headers = new HashMap<>();
-        Enumeration<?> allHeaders = message.getAllHeaders();
-        while (allHeaders.hasMoreElements()) {
-            Header header = (Header) allHeaders.nextElement();
-            headers.put(header.getName(), header.getValue());
-        }
-        builder.headers(headers);
-
-        // Content and attachments
-        parseContent(message, builder);
 
         return builder.build();
     }
 
-    private List<String> parseAddresses(Address[] addresses) {
-        if (addresses == null) {
-            return List.of();
+    /**
+     * Parse IMAP FLAGS from a FETCH response string.
+     * 从 FETCH 响应字符串中解析 IMAP FLAGS。
+     */
+    private EmailFlags parseFlagsFromResponse(String response) {
+        Matcher matcher = FLAGS_PATTERN.matcher(response);
+        if (!matcher.find()) {
+            return EmailFlags.UNREAD;
         }
-        List<String> result = new ArrayList<>();
-        for (Address addr : addresses) {
-            if (addr instanceof InternetAddress ia) {
-                result.add(ia.getAddress());
-            } else {
-                result.add(addr.toString());
+
+        String flagsStr = matcher.group(1).toUpperCase(Locale.ENGLISH);
+        return new EmailFlags(
+                flagsStr.contains("\\SEEN"),
+                flagsStr.contains("\\ANSWERED"),
+                flagsStr.contains("\\FLAGGED"),
+                flagsStr.contains("\\DELETED"),
+                flagsStr.contains("\\DRAFT"),
+                flagsStr.contains("\\RECENT")
+        );
+    }
+
+    /**
+     * Parse RFC822.SIZE from a FETCH response string.
+     * 从 FETCH 响应字符串中解析 RFC822.SIZE。
+     */
+    private long parseSizeFromResponse(String response) {
+        Matcher matcher = SIZE_PATTERN.matcher(response);
+        if (matcher.find()) {
+            try {
+                return Long.parseLong(matcher.group(1));
+            } catch (NumberFormatException e) {
+                return 0;
             }
         }
-        return result;
+        return 0;
     }
 
-    private void parseContent(Part part, ReceivedEmail.Builder builder) throws MessagingException {
-        try {
-            List<Attachment> attachments = new ArrayList<>();
-            parseContentRecursive(part, builder, attachments, 0);
-            builder.attachments(attachments);
-        } catch (IOException e) {
-            throw new MessagingException("Failed to parse message content", e);
+    /**
+     * Extract the raw BODY[] literal content from a FETCH response.
+     * 从 FETCH 响应中提取原始 BODY[] 字面量内容。
+     *
+     * <p>The FETCH response contains a literal like {1234}\r\n followed by
+     * exactly 1234 bytes of the raw message.</p>
+     */
+    private String extractBodyLiteral(String response) {
+        Matcher matcher = BODY_LITERAL_PATTERN.matcher(response);
+        if (!matcher.find()) {
+            return null;
         }
+
+        int literalSize;
+        try {
+            literalSize = Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+
+        int start = matcher.end();
+        if (start + literalSize > response.length()) {
+            // If the literal size exceeds available data, take what we have
+            return response.substring(start);
+        }
+
+        return response.substring(start, start + literalSize);
     }
 
-    private static final int MAX_MIME_DEPTH = 50;
-
-    private void parseContentRecursive(Part part, ReceivedEmail.Builder builder,
-                                        List<Attachment> attachments, int depth) throws MessagingException, IOException {
-        if (depth > MAX_MIME_DEPTH) {
+    /**
+     * Sort ReceivedEmail list according to the specified sort order.
+     * 根据指定的排序顺序对 ReceivedEmail 列表排序。
+     */
+    private void sortEmails(List<ReceivedEmail> emails, EmailQuery.SortOrder sortOrder) {
+        if (sortOrder == null || emails.size() <= 1) {
             return;
         }
-        String contentType = part.getContentType().toLowerCase();
-        Object content = part.getContent();
 
-        if (part.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            String text = content.toString();
-            if (builder.build().textContent() == null) {
-                builder.textContent(text);
-            }
-        } else if (part.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            String html = content.toString();
-            if (builder.build().htmlContent() == null) {
-                builder.htmlContent(html);
-            }
-        } else if (content instanceof Multipart multipart) {
-            for (int i = 0; i < multipart.getCount(); i++) {
-                parseContentRecursive(multipart.getBodyPart(i), builder, attachments, depth + 1);
-            }
-        } else if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())
-                || Part.INLINE.equalsIgnoreCase(part.getDisposition())
-                || part.getFileName() != null) {
-            // Handle attachment
-            String fileName = part.getFileName();
-            if (fileName != null) {
-                try (InputStream is = part.getInputStream()) {
-                    byte[] data = readAllBytes(is);
-                    attachments.add(ByteArrayAttachment.of(fileName, data, part.getContentType()));
+        Comparator<ReceivedEmail> comparator = switch (sortOrder) {
+            case NEWEST_FIRST -> (e1, e2) -> {
+                Instant d1 = e1.receivedDate() != null ? e1.receivedDate() : e1.sentDate();
+                Instant d2 = e2.receivedDate() != null ? e2.receivedDate() : e2.sentDate();
+                if (d1 == null) return 1;
+                if (d2 == null) return -1;
+                return d2.compareTo(d1);
+            };
+            case OLDEST_FIRST -> (e1, e2) -> {
+                Instant d1 = e1.receivedDate() != null ? e1.receivedDate() : e1.sentDate();
+                Instant d2 = e2.receivedDate() != null ? e2.receivedDate() : e2.sentDate();
+                if (d1 == null) return 1;
+                if (d2 == null) return -1;
+                return d1.compareTo(d2);
+            };
+            case SUBJECT_ASC -> (e1, e2) -> {
+                String s1 = e1.subject();
+                String s2 = e2.subject();
+                if (s1 == null) return 1;
+                if (s2 == null) return -1;
+                return s1.compareToIgnoreCase(s2);
+            };
+            case SUBJECT_DESC -> (e1, e2) -> {
+                String s1 = e1.subject();
+                String s2 = e2.subject();
+                if (s1 == null) return 1;
+                if (s2 == null) return -1;
+                return s2.compareToIgnoreCase(s1);
+            };
+            case SENDER_ASC, SENDER_DESC -> (e1, e2) -> {
+                String s1 = e1.from() != null ? e1.from() : "";
+                String s2 = e2.from() != null ? e2.from() : "";
+                int result = s1.compareToIgnoreCase(s2);
+                return sortOrder == EmailQuery.SortOrder.SENDER_DESC ? -result : result;
+            };
+        };
+
+        emails.sort(comparator);
+    }
+
+    /**
+     * Fetch messages individually by sequence number.
+     * 按序列号逐条获取消息。
+     *
+     * @param seqNums    the sequence numbers to fetch | 要获取的序列号列表
+     * @param folderName the folder name for building ReceivedEmail | 用于构建 ReceivedEmail 的文件夹名
+     * @param result     the list to accumulate parsed emails into | 用于累积解析邮件的列表
+     */
+    private void fetchIndividually(List<Integer> seqNums, String folderName,
+                                   List<ReceivedEmail> result) {
+        for (int seq : seqNums) {
+            try {
+                String fetchResponse = client.fetch(seq, "(BODY[] FLAGS RFC822.SIZE)");
+                ReceivedEmail email = parseFetchResponse(fetchResponse, seq, folderName);
+                if (email != null) {
+                    result.add(email);
                 }
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING,
+                        "Failed to parse message at sequence " + seq, e);
             }
         }
     }
 
-    private byte[] readAllBytes(InputStream is) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        while ((bytesRead = is.read(buffer)) != -1) {
-            baos.write(buffer, 0, bytesRead);
-        }
-        return baos.toByteArray();
-    }
-
-    private void setMessageFlag(String messageId, Flags.Flag flag, boolean value) {
+    /**
+     * Set a flag on a message identified by its Message-ID.
+     * 为通过 Message-ID 标识的消息设置标记。
+     */
+    private void setMessageFlag(String messageId, String action, String flags) {
         ensureConnected();
-        Message message = findMessage(messageId);
-        if (message == null) {
+        int seq = findMessageSeq(messageId);
+        if (seq < 0) {
             throw EmailReceiveException.messageNotFound(messageId);
         }
 
         try {
-            // Ensure folder is open in READ_WRITE mode
-            Folder folder = message.getFolder();
-            if (!folder.isOpen() || folder.getMode() != Folder.READ_WRITE) {
-                if (folder.isOpen()) {
-                    folder.close(false);
-                }
-                folder.open(Folder.READ_WRITE);
-            }
-            message.setFlag(flag, value);
-        } catch (MessagingException e) {
+            client.store(seq, action, flags);
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to set message flag: " + messageId, e);
         }
     }
 
-    private Message findMessage(String messageId) {
+    /**
+     * Find the sequence number of a message by its Message-ID header.
+     * 通过 Message-ID 邮件头查找消息的序列号。
+     *
+     * <p>Searches the default folder first, then other folders.</p>
+     * <p>先搜索默认文件夹，然后搜索其他文件夹。</p>
+     *
+     * @param messageId the Message-ID to find | 要查找的 Message-ID
+     * @return the sequence number, or -1 if not found | 序列号，未找到返回 -1
+     */
+    private int findMessageSeq(String messageId) {
         if (messageId == null || messageId.isBlank()) {
-            return null;
+            return -1;
         }
+
+        String searchCriteria = "HEADER Message-ID \"" + escapeSearchValue(messageId) + "\"";
 
         try {
             // Search in default folder first
-            Folder folder = getFolder(config.defaultFolder(), Folder.READ_WRITE);
-            SearchTerm searchTerm = new MessageIDTerm(messageId);
-            Message[] messages = folder.search(searchTerm);
-
-            if (messages.length > 0) {
-                return messages[0];
+            selectFolder(config.defaultFolder());
+            List<Integer> seqNums = client.search(searchCriteria);
+            if (!seqNums.isEmpty()) {
+                return seqNums.getFirst();
             }
 
             // Search in other folders
             for (String folderName : listFolders()) {
                 if (folderName.equals(config.defaultFolder())) continue;
-                folder = getFolder(folderName, Folder.READ_WRITE);
-                messages = folder.search(searchTerm);
-                if (messages.length > 0) {
-                    return messages[0];
+                selectFolder(folderName);
+                seqNums = client.search(searchCriteria);
+                if (!seqNums.isEmpty()) {
+                    return seqNums.getFirst();
                 }
             }
 
-            return null;
-        } catch (MessagingException e) {
+            return -1;
+        } catch (ProtocolException e) {
             throw new EmailReceiveException("Failed to find message: " + messageId, e);
         }
     }

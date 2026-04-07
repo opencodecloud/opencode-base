@@ -1,6 +1,8 @@
 
 package cloud.opencode.base.serialization.compress;
 
+import java.util.Arrays;
+
 /**
  * CompressionAlgorithm - Compression Algorithm Enumeration
  * 压缩算法枚举
@@ -12,23 +14,19 @@ package cloud.opencode.base.serialization.compress;
  * <ul>
  *   <li>NONE - No compression - 无压缩</li>
  *   <li>GZIP - GZIP compression (JDK built-in) - GZIP 压缩（JDK 内置）</li>
- *   <li>LZ4 - LZ4 fast compression - LZ4 快速压缩</li>
- *   <li>SNAPPY - Snappy compression - Snappy 压缩</li>
- *   <li>ZSTD - Zstandard high-ratio compression - Zstandard 高压缩比压缩</li>
+ *   <li>DEFLATE - Deflate compression (JDK built-in) - Deflate 压缩（JDK 内置）</li>
  * </ul>
  *
  * <p><strong>Selection Guide | 选择指南:</strong></p>
  * <ul>
  *   <li>GZIP - Best compression ratio, moderate speed - 最佳压缩比，中等速度</li>
- *   <li>LZ4 - Fastest speed, moderate compression - 最快速度，中等压缩比</li>
- *   <li>SNAPPY - Good balance for real-time - 实时场景的良好平衡</li>
- *   <li>ZSTD - Best overall (ratio + speed) - 最佳综合表现</li>
+ *   <li>DEFLATE - Slightly faster than GZIP, slightly less overhead - 比 GZIP 略快，开销略小</li>
  * </ul>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>Supported compression algorithm enumeration - 支持的压缩算法枚举</li>
- *   <li>GZIP, LZ4, Snappy, Deflate, ZSTD support - 支持GZIP、LZ4、Snappy、Deflate、ZSTD</li>
+ *   <li>GZIP, Deflate support (JDK built-in) - 支持 GZIP、Deflate（JDK 内置）</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -36,7 +34,7 @@ package cloud.opencode.base.serialization.compress;
  * // Select compression for serialization
  * // 为序列化选择压缩算法
  * CompressedSerializer serializer = new CompressedSerializer(
- *     delegate, CompressionAlgorithm.LZ4
+ *     delegate, CompressionAlgorithm.GZIP
  * );
  * }</pre>
  *
@@ -66,22 +64,10 @@ public enum CompressionAlgorithm {
     GZIP("gzip", (byte) 1, true),
 
     /**
-     * LZ4 fast compression (requires lz4-java)
-     * LZ4 快速压缩（需要 lz4-java）
+     * Deflate compression (JDK built-in)
+     * Deflate 压缩（JDK 内置）
      */
-    LZ4("lz4", (byte) 2, false),
-
-    /**
-     * Snappy compression (requires snappy-java)
-     * Snappy 压缩（需要 snappy-java）
-     */
-    SNAPPY("snappy", (byte) 3, false),
-
-    /**
-     * Zstandard high-ratio compression (requires zstd-jni)
-     * Zstandard 高压缩比压缩（需要 zstd-jni）
-     */
-    ZSTD("zstd", (byte) 4, false);
+    DEFLATE("deflate", (byte) 5, true);
 
     /**
      * The algorithm name
@@ -144,15 +130,27 @@ public enum CompressionAlgorithm {
      * @return true if available - 如果可用则返回 true
      */
     public boolean isAvailable() {
-        if (builtIn || this == NONE) {
-            return true;
+        // All algorithms are JDK built-in or NONE, so always available
+        return true;
+    }
+
+    /**
+     * Pre-built lookup table: index = algorithm id byte, value = algorithm.
+     * O(1) lookup instead of O(n) linear scan on every decompression call.
+     * 预构建查找表：索引 = 算法 id 字节，值 = 算法。每次解压调用 O(1) 查找代替 O(n) 线性扫描。
+     */
+    private static final CompressionAlgorithm[] BY_ID;
+
+    static {
+        int maxId = 0;
+        for (CompressionAlgorithm alg : values()) {
+            maxId = Math.max(maxId, alg.id & 0xFF);
         }
-        return switch (this) {
-            case LZ4 -> isClassAvailable("net.jpountz.lz4.LZ4Factory");
-            case SNAPPY -> isClassAvailable("org.xerial.snappy.Snappy");
-            case ZSTD -> isClassAvailable("com.github.luben.zstd.Zstd");
-            default -> false;
-        };
+        BY_ID = new CompressionAlgorithm[maxId + 1];
+        Arrays.fill(BY_ID, NONE);
+        for (CompressionAlgorithm alg : values()) {
+            BY_ID[alg.id & 0xFF] = alg;
+        }
     }
 
     /**
@@ -163,12 +161,8 @@ public enum CompressionAlgorithm {
      * @return the algorithm, or NONE if not found - 算法，如果未找到则返回 NONE
      */
     public static CompressionAlgorithm fromId(byte id) {
-        for (CompressionAlgorithm alg : values()) {
-            if (alg.id == id) {
-                return alg;
-            }
-        }
-        return NONE;
+        int idx = id & 0xFF;
+        return idx < BY_ID.length ? BY_ID[idx] : NONE;
     }
 
     /**
@@ -189,14 +183,5 @@ public enum CompressionAlgorithm {
             }
         }
         return NONE;
-    }
-
-    private static boolean isClassAvailable(String className) {
-        try {
-            Class.forName(className);
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
     }
 }

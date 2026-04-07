@@ -47,7 +47,7 @@ public final class CloneContext {
      * Maps original objects to their clones (identity-based)
      * 原始对象到克隆对象的映射（基于身份）
      */
-    private final IdentityHashMap<Object, Object> clonedObjects = new IdentityHashMap<>();
+    private final IdentityHashMap<Object, Object> clonedObjects = new IdentityHashMap<>(64);
 
     /**
      * Current clone depth
@@ -66,6 +66,18 @@ public final class CloneContext {
      * 用于调试的克隆路径
      */
     private final Deque<String> path = new ArrayDeque<>();
+
+    /**
+     * Clone policy
+     * 克隆策略
+     */
+    private ClonePolicy policy = ClonePolicy.STANDARD;
+
+    /**
+     * Warnings for LENIENT mode
+     * 宽松模式下的警告
+     */
+    private final java.util.List<String> warnings = new java.util.ArrayList<>();
 
     /**
      * Statistics tracking
@@ -101,6 +113,21 @@ public final class CloneContext {
     public static CloneContext create(int maxDepth) {
         CloneContext ctx = new CloneContext();
         ctx.maxDepth = maxDepth;
+        return ctx;
+    }
+
+    /**
+     * Creates a new CloneContext with max depth and policy
+     * 创建指定最大深度和策略的CloneContext
+     *
+     * @param maxDepth the maximum depth | 最大深度
+     * @param policy   the clone policy | 克隆策略
+     * @return the new context | 新的上下文
+     */
+    public static CloneContext create(int maxDepth, ClonePolicy policy) {
+        CloneContext ctx = new CloneContext();
+        ctx.maxDepth = maxDepth;
+        ctx.policy = policy != null ? policy : ClonePolicy.STANDARD;
         return ctx;
     }
 
@@ -256,6 +283,58 @@ public final class CloneContext {
         if (!path.isEmpty()) {
             path.pop();
         }
+    }
+
+    // ==================== Policy & Warnings | 策略与警告 ====================
+
+    /**
+     * Gets the clone policy
+     * 获取克隆策略
+     *
+     * @return the policy | 策略
+     */
+    public ClonePolicy getPolicy() {
+        return policy;
+    }
+
+    /**
+     * Checks if the policy is lenient
+     * 检查策略是否为宽松模式
+     *
+     * @return true if lenient | 如果是宽松模式返回true
+     */
+    public boolean isLenient() {
+        return policy == ClonePolicy.LENIENT;
+    }
+
+    /**
+     * Checks if the policy is strict
+     * 检查策略是否为严格模式
+     *
+     * @return true if strict | 如果是严格模式返回true
+     */
+    public boolean isStrict() {
+        return policy == ClonePolicy.STRICT;
+    }
+
+    /**
+     * Adds a warning message (used in LENIENT mode)
+     * 添加警告消息（用于宽松模式）
+     *
+     * @param warning the warning message | 警告消息
+     */
+    public void addWarning(String warning) {
+        warnings.add(warning);
+    }
+
+    /**
+     * Gets all warning messages
+     * 获取所有警告消息
+     *
+     * @return unmodifiable list of warnings | 不可修改的警告列表
+     */
+    public java.util.List<String> getWarnings() {
+        return Collections.unmodifiableList(warnings);
     }
 
     // ==================== Statistics | 统计 ====================

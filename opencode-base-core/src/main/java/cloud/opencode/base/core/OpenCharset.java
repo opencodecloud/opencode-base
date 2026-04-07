@@ -338,6 +338,9 @@ public final class OpenCharset {
      * 检查是否为纯 ASCII 字符串
      */
     public static boolean isAscii(String str) {
+        if (str == null) {
+            return false;
+        }
         return !hasNonAscii(str);
     }
 

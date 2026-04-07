@@ -5,6 +5,8 @@ import cloud.opencode.base.parallel.exception.OpenParallelException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -48,6 +50,8 @@ import java.util.function.Function;
  * @since JDK 25, opencode-base-parallel V1.0.0
  */
 public final class AsyncPipeline<T> {
+
+    private static final ExecutorService EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private final CompletableFuture<T> future;
 
@@ -110,7 +114,7 @@ public final class AsyncPipeline<T> {
      * @return the new pipeline - 新流水线
      */
     public <R> AsyncPipeline<R> then(Function<T, R> fn) {
-        return new AsyncPipeline<>(future.thenApplyAsync(fn));
+        return new AsyncPipeline<>(future.thenApplyAsync(fn, EXECUTOR));
     }
 
     /**
@@ -122,7 +126,7 @@ public final class AsyncPipeline<T> {
      * @return the new pipeline - 新流水线
      */
     public <R> AsyncPipeline<R> thenAsync(Function<T, CompletableFuture<R>> fn) {
-        return new AsyncPipeline<>(future.thenComposeAsync(fn));
+        return new AsyncPipeline<>(future.thenComposeAsync(fn, EXECUTOR));
     }
 
     /**
@@ -136,7 +140,7 @@ public final class AsyncPipeline<T> {
         return new AsyncPipeline<>(future.thenApplyAsync(t -> {
             action.accept(t);
             return t;
-        }));
+        }, EXECUTOR));
     }
 
     /**
@@ -152,7 +156,7 @@ public final class AsyncPipeline<T> {
                 return t;
             }
             throw new IllegalStateException("Value did not match filter");
-        }));
+        }, EXECUTOR));
     }
 
     // ==================== Error Handling ====================
@@ -176,7 +180,7 @@ public final class AsyncPipeline<T> {
      * @return the new pipeline - 新流水线
      */
     public AsyncPipeline<T> onErrorAsync(Function<Throwable, CompletableFuture<T>> handler) {
-        return new AsyncPipeline<>(future.exceptionallyComposeAsync(handler));
+        return new AsyncPipeline<>(future.exceptionallyComposeAsync(handler, EXECUTOR));
     }
 
     /**
@@ -188,7 +192,7 @@ public final class AsyncPipeline<T> {
      * @return the new pipeline - 新流水线
      */
     public <R> AsyncPipeline<R> handle(java.util.function.BiFunction<T, Throwable, R> handler) {
-        return new AsyncPipeline<>(future.handleAsync(handler));
+        return new AsyncPipeline<>(future.handleAsync(handler, EXECUTOR));
     }
 
     // ==================== Combining ====================
@@ -205,7 +209,7 @@ public final class AsyncPipeline<T> {
      */
     public <U, R> AsyncPipeline<R> combine(AsyncPipeline<U> other,
                                             java.util.function.BiFunction<T, U, R> combiner) {
-        return new AsyncPipeline<>(future.thenCombineAsync(other.future, combiner));
+        return new AsyncPipeline<>(future.thenCombineAsync(other.future, combiner, EXECUTOR));
     }
 
     /**
@@ -216,7 +220,7 @@ public final class AsyncPipeline<T> {
      * @return this pipeline - 此流水线
      */
     public AsyncPipeline<T> runAfter(AsyncPipeline<?> other) {
-        return new AsyncPipeline<>(other.future.thenComposeAsync(_ -> future));
+        return new AsyncPipeline<>(other.future.thenComposeAsync(_ -> future, EXECUTOR));
     }
 
     // ==================== Terminal Operations ====================

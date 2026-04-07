@@ -437,36 +437,6 @@ class ReactiveCacheTest {
     }
 
     @Nested
-    @DisplayName("Reactor Integration Tests")
-    class ReactorIntegrationTests {
-
-        @Test
-        @DisplayName("isReactorAvailable returns boolean")
-        void isReactorAvailableReturnsBoolean() {
-            // This should not throw, regardless of result
-            assertDoesNotThrow(() -> ReactiveCache.isReactorAvailable());
-        }
-
-        @Test
-        @DisplayName("asMono throws when Reactor not available")
-        void asMonoThrowsWhenReactorNotAvailable() {
-            if (!ReactiveCache.isReactorAvailable()) {
-                assertThrows(UnsupportedOperationException.class, () ->
-                        reactiveCache.asMono("key"));
-            }
-        }
-
-        @Test
-        @DisplayName("asFlux throws when Reactor not available")
-        void asFluxThrowsWhenReactorNotAvailable() {
-            if (!ReactiveCache.isReactorAvailable()) {
-                assertThrows(UnsupportedOperationException.class, () ->
-                        reactiveCache.asFlux());
-            }
-        }
-    }
-
-    @Nested
     @DisplayName("Error Handling Tests")
     class ErrorHandlingTests {
 

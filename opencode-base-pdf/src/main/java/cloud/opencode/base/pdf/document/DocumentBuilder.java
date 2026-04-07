@@ -1,6 +1,7 @@
 package cloud.opencode.base.pdf.document;
 
 import cloud.opencode.base.pdf.PdfDocument;
+import cloud.opencode.base.pdf.content.PdfWatermark;
 import cloud.opencode.base.pdf.font.PdfFont;
 
 import java.io.OutputStream;
@@ -62,7 +63,7 @@ import java.util.Objects;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-pdf V1.0.0
+ * @since JDK 25, opencode-base-pdf V1.0.3
  */
 public final class DocumentBuilder {
 
@@ -92,6 +93,11 @@ public final class DocumentBuilder {
     private boolean allowCopying = true;
     private boolean allowModifying = true;
     private boolean allowAnnotations = true;
+
+    // Document decorations
+    private PdfWatermark watermark;
+    private PdfHeader header;
+    private PdfFooter footer;
 
     // Pages
     private final List<PageBuilder> pages = new ArrayList<>();
@@ -204,6 +210,9 @@ public final class DocumentBuilder {
      * @return this builder | 当前构建器
      */
     public DocumentBuilder margins(float top, float right, float bottom, float left) {
+        if (!(top >= 0f) || !(right >= 0f) || !(bottom >= 0f) || !(left >= 0f)) {
+            throw new IllegalArgumentException("margins must be non-negative");
+        }
         this.marginTop = top;
         this.marginRight = right;
         this.marginBottom = bottom;
@@ -248,6 +257,80 @@ public final class DocumentBuilder {
         Objects.requireNonNull(fontPath, "fontPath cannot be null");
         Objects.requireNonNull(fontName, "fontName cannot be null");
         embeddedFonts.add(new EmbeddedFontEntry(fontPath, fontName));
+        return this;
+    }
+
+    // ==================== 水印/页眉/页脚 Watermark / Header / Footer ====================
+
+    /**
+     * Sets document watermark.
+     * 设置文档水印。
+     *
+     * @param watermark watermark configuration | 水印配置
+     * @return this builder | 当前构建器
+     */
+    public DocumentBuilder watermark(PdfWatermark watermark) {
+        this.watermark = watermark;
+        return this;
+    }
+
+    /**
+     * Sets document watermark with text (convenience method).
+     * 设置文档文本水印（便捷方法）。
+     *
+     * @param text watermark text | 水印文本
+     * @return this builder | 当前构建器
+     */
+    public DocumentBuilder watermark(String text) {
+        this.watermark = text == null ? null : PdfWatermark.text(text);
+        return this;
+    }
+
+    /**
+     * Sets document header.
+     * 设置文档页眉。
+     *
+     * @param header header configuration | 页眉配置
+     * @return this builder | 当前构建器
+     */
+    public DocumentBuilder header(PdfHeader header) {
+        this.header = header;
+        return this;
+    }
+
+    /**
+     * Sets document header with centered text (convenience method).
+     * 设置文档居中页眉（便捷方法）。
+     *
+     * @param centerText center text | 居中文本
+     * @return this builder | 当前构建器
+     */
+    public DocumentBuilder header(String centerText) {
+        this.header = centerText == null ? null : PdfHeader.of(centerText);
+        return this;
+    }
+
+    /**
+     * Sets document footer.
+     * 设置文档页脚。
+     *
+     * @param footer footer configuration | 页脚配置
+     * @return this builder | 当前构建器
+     */
+    public DocumentBuilder footer(PdfFooter footer) {
+        this.footer = footer;
+        return this;
+    }
+
+    /**
+     * Sets document footer with centered text (convenience method).
+     * 设置文档居中页脚（便捷方法）。
+     *
+     * @param centerText center text | 居中文本
+     * @return this builder | 当前构建器
+     */
+    public DocumentBuilder footer(String centerText) {
+        this.footer = centerText == null ? null : PdfFooter.of(centerText);
         return this;
     }
 
@@ -339,8 +422,8 @@ public final class DocumentBuilder {
      * @return the built document | 构建的文档
      */
     public PdfDocument build() {
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        // TODO: implement PdfDocument wrapper around rendered bytes
+        throw new UnsupportedOperationException("Use toBytes() or save() instead");
     }
 
     /**
@@ -351,8 +434,7 @@ public final class DocumentBuilder {
      */
     public void save(Path path) {
         Objects.requireNonNull(path, "path cannot be null");
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        new PdfRenderer(this).save(path);
     }
 
     /**
@@ -363,8 +445,7 @@ public final class DocumentBuilder {
      */
     public void save(OutputStream outputStream) {
         Objects.requireNonNull(outputStream, "outputStream cannot be null");
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        new PdfRenderer(this).save(outputStream);
     }
 
     /**
@@ -374,8 +455,7 @@ public final class DocumentBuilder {
      * @return PDF bytes | PDF 字节数组
      */
     public byte[] toBytes() {
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        return new PdfRenderer(this).toBytes();
     }
 
     // ==================== 访问方法 Accessors ====================
@@ -438,6 +518,18 @@ public final class DocumentBuilder {
 
     public boolean isEncrypted() {
         return userPassword != null || ownerPassword != null;
+    }
+
+    public PdfWatermark getWatermark() {
+        return watermark;
+    }
+
+    public PdfHeader getHeader() {
+        return header;
+    }
+
+    public PdfFooter getFooter() {
+        return footer;
     }
 
     // ==================== 静态工厂 Static Factory ====================

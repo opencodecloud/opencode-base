@@ -2,7 +2,7 @@
 
 **Hash utilities library for Java 25+**
 
-`opencode-base-hash` provides a unified API for hash functions and hash-based data structures, including non-cryptographic hashes (MurmurHash3, xxHash, FNV-1a, CRC32), cryptographic hashes (MD5, SHA family, SHA-3), Bloom filters, consistent hash rings, and SimHash for text similarity.
+`opencode-base-hash` provides a unified API for hash functions and hash-based data structures, including non-cryptographic hashes (MurmurHash3, xxHash, FNV-1a, CRC32, SipHash, Adler32), cryptographic hashes (MD5, SHA family, SHA-3), HMAC authentication (HMAC-SHA256/384/512), Bloom filters, consistent hash rings, SimHash for text similarity, and zero-allocation hash code combining.
 
 ## Features
 
@@ -11,10 +11,13 @@
 - **xxHash**: High-performance 64-bit hash with seed support
 - **FNV-1a**: 32-bit and 64-bit Fowler-Noll-Vo hash
 - **CRC32**: CRC32 and CRC32C (Castagnoli) checksums
+- **Adler32**: Fast checksum (lighter than CRC32)
+- **SipHash-2-4**: Hash-flooding resistant keyed hash (64-bit)
 - **MD5**: For checksums only (not cryptographically secure)
 - **SHA-1**: For checksums only (not cryptographically secure)
-- **SHA-256 / SHA-512**: Cryptographic hash functions
+- **SHA-256 / SHA-384 / SHA-512**: Cryptographic hash functions
 - **SHA3-256 / SHA3-512**: Latest SHA-3 standard
+- **HMAC**: HMAC-MD5, HMAC-SHA1, HMAC-SHA256, HMAC-SHA384, HMAC-SHA512
 
 ### Data Structures
 - **BloomFilter**: Probabilistic set membership with configurable false positive rate
@@ -23,9 +26,11 @@
 - **SimHash**: Locality-sensitive hashing for text similarity detection
 
 ### Utilities
-- **HashCode**: Unified hash result with int, long, byte array, and hex string access
+- **HashCode**: Unified hash result with int, long, byte array, hex string, and Base64 access
+- **HashCodes**: Zero-allocation hash code combiner for `hashCode()` implementations
 - **Funnel**: Type-safe serialization interface for hash input
 - **Hasher**: Streaming hash builder for incremental hashing
+- **File/Stream hashing**: Convenience methods for hashing files and InputStreams
 - **Ordered/Unordered Combine**: Combine multiple hash codes
 
 ## Quick Start
@@ -35,7 +40,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-hash</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -46,20 +51,31 @@ import cloud.opencode.base.hash.*;
 
 // Hash a string with MurmurHash3
 HashCode hash = OpenHash.murmur3_128().hashUtf8("Hello World");
-System.out.println(hash.toString());  // hex string
+System.out.println(hash.toHex());     // hex string
+System.out.println(hash.toBase64());  // URL-safe Base64
 
 // Hash with different algorithms
 HashCode murmur = OpenHash.murmur3_32().hashUtf8("data");
 HashCode xx = OpenHash.xxHash64().hashUtf8("data");
 HashCode sha = OpenHash.sha256().hashUtf8("data");
+HashCode sip = OpenHash.sipHash24().hashUtf8("data");
 
-// Hash bytes
-byte[] data = "Hello".getBytes();
-HashCode hash = OpenHash.hash(data, OpenHash.murmur3_128());
+// HMAC authentication
+byte[] key = "secret".getBytes();
+HashCode hmac = OpenHash.hmacSha256(key).hashUtf8("message");
 
-// Combine hash codes
+// Hash a file
+HashCode fileHash = OpenHash.sha256().hashFile(Path.of("data.bin"));
+
+// Hash an InputStream
+HashCode streamHash = OpenHash.sha256().hashInputStream(inputStream);
+
+// Zero-allocation hashCode() combining
+int hash = HashCodes.combine(name.hashCode(), age, active ? 1 : 0);
+int hash2 = HashCodes.start().add(name).add(age).add(active).result();
+
+// Combine HashCode objects
 HashCode combined = OpenHash.combineOrdered(hash1, hash2, hash3);
-HashCode xored = OpenHash.combineUnordered(hash1, hash2, hash3);
 ```
 
 ### Bloom Filter
@@ -68,7 +84,7 @@ HashCode xored = OpenHash.combineUnordered(hash1, hash2, hash3);
 // Create a Bloom filter
 BloomFilter<String> filter = OpenHash.<String>bloomFilter(Funnel.STRING_FUNNEL)
     .expectedInsertions(1_000_000)
-    .falsePositiveRate(0.01)
+    .fpp(0.01)
     .build();
 
 // Add elements
@@ -95,11 +111,11 @@ ConsistentHash<String> ring = OpenHash.<String>consistentHash()
     .addNode("server1", "192.168.1.1")
     .addNode("server2", "192.168.1.2")
     .addNode("server3", "192.168.1.3")
-    .virtualNodes(150)
+    .virtualNodeCount(150)
     .build();
 
 // Route a key to a node
-String server = ring.getNode("user:12345").getData();  // "192.168.1.x"
+String server = ring.get("user:12345");  // "192.168.1.x"
 
 // Add/remove nodes dynamically
 ring.addNode("server4", "192.168.1.4");
@@ -115,8 +131,8 @@ SimHash simHash = OpenHash.simHash()
     .build();
 
 // Compute fingerprints
-Fingerprint fp1 = simHash.hash("The quick brown fox");
-Fingerprint fp2 = simHash.hash("The quick brown dog");
+Fingerprint fp1 = simHash.fingerprint("The quick brown fox");
+Fingerprint fp2 = simHash.fingerprint("The quick brown dog");
 
 // Compare similarity (Hamming distance)
 int distance = fp1.hammingDistance(fp2);
@@ -140,8 +156,9 @@ HashCode hash = hasher.hash();
 | Class | Description |
 |-------|-------------|
 | `OpenHash` | Main facade with factory methods for all hash functions and data structures |
-| `HashFunction` | Interface for hash function implementations |
-| `HashCode` | Immutable hash result with int, long, byte array, and hex string access |
+| `HashFunction` | Interface for hash function implementations (includes `hashFile`/`hashInputStream`) |
+| `HashCode` | Immutable hash result with int, long, byte array, hex, and Base64 access |
+| `HashCodes` | Zero-allocation hash code combiner for `hashCode()` implementations |
 | `Hasher` | Streaming hash builder for incremental input |
 | `Funnel` | Type-safe serialization interface for converting objects to hash input |
 
@@ -153,7 +170,10 @@ HashCode hash = hasher.hash();
 | `XxHashFunction` | xxHash 64-bit high-performance hash |
 | `Fnv1aHashFunction` | FNV-1a 32-bit and 64-bit hash |
 | `Crc32HashFunction` | CRC32 and CRC32C (Castagnoli) implementations |
-| `MessageDigestHashFunction` | JDK MessageDigest-based hashes (MD5, SHA-1, SHA-256, SHA-512, SHA3) |
+| `Adler32HashFunction` | Adler-32 checksum |
+| `SipHashFunction` | SipHash-2-4 keyed hash (hash-flooding resistant) |
+| `HmacHashFunction` | HMAC-MD5, HMAC-SHA1, HMAC-SHA256, HMAC-SHA384, HMAC-SHA512 |
+| `MessageDigestHashFunction` | JDK MessageDigest-based hashes (MD5, SHA-1, SHA-256, SHA-384, SHA-512, SHA3) |
 
 ### Bloom Filter Package (`cloud.opencode.base.hash.bloom`)
 | Class | Description |

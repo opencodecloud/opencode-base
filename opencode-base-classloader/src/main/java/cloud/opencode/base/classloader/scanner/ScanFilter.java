@@ -2,7 +2,6 @@ package cloud.opencode.base.classloader.scanner;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -54,6 +53,22 @@ public interface ScanFilter {
      */
     boolean test(Class<?> clazz);
 
+    /**
+     * Pre-filter by class name before loading the class (performance optimization)
+     * 在加载类之前按类名预过滤（性能优化）
+     *
+     * <p>If this method returns false, the class will not be loaded via Class.forName,
+     * saving expensive class loading operations. Default returns true (no pre-filtering).</p>
+     * <p>如果此方法返回 false，则不会通过 Class.forName 加载该类，
+     * 从而节省昂贵的类加载操作。默认返回 true（不预过滤）。</p>
+     *
+     * @param className fully qualified class name | 全限定类名
+     * @return true if class should proceed to loading | 需要继续加载返回 true
+     */
+    default boolean preTest(String className) {
+        return true;
+    }
+
     // ==================== Combination Methods | 组合方法 ====================
 
     /**
@@ -65,7 +80,11 @@ public interface ScanFilter {
      */
     default ScanFilter and(ScanFilter other) {
         Objects.requireNonNull(other);
-        return clazz -> this.test(clazz) && other.test(clazz);
+        ScanFilter self = this;
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) { return self.test(clazz) && other.test(clazz); }
+            @Override public boolean preTest(String className) { return self.preTest(className) && other.preTest(className); }
+        };
     }
 
     /**
@@ -77,7 +96,11 @@ public interface ScanFilter {
      */
     default ScanFilter or(ScanFilter other) {
         Objects.requireNonNull(other);
-        return clazz -> this.test(clazz) || other.test(clazz);
+        ScanFilter self = this;
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) { return self.test(clazz) || other.test(clazz); }
+            @Override public boolean preTest(String className) { return self.preTest(className) || other.preTest(className); }
+        };
     }
 
     /**
@@ -100,7 +123,21 @@ public interface ScanFilter {
      * @return combined filter | 组合后的过滤器
      */
     static ScanFilter and(ScanFilter... filters) {
-        return clazz -> Arrays.stream(filters).allMatch(f -> f.test(clazz));
+        ScanFilter[] copy = filters.clone();
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) {
+                for (ScanFilter f : copy) {
+                    if (!f.test(clazz)) return false;
+                }
+                return true;
+            }
+            @Override public boolean preTest(String className) {
+                for (ScanFilter f : copy) {
+                    if (!f.preTest(className)) return false;
+                }
+                return true;
+            }
+        };
     }
 
     /**
@@ -111,7 +148,22 @@ public interface ScanFilter {
      * @return combined filter | 组合后的过滤器
      */
     static ScanFilter or(ScanFilter... filters) {
-        return clazz -> Arrays.stream(filters).anyMatch(f -> f.test(clazz));
+        ScanFilter[] copy = filters.clone();
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) {
+                for (ScanFilter f : copy) {
+                    if (f.test(clazz)) return true;
+                }
+                return false;
+            }
+            @Override public boolean preTest(String className) {
+                // For OR, if ANY sub-filter's preTest passes, we must load the class
+                for (ScanFilter f : copy) {
+                    if (f.preTest(className)) return true;
+                }
+                return false;
+            }
+        };
     }
 
     /**
@@ -210,7 +262,13 @@ public interface ScanFilter {
      */
     @SafeVarargs
     static ScanFilter hasAnyAnnotation(Class<? extends Annotation>... annotations) {
-        return clazz -> Arrays.stream(annotations).anyMatch(clazz::isAnnotationPresent);
+        Class<? extends Annotation>[] copy = annotations.clone();
+        return clazz -> {
+            for (Class<? extends Annotation> a : copy) {
+                if (clazz.isAnnotationPresent(a)) return true;
+            }
+            return false;
+        };
     }
 
     /**
@@ -222,7 +280,13 @@ public interface ScanFilter {
      */
     @SafeVarargs
     static ScanFilter hasAllAnnotations(Class<? extends Annotation>... annotations) {
-        return clazz -> Arrays.stream(annotations).allMatch(clazz::isAnnotationPresent);
+        Class<? extends Annotation>[] copy = annotations.clone();
+        return clazz -> {
+            for (Class<? extends Annotation> a : copy) {
+                if (!clazz.isAnnotationPresent(a)) return false;
+            }
+            return true;
+        };
     }
 
     // ==================== Inheritance Filters | 继承过滤器 ====================
@@ -265,7 +329,10 @@ public interface ScanFilter {
      */
     static ScanFilter nameStartsWith(String prefix) {
         Objects.requireNonNull(prefix, "Prefix must not be null");
-        return clazz -> clazz.getName().startsWith(prefix);
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) { return clazz.getName().startsWith(prefix); }
+            @Override public boolean preTest(String className) { return className.startsWith(prefix); }
+        };
     }
 
     /**
@@ -277,7 +344,10 @@ public interface ScanFilter {
      */
     static ScanFilter nameEndsWith(String suffix) {
         Objects.requireNonNull(suffix, "Suffix must not be null");
-        return clazz -> clazz.getName().endsWith(suffix);
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) { return clazz.getName().endsWith(suffix); }
+            @Override public boolean preTest(String className) { return className.endsWith(suffix); }
+        };
     }
 
     /**
@@ -302,7 +372,10 @@ public interface ScanFilter {
     static ScanFilter nameMatches(String regex) {
         Objects.requireNonNull(regex, "Regex must not be null");
         Pattern pattern = Pattern.compile(regex);
-        return clazz -> pattern.matcher(clazz.getName()).matches();
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) { return pattern.matcher(clazz.getName()).matches(); }
+            @Override public boolean preTest(String className) { return pattern.matcher(className).matches(); }
+        };
     }
 
     /**
@@ -314,9 +387,14 @@ public interface ScanFilter {
      */
     static ScanFilter inPackage(String packageName) {
         Objects.requireNonNull(packageName, "Package name must not be null");
-        return clazz -> {
-            Package pkg = clazz.getPackage();
-            return pkg != null && pkg.getName().startsWith(packageName);
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) {
+                Package pkg = clazz.getPackage();
+                return pkg != null && pkg.getName().startsWith(packageName);
+            }
+            @Override public boolean preTest(String className) {
+                return className.startsWith(packageName);
+            }
         };
     }
 
@@ -353,6 +431,80 @@ public interface ScanFilter {
         return clazz -> Modifier.isFinal(clazz.getModifiers());
     }
 
+    // ==================== Sealed Filters | 密封类过滤器 ====================
+
+    /**
+     * Filter for sealed classes
+     * 过滤密封类
+     *
+     * @return filter | 过滤器
+     */
+    static ScanFilter isSealed() {
+        return clazz -> clazz.isSealed();
+    }
+
+    /**
+     * Filter for sealed classes that have permitted subclasses
+     * 过滤有许可子类的密封类
+     *
+     * @return filter | 过滤器
+     */
+    static ScanFilter hasPermittedSubclass() {
+        return clazz -> clazz.isSealed() && clazz.getPermittedSubclasses() != null
+                && clazz.getPermittedSubclasses().length > 0;
+    }
+
+    // ==================== Member Filters | 成员过滤器 ====================
+
+    /**
+     * Filter for classes that have a constructor with the specified parameter count
+     * 过滤具有指定参数数量构造器的类
+     *
+     * @param count parameter count | 参数数量
+     * @return filter | 过滤器
+     */
+    static ScanFilter hasConstructorWithParameterCount(int count) {
+        return clazz -> {
+            for (var constructor : clazz.getDeclaredConstructors()) {
+                if (constructor.getParameterCount() == count) return true;
+            }
+            return false;
+        };
+    }
+
+    /**
+     * Filter for classes that have a method with the specified return type
+     * 过滤具有指定返回类型方法的类
+     *
+     * @param returnType return type | 返回类型
+     * @return filter | 过滤器
+     */
+    static ScanFilter hasMethodWithReturnType(Class<?> returnType) {
+        Objects.requireNonNull(returnType, "Return type must not be null");
+        return clazz -> {
+            for (var method : clazz.getDeclaredMethods()) {
+                if (method.getReturnType() == returnType) return true;
+            }
+            return false;
+        };
+    }
+
+    /**
+     * Filter for classes that have a method with the specified parameter count
+     * 过滤具有指定参数数量方法的类
+     *
+     * @param count parameter count | 参数数量
+     * @return filter | 过滤器
+     */
+    static ScanFilter hasMethodWithParameterCount(int count) {
+        return clazz -> {
+            for (var method : clazz.getDeclaredMethods()) {
+                if (method.getParameterCount() == count) return true;
+            }
+            return false;
+        };
+    }
+
     // ==================== Special Filters | 特殊过滤器 ====================
 
     /**
@@ -382,7 +534,10 @@ public interface ScanFilter {
      * @return filter | 过滤器
      */
     static ScanFilter isTopLevel() {
-        return clazz -> !clazz.getName().contains("$");
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) { return !clazz.getName().contains("$"); }
+            @Override public boolean preTest(String className) { return !className.contains("$"); }
+        };
     }
 
     /**
@@ -392,6 +547,9 @@ public interface ScanFilter {
      * @return filter | 过滤器
      */
     static ScanFilter isInnerClass() {
-        return clazz -> clazz.getName().contains("$");
+        return new ScanFilter() {
+            @Override public boolean test(Class<?> clazz) { return clazz.getName().contains("$"); }
+            @Override public boolean preTest(String className) { return className.contains("$"); }
+        };
     }
 }

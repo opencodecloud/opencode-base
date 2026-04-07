@@ -237,7 +237,7 @@ public final class OpenTempFile {
     public static boolean isInTempDirectory(Path path) {
         try {
             Path tempDir = getTempDirectory().toRealPath();
-            Path realPath = path.toAbsolutePath().normalize();
+            Path realPath = path.toRealPath();
             return realPath.startsWith(tempDir);
         } catch (IOException e) {
             return false;

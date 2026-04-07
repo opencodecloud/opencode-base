@@ -27,7 +27,7 @@ class CycleDetectedExceptionTest {
         void constructorWithMessageShouldSetMessageAndEmptyCyclePath() {
             CycleDetectedException ex = new CycleDetectedException("Cycle found");
 
-            assertThat(ex.getMessage()).isEqualTo("Cycle found");
+            assertThat(ex.getRawMessage()).isEqualTo("Cycle found");
             assertThat(ex.getCyclePath()).isEmpty();
             assertThat(ex.getCode()).isEqualTo(TreeErrorCode.CYCLE_DETECTED.getCode());
         }
@@ -42,7 +42,7 @@ class CycleDetectedExceptionTest {
             assertThat(ex.getCyclePath()).hasSize(4);
             assertThat(ex.getCyclePath().get(0)).isEqualTo(1L);
             assertThat(ex.getCyclePath().get(3)).isEqualTo(1L);
-            assertThat(ex.getMessage()).contains("Cycle detected");
+            assertThat(ex.getRawMessage()).contains("Cycle detected");
         }
 
         @Test
@@ -52,7 +52,7 @@ class CycleDetectedExceptionTest {
 
             CycleDetectedException ex = new CycleDetectedException("Custom cycle message", path);
 
-            assertThat(ex.getMessage()).isEqualTo("Custom cycle message");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom cycle message");
             assertThat(ex.getCyclePath()).hasSize(2);
             assertThat(ex.getCyclePath().get(0)).isEqualTo(1L);
         }
@@ -63,6 +63,15 @@ class CycleDetectedExceptionTest {
             CycleDetectedException ex = new CycleDetectedException("Message", null);
 
             assertThat(ex.getCyclePath()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("should be instance of TreeException and OpenException")
+        void shouldBeInstanceOfTreeExceptionAndOpenException() {
+            CycleDetectedException ex = new CycleDetectedException("test");
+
+            assertThat(ex).isInstanceOf(TreeException.class);
+            assertThat(ex).isInstanceOf(cloud.opencode.base.core.exception.OpenException.class);
         }
     }
 

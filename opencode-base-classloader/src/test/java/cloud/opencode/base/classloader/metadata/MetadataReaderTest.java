@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.*;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.*;
@@ -302,6 +302,207 @@ class MetadataReaderTest {
 
             assertThat(metadata.isInnerClass()).isTrue();
             assertThat(metadata.isInterface()).isTrue();
+        }
+    }
+
+    // ==================== Test fixtures for generic/record/annotation tests ====================
+
+    @SuppressWarnings("unused")
+    static class GenericClass<T extends Comparable<T>, K> {
+        private List<T> items;
+        private Map<String, K> mapping;
+        private int count;
+
+        public List<T> getItems() { return items; }
+        public <R> R transform(T input) { return null; }
+    }
+
+    record SampleRecord(String name, int age, List<String> tags) {}
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    @interface TestAnnotation {
+        String value() default "";
+        int count() default 0;
+        RetentionPolicy policy() default RetentionPolicy.RUNTIME;
+        Class<?> type() default Object.class;
+    }
+
+    @TestAnnotation(value = "hello", count = 42, policy = RetentionPolicy.SOURCE, type = String.class)
+    static class AnnotatedClass {}
+
+    @Nested
+    @DisplayName("Generic Signature Parsing Tests")
+    class GenericSignatureParsingTests {
+
+        @Test
+        @DisplayName("Should parse class type parameters")
+        void shouldParseClassTypeParameters() {
+            ClassMetadata metadata = MetadataReader.read(GenericClass.class);
+
+            assertThat(metadata.hasTypeParameters()).isTrue();
+            assertThat(metadata.getTypeParameters()).hasSize(2);
+            assertThat(metadata.getTypeParameters().get(0)).contains("T");
+            assertThat(metadata.getTypeParameters().get(0)).contains("Comparable");
+            assertThat(metadata.getTypeParameters().get(1)).isEqualTo("K");
+        }
+
+        @Test
+        @DisplayName("Should parse generic signature string")
+        void shouldParseGenericSignatureString() {
+            ClassMetadata metadata = MetadataReader.read(GenericClass.class);
+
+            assertThat(metadata.getGenericSignature()).isNotNull();
+            assertThat(metadata.getGenericSignature()).contains("T");
+            assertThat(metadata.getGenericSignature()).contains("K");
+        }
+
+        @Test
+        @DisplayName("Should return null signature for non-generic class")
+        void shouldReturnNullSignatureForNonGenericClass() {
+            ClassMetadata metadata = MetadataReader.read(String.class);
+
+            assertThat(metadata.getGenericSignature()).isNull();
+            assertThat(metadata.hasTypeParameters()).isFalse();
+            assertThat(metadata.getTypeParameters()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should parse generic field types")
+        void shouldParseGenericFieldTypes() {
+            ClassMetadata metadata = MetadataReader.read(GenericClass.class);
+
+            // 'items' field should have generic type info
+            var itemsField = metadata.getField("items");
+            assertThat(itemsField).isPresent();
+            assertThat(itemsField.get().getGenericType()).isNotNull();
+            assertThat(itemsField.get().getGenericType()).contains("T");
+
+            // 'count' field (primitive) should have null generic type
+            var countField = metadata.getField("count");
+            assertThat(countField).isPresent();
+            assertThat(countField.get().getGenericType()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should parse generic method return and parameter types")
+        void shouldParseGenericMethodReturnAndParameterTypes() {
+            ClassMetadata metadata = MetadataReader.read(GenericClass.class);
+
+            // getItems method
+            var getItemsMethods = metadata.getMethodsByName("getItems");
+            assertThat(getItemsMethods).isNotEmpty();
+            MethodMetadata getItems = getItemsMethods.get(0);
+            assertThat(getItems.getGenericReturnType()).isNotNull();
+            assertThat(getItems.getGenericReturnType()).contains("T");
+
+            // transform method
+            var transformMethods = metadata.getMethodsByName("transform");
+            assertThat(transformMethods).isNotEmpty();
+            MethodMetadata transform = transformMethods.get(0);
+            assertThat(transform.getGenericSignature()).isNotNull();
+            assertThat(transform.getGenericParameterTypes()).isNotEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("Record Parsing Tests")
+    class RecordParsingTests {
+
+        @Test
+        @DisplayName("Should parse record components")
+        void shouldParseRecordComponents() {
+            ClassMetadata metadata = MetadataReader.read(SampleRecord.class);
+
+            assertThat(metadata.isRecord()).isTrue();
+            assertThat(metadata.getRecordComponents()).hasSize(3);
+        }
+
+        @Test
+        @DisplayName("Should parse record component names and types")
+        void shouldParseRecordComponentNamesAndTypes() {
+            ClassMetadata metadata = MetadataReader.read(SampleRecord.class);
+
+            List<RecordComponentMetadata> components = metadata.getRecordComponents();
+            assertThat(components.get(0).name()).isEqualTo("name");
+            assertThat(components.get(0).type()).isEqualTo("java.lang.String");
+
+            assertThat(components.get(1).name()).isEqualTo("age");
+            assertThat(components.get(1).type()).isEqualTo("int");
+
+            assertThat(components.get(2).name()).isEqualTo("tags");
+            assertThat(components.get(2).type()).isEqualTo("java.util.List");
+        }
+
+        @Test
+        @DisplayName("Should parse record component generic types")
+        void shouldParseRecordComponentGenericTypes() {
+            ClassMetadata metadata = MetadataReader.read(SampleRecord.class);
+
+            List<RecordComponentMetadata> components = metadata.getRecordComponents();
+            // 'tags' is List<String>, should have generic type
+            assertThat(components.get(2).genericType()).isNotNull();
+            assertThat(components.get(2).genericType()).contains("String");
+
+            // 'age' is int, should not have generic type
+            assertThat(components.get(1).genericType()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return empty components for non-record class")
+        void shouldReturnEmptyComponentsForNonRecordClass() {
+            ClassMetadata metadata = MetadataReader.read(String.class);
+
+            assertThat(metadata.isRecord()).isFalse();
+            assertThat(metadata.getRecordComponents()).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("Annotation Attribute Resolution Tests")
+    class AnnotationAttributeResolutionTests {
+
+        @Test
+        @DisplayName("Should resolve enum annotation attribute")
+        void shouldResolveEnumAnnotationAttribute() {
+            ClassMetadata metadata = MetadataReader.read(AnnotatedClass.class);
+
+            var annotation = metadata.getAnnotation(TestAnnotation.class.getName());
+            assertThat(annotation).isPresent();
+
+            // Enum values should be resolved to their name strings
+            var policyValue = annotation.get().attributes().get("policy");
+            assertThat(policyValue).isEqualTo("SOURCE");
+        }
+
+        @Test
+        @DisplayName("Should resolve string annotation attribute")
+        void shouldResolveStringAnnotationAttribute() {
+            ClassMetadata metadata = MetadataReader.read(AnnotatedClass.class);
+
+            var annotation = metadata.getAnnotation(TestAnnotation.class.getName());
+            assertThat(annotation).isPresent();
+            assertThat(annotation.get().attributes().get("value")).isEqualTo("hello");
+        }
+
+        @Test
+        @DisplayName("Should resolve int annotation attribute")
+        void shouldResolveIntAnnotationAttribute() {
+            ClassMetadata metadata = MetadataReader.read(AnnotatedClass.class);
+
+            var annotation = metadata.getAnnotation(TestAnnotation.class.getName());
+            assertThat(annotation).isPresent();
+            assertThat(annotation.get().attributes().get("count")).isEqualTo(42);
+        }
+
+        @Test
+        @DisplayName("Should resolve Class annotation attribute to name string")
+        void shouldResolveClassAnnotationAttributeToNameString() {
+            ClassMetadata metadata = MetadataReader.read(AnnotatedClass.class);
+
+            var annotation = metadata.getAnnotation(TestAnnotation.class.getName());
+            assertThat(annotation).isPresent();
+            assertThat(annotation.get().attributes().get("type")).isEqualTo("java.lang.String");
         }
     }
 }

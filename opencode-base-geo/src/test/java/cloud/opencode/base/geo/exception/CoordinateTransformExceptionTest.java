@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,8 @@ class CoordinateTransformExceptionTest {
         void testMessageOnlyConstructor() {
             CoordinateTransformException ex = new CoordinateTransformException("Transform failed");
 
-            assertThat(ex.getMessage()).isEqualTo("Transform failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Transform failed");
+            assertThat(ex.getMessage()).contains("Transform failed");
         }
 
         @Test
@@ -35,7 +37,8 @@ class CoordinateTransformExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             CoordinateTransformException ex = new CoordinateTransformException("Transform failed", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Transform failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Transform failed");
+            assertThat(ex.getMessage()).contains("Transform failed");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -58,6 +61,14 @@ class CoordinateTransformExceptionTest {
             CoordinateTransformException ex = new CoordinateTransformException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            CoordinateTransformException ex = new CoordinateTransformException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

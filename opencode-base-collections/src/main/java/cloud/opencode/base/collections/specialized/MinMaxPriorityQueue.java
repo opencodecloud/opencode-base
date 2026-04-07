@@ -234,6 +234,11 @@ public final class MinMaxPriorityQueue<E> extends AbstractQueue<E> implements Se
             // Sift up since we placed an element into the leaf area and it may be
             // smaller than its parent, violating the min-heap property
             siftUp(maxIndex);
+            // If the element didn't move up (still at maxIndex), it may be larger
+            // than its children, so sift down to restore the min-heap property
+            if (heap[maxIndex] == last) {
+                siftDownMin(maxIndex);
+            }
         }
 
         return max;

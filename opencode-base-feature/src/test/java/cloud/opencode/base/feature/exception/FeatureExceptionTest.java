@@ -1,5 +1,6 @@
 package cloud.opencode.base.feature.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 @DisplayName("FeatureException 测试")
 class FeatureExceptionTest {
@@ -26,10 +27,11 @@ class FeatureExceptionTest {
         void testMessageConstructor() {
             FeatureException ex = new FeatureException("Error message");
 
-            assertThat(ex.getMessage()).isEqualTo("Error message");
+            assertThat(ex.getRawMessage()).isEqualTo("Error message");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (0) Error message");
             assertThat(ex.getCause()).isNull();
             assertThat(ex.getFeatureKey()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.UNKNOWN);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.UNKNOWN);
         }
 
         @Test
@@ -38,9 +40,10 @@ class FeatureExceptionTest {
             Throwable cause = new RuntimeException("cause");
             FeatureException ex = new FeatureException("Error message", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Error message");
+            assertThat(ex.getRawMessage()).isEqualTo("Error message");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (0) Error message");
             assertThat(ex.getCause()).isSameAs(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.UNKNOWN);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.UNKNOWN);
         }
 
         @Test
@@ -48,8 +51,9 @@ class FeatureExceptionTest {
         void testMessageAndErrorCodeConstructor() {
             FeatureException ex = new FeatureException("Error", FeatureErrorCode.NOT_FOUND);
 
-            assertThat(ex.getMessage()).isEqualTo("Error");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.NOT_FOUND);
+            assertThat(ex.getRawMessage()).isEqualTo("Error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (1001) Error");
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.NOT_FOUND);
         }
 
         @Test
@@ -60,10 +64,11 @@ class FeatureExceptionTest {
                     "Error", cause, "feature-key", FeatureErrorCode.STORE_ERROR
             );
 
-            assertThat(ex.getMessage()).isEqualTo("Error");
+            assertThat(ex.getRawMessage()).isEqualTo("Error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (3001) Error");
             assertThat(ex.getCause()).isSameAs(cause);
             assertThat(ex.getFeatureKey()).isEqualTo("feature-key");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.STORE_ERROR);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.STORE_ERROR);
         }
 
         @Test
@@ -71,7 +76,7 @@ class FeatureExceptionTest {
         void testNullErrorCodeUsesUnknown() {
             FeatureException ex = new FeatureException("Error", null, null, null);
 
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.UNKNOWN);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.UNKNOWN);
         }
     }
 
@@ -80,10 +85,11 @@ class FeatureExceptionTest {
     class InheritanceTests {
 
         @Test
-        @DisplayName("继承RuntimeException")
-        void testExtendsRuntimeException() {
+        @DisplayName("继承OpenException和RuntimeException")
+        void testExtendsOpenException() {
             FeatureException ex = new FeatureException("test");
 
+            assertThat(ex).isInstanceOf(OpenException.class);
             assertThat(ex).isInstanceOf(RuntimeException.class);
         }
 
@@ -93,7 +99,7 @@ class FeatureExceptionTest {
             assertThatThrownBy(() -> {
                 throw new FeatureException("Test error");
             }).isInstanceOf(FeatureException.class)
-              .hasMessage("Test error");
+              .hasMessage("[feature] (0) Test error");
         }
     }
 }

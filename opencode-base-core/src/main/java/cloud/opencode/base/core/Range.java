@@ -18,6 +18,7 @@ package cloud.opencode.base.core;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -52,6 +53,10 @@ import java.util.stream.Stream;
  * closed.contains(5);       // true
  * closed.contains(0);       // false
  *
+ * // Stream filtering | 流过滤
+ * Range<Integer> range = Range.closed(1, 100);
+ * List<Integer> inRange = numbers.stream().filter(range).toList();
+ *
  * // Check enclosure
  * Range.closed(1, 10).encloses(Range.closed(3, 7));  // true
  *
@@ -66,6 +71,7 @@ import java.util.stream.Stream;
  *   <li>Containment checking - 包含检查</li>
  *   <li>Intersection, union, and span operations - 交集、并集和跨度操作</li>
  *   <li>Stream support for integer ranges - 整数范围的流支持</li>
+ *   <li>Predicate support for stream filtering (test) - 支持流过滤的 Predicate</li>
  * </ul>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -80,7 +86,7 @@ import java.util.stream.Stream;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-core V1.0.0
  */
-public final class Range<C extends Comparable<? super C>> {
+public final class Range<C extends Comparable<? super C>> implements Predicate<C> {
 
     private final Bound<C> lowerBound;
     private final Bound<C> upperBound;
@@ -297,6 +303,25 @@ public final class Range<C extends Comparable<? super C>> {
     }
 
     /**
+     * Tests if the given value is contained in this range (Predicate support).
+     * 测试给定值是否包含在此范围内（Predicate 支持）。
+     *
+     * <p>Enables using Range directly in stream filters and other Predicate-accepting APIs:</p>
+     * <p>使 Range 可以直接用于流过滤和其他接受 Predicate 的 API：</p>
+     * <pre>{@code
+     * Range<Integer> range = Range.closed(1, 10);
+     * List<Integer> filtered = list.stream().filter(range).toList();
+     * }</pre>
+     *
+     * @param value the value to test | 待测试的值
+     * @return true if the value is contained in this range | 如果值在范围内返回 true
+     */
+    @Override
+    public boolean test(C value) {
+        return contains(value);
+    }
+
+    /**
      * Returns true if this range contains all given values.
      * 如果此范围包含所有给定值返回 true。
      */
@@ -333,8 +358,26 @@ public final class Range<C extends Comparable<? super C>> {
      * 如果此范围与另一个范围相连返回 true。
      */
     public boolean isConnected(Range<C> other) {
-        return lowerBound.compareTo(other.upperBound) <= 0
-                && other.lowerBound.compareTo(upperBound) <= 0;
+        return compareLowerToUpper(lowerBound, other.upperBound) <= 0
+                && compareLowerToUpper(other.lowerBound, upperBound) <= 0;
+    }
+
+    /**
+     * Compare a lower bound against an upper bound for connectivity check.
+     * 比较下界与上界（用于连通性检查）。
+     *
+     * <p>Unbounded lower (-∞) is always &le; any upper bound,
+     * and unbounded upper (+∞) is always &ge; any lower bound.</p>
+     */
+    private static <C extends Comparable<? super C>> int compareLowerToUpper(
+            Bound<C> lower, Bound<C> upper) {
+        if (lower.endpoint() == null || upper.endpoint() == null) {
+            return -1; // -∞ ≤ anything, or anything ≤ +∞
+        }
+        int cmp = lower.endpoint().compareTo(upper.endpoint());
+        if (cmp != 0) return cmp;
+        // Same endpoint: closed+closed → 0 (connected), any open → 1 (gap)
+        return (lower.type() == BoundType.OPEN || upper.type() == BoundType.OPEN) ? 1 : 0;
     }
 
     // ==================== Operations | 操作 ====================
@@ -373,7 +416,7 @@ public final class Range<C extends Comparable<? super C>> {
             return Optional.empty();
         }
 
-        Range<C> lower = upperBound.compareTo(other.lowerBound) < 0 ? this : other;
+        Range<C> lower = compareLowerToUpper(other.lowerBound, upperBound) > 0 ? this : other;
         Range<C> higher = lower == this ? other : this;
 
         Bound<C> gapLower = lower.upperBound.flip();

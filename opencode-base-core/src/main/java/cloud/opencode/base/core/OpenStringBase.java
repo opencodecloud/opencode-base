@@ -1,5 +1,7 @@
 package cloud.opencode.base.core;
 
+import java.util.Locale;
+
 /**
  * Basic String Utility Class - Minimal string operations for core module
  * 基础字符串工具类 - 核心模块的最小化字符串操作
@@ -243,7 +245,7 @@ public final class OpenStringBase {
      * 安全转小写
      */
     public static String toLowerCase(String str) {
-        return str == null ? null : str.toLowerCase();
+        return str == null ? null : str.toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -251,7 +253,7 @@ public final class OpenStringBase {
      * 安全转大写
      */
     public static String toUpperCase(String str) {
-        return str == null ? null : str.toUpperCase();
+        return str == null ? null : str.toUpperCase(Locale.ROOT);
     }
 
     /**

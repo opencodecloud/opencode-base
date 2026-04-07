@@ -52,23 +52,40 @@ public final class SerializingCloner extends AbstractCloner {
      * 反序列化时拒绝的类，防止反序列化利用链攻击。
      */
     private static final Set<String> REJECTED_CLASSES = Set.of(
+            // JDK dangerous classes
             "java.lang.Runtime",
             "java.lang.ProcessBuilder",
             "java.lang.Process",
+            "java.lang.Thread",
+            "java.net.URLClassLoader",
             "javax.script.ScriptEngineManager",
+            // JNDI injection
+            "javax.naming.InitialContext",
+            "javax.naming.spi.NamingManager",
+            "com.sun.jndi.rmi.registry.RegistryContext",
+            "com.sun.jndi.ldap.LdapCtx",
+            // RMI
+            "java.rmi.server.UnicastRemoteObject",
+            "java.rmi.server.RemoteObjectInvocationHandler",
+            // JMX
+            "javax.management.BadAttributeValueExpException",
+            // JDBC / DataSource
+            "com.sun.rowset.JdbcRowSetImpl",
+            "com.mchange.v2.c3p0.WrapperConnectionPoolDataSource",
+            // Apache Commons
             "org.apache.commons.collections.functors.InvokerTransformer",
             "org.apache.commons.collections.functors.InstantiateTransformer",
             "org.apache.commons.collections4.functors.InvokerTransformer",
             "org.apache.commons.collections4.functors.InstantiateTransformer",
+            "org.apache.commons.beanutils.BeanComparator",
+            // Xalan / XSLT
             "org.apache.xalan.xsltc.trax.TemplatesImpl",
             "com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl",
+            // Spring
             "org.springframework.beans.factory.ObjectFactory",
-            "com.sun.rowset.JdbcRowSetImpl",
-            "java.rmi.server.UnicastRemoteObject",
-            "java.rmi.server.RemoteObjectInvocationHandler",
-            "javax.management.BadAttributeValueExpException",
-            "com.mchange.v2.c3p0.WrapperConnectionPoolDataSource",
-            "org.apache.commons.beanutils.BeanComparator"
+            // Groovy
+            "org.codehaus.groovy.runtime.ConvertedClosure",
+            "org.codehaus.groovy.runtime.MethodClosure"
     );
 
     /**
@@ -104,7 +121,10 @@ public final class SerializingCloner extends AbstractCloner {
             if (className.startsWith("org.apache.commons.collections.functors.")
                     || className.startsWith("org.apache.commons.collections4.functors.")
                     || className.startsWith("javassist.")
-                    || className.startsWith("org.codehaus.groovy.runtime.")) {
+                    || className.startsWith("org.codehaus.groovy.runtime.")
+                    || className.startsWith("org.mozilla.javascript.")
+                    || className.startsWith("org.apache.bcel.")
+                    || className.startsWith("com.sun.jndi.")) {
                 return ObjectInputFilter.Status.REJECTED;
             }
         }

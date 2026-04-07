@@ -69,6 +69,25 @@ class SolarDateTest {
     class OfFactoryTests {
 
         @Test
+        @DisplayName("of(year, month, day)创建日期")
+        void testOfYearMonthDay() {
+            SolarDate date = SolarDate.of(2024, 6, 15);
+
+            assertThat(date.year()).isEqualTo(2024);
+            assertThat(date.month()).isEqualTo(6);
+            assertThat(date.day()).isEqualTo(15);
+        }
+
+        @Test
+        @DisplayName("of(year, month, day)等价于构造函数")
+        void testOfEqualsConstructor() {
+            SolarDate d1 = SolarDate.of(2024, 3, 20);
+            SolarDate d2 = new SolarDate(2024, 3, 20);
+
+            assertThat(d1).isEqualTo(d2);
+        }
+
+        @Test
         @DisplayName("of从LocalDate创建")
         void testOfLocalDate() {
             LocalDate localDate = LocalDate.of(2024, 6, 15);
@@ -234,7 +253,6 @@ class SolarDateTest {
         @Test
         @DisplayName("getDayOfWeek返回1-7")
         void testDayOfWeekRange() {
-            // 验证一周7天的所有值
             for (int i = 0; i < 7; i++) {
                 SolarDate date = new SolarDate(2024, 1, 1).plusDays(i);
                 assertThat(date.getDayOfWeek()).isBetween(1, 7);

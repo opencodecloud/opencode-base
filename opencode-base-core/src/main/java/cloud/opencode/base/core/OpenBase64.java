@@ -223,35 +223,79 @@ public final class OpenBase64 {
     // ==================== 验证 ====================
 
     /**
-     * Checks
-     * 检查字符串是否为有效的 Base64 编码
+     * Checks if the string is valid standard Base64 encoding (without decoding).
+     * 检查字符串是否为有效的标准 Base64 编码（不执行解码）。
+     *
+     * <p>Validates that the string contains only valid Base64 characters (A-Z, a-z, 0-9, +, /, =)
+     * and that the non-whitespace content length is a multiple of 4. Whitespace characters
+     * (spaces, tabs, CR, LF) are ignored to support MIME-formatted input.</p>
+     * <p>验证字符串仅包含有效的 Base64 字符（A-Z、a-z、0-9、+、/、=），
+     * 且去除空白后的内容长度为 4 的倍数。忽略空白字符（空格、制表符、CR、LF）以支持 MIME 格式输入。</p>
+     *
+     * @param str the string to check | 要检查的字符串
+     * @return true if the string is valid Base64 | 如果字符串是有效的 Base64 则返回 true
+     * @see #isBase64UrlSafe(String)
      */
     public static boolean isBase64(String str) {
         if (str == null || str.isEmpty()) {
             return false;
         }
-        try {
-            Base64.getDecoder().decode(str);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
+        int contentLen = 0;
+        boolean paddingStarted = false;
+        int paddingCount = 0;
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            // Skip whitespace (for MIME compatibility)
+            if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+                continue;
+            }
+            if (c == '=') {
+                paddingStarted = true;
+                paddingCount++;
+                contentLen++;
+                if (paddingCount > 2) {
+                    return false;
+                }
+            } else if (paddingStarted) {
+                // Non-padding character after padding
+                return false;
+            } else if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                    || (c >= '0' && c <= '9') || c == '+' || c == '/') {
+                contentLen++;
+            } else {
+                return false;
+            }
         }
+        return contentLen > 0 && contentLen % 4 == 0;
     }
 
     /**
-     * Checks
-     * 检查字符串是否为有效的 URL 安全 Base64 编码
+     * Checks if the string is valid URL-safe Base64 encoding (without decoding).
+     * 检查字符串是否为有效的 URL 安全 Base64 编码（不执行解码）。
+     *
+     * <p>Validates that the string contains only valid URL-safe Base64 characters
+     * (A-Z, a-z, 0-9, -, _). URL-safe Base64 typically omits padding ('='),
+     * so length is not required to be a multiple of 4.</p>
+     * <p>验证字符串仅包含有效的 URL 安全 Base64 字符（A-Z、a-z、0-9、-、_）。
+     * URL 安全 Base64 通常省略填充字符（'='），因此长度不要求为 4 的倍数。</p>
+     *
+     * @param str the string to check | 要检查的字符串
+     * @return true if the string is valid URL-safe Base64 | 如果字符串是有效的 URL 安全 Base64 则返回 true
+     * @see #isBase64(String)
      */
     public static boolean isBase64UrlSafe(String str) {
         if (str == null || str.isEmpty()) {
             return false;
         }
-        try {
-            Base64.getUrlDecoder().decode(str);
-            return true;
-        } catch (IllegalArgumentException e) {
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                    || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+                continue;
+            }
             return false;
         }
+        return true;
     }
 
     // ==================== 流式编解码 ====================

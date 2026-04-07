@@ -457,8 +457,11 @@ class OidcTokenTest {
             String str = oidcToken.toString();
 
             assertThat(str).contains("OidcToken");
-            assertThat(str).contains("subject='user123'");
-            assertThat(str).contains("email='user@example.com'");
+            assertThat(str).contains("hasIdToken=");
+            assertThat(str).contains("hasRefreshToken=");
+            assertThat(str).contains("isExpired=");
+            assertThat(str).doesNotContain("subject=");
+            assertThat(str).doesNotContain("email=");
         }
     }
 

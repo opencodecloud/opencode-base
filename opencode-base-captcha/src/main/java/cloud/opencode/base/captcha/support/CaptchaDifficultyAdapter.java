@@ -58,6 +58,12 @@ public final class CaptchaDifficultyAdapter {
     private static final Duration RESET_WINDOW = Duration.ofMinutes(15);
     private static final Duration CLEANUP_INTERVAL = Duration.ofMinutes(30);
 
+    /**
+     * Maximum number of tracked clients to prevent unbounded map growth (OOM).
+     * 最大跟踪客户端数量，防止无限制的 Map 增长（OOM）。
+     */
+    private static final int MAX_TRACKED_CLIENTS = 100_000;
+
     private final Map<String, ClientRecord> clientRecords = new ConcurrentHashMap<>();
     private final LongAdder totalRequests = new LongAdder();
     private final LongAdder totalFailures = new LongAdder();
@@ -140,6 +146,15 @@ public final class CaptchaDifficultyAdapter {
         totalRequests.increment();
         if (!success) {
             totalFailures.increment();
+        }
+
+        // Prevent unbounded map growth — evict expired entries first, then skip new clients
+        // 防止无限制的 Map 增长 — 先淘汰过期条目，然后跳过新客户端
+        if (!clientRecords.containsKey(clientId) && clientRecords.size() >= MAX_TRACKED_CLIENTS) {
+            cleanup();
+            if (clientRecords.size() >= MAX_TRACKED_CLIENTS) {
+                return;
+            }
         }
 
         ClientRecord record = clientRecords.computeIfAbsent(clientId,

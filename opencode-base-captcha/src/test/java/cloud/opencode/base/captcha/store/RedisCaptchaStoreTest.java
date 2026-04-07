@@ -244,6 +244,80 @@ class RedisCaptchaStoreTest {
 
             assertThat(result).isEmpty();
         }
+
+        @Test
+        @DisplayName("should use atomic getAndRemoveCommand when provided")
+        void shouldUseAtomicGetAndRemoveCommandWhenProvided() {
+            Map<String, String> redis = new HashMap<>();
+            AtomicInteger getterCalls = new AtomicInteger(0);
+            AtomicInteger deleterCalls = new AtomicInteger(0);
+
+            RedisCaptchaStore s = RedisCaptchaStore.builder()
+                .setter((key, value, ttl) -> redis.put(key, value))
+                .getter(key -> {
+                    getterCalls.incrementAndGet();
+                    return redis.get(key);
+                })
+                .deleter(key -> {
+                    deleterCalls.incrementAndGet();
+                    redis.remove(key);
+                })
+                .getAndRemoveCommand(key -> redis.remove(key))
+                .build();
+
+            s.store("id-1", "answer", Duration.ofMinutes(5));
+            Optional<String> result = s.getAndRemove("id-1");
+
+            assertThat(result).isPresent().contains("answer");
+            assertThat(redis.containsKey("captcha:id-1")).isFalse();
+            // getter and deleter should NOT have been called by getAndRemove
+            assertThat(getterCalls.get()).isZero();
+            assertThat(deleterCalls.get()).isZero();
+        }
+
+        @Test
+        @DisplayName("should return empty from atomic getAndRemoveCommand for missing key")
+        void shouldReturnEmptyFromAtomicGetAndRemoveCommandForMissingKey() {
+            Map<String, String> redis = new HashMap<>();
+
+            RedisCaptchaStore s = RedisCaptchaStore.builder()
+                .setter((key, value, ttl) -> redis.put(key, value))
+                .getter(redis::get)
+                .deleter(redis::remove)
+                .getAndRemoveCommand(key -> redis.remove(key))
+                .build();
+
+            Optional<String> result = s.getAndRemove("nonexistent");
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("should fall back to GET+DEL when getAndRemoveCommand not provided")
+        void shouldFallBackToGetDelWhenGetAndRemoveCommandNotProvided() {
+            AtomicInteger getterCalls = new AtomicInteger(0);
+            AtomicInteger deleterCalls = new AtomicInteger(0);
+
+            RedisCaptchaStore s = RedisCaptchaStore.builder()
+                .setter((key, value, ttl) -> mockRedis.put(key, value))
+                .getter(key -> {
+                    getterCalls.incrementAndGet();
+                    return mockRedis.get(key);
+                })
+                .deleter(key -> {
+                    deleterCalls.incrementAndGet();
+                    mockRedis.remove(key);
+                })
+                .build();
+
+            s.store("id-1", "answer", Duration.ofMinutes(5));
+            Optional<String> result = s.getAndRemove("id-1");
+
+            assertThat(result).isPresent().contains("answer");
+            // fallback uses getter + deleter
+            assertThat(getterCalls.get()).isEqualTo(1);
+            assertThat(deleterCalls.get()).isEqualTo(1);
+        }
     }
 
     @Nested
@@ -356,6 +430,93 @@ class RedisCaptchaStoreTest {
         @DisplayName("should return -1 indicating unknown size")
         void shouldReturnNegativeOneIndicatingUnknownSize() {
             assertThat(store.size()).isEqualTo(-1);
+        }
+    }
+
+    @Nested
+    @DisplayName("ID Validation Tests")
+    class IdValidationTests {
+
+        @Test
+        @DisplayName("should reject null ID")
+        void shouldRejectNullId() {
+            assertThatThrownBy(() -> store.store(null, "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("null or blank");
+        }
+
+        @Test
+        @DisplayName("should reject blank ID")
+        void shouldRejectBlankId() {
+            assertThatThrownBy(() -> store.store("   ", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("null or blank");
+        }
+
+        @Test
+        @DisplayName("should reject empty ID")
+        void shouldRejectEmptyId() {
+            assertThatThrownBy(() -> store.store("", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("null or blank");
+        }
+
+        @Test
+        @DisplayName("should reject ID with control characters")
+        void shouldRejectIdWithControlCharacters() {
+            assertThatThrownBy(() -> store.store("id\u0000inject", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid characters");
+
+            assertThatThrownBy(() -> store.store("id\nnewline", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid characters");
+
+            assertThatThrownBy(() -> store.store("id\rtab", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid characters");
+        }
+
+        @Test
+        @DisplayName("should reject ID with glob pattern characters")
+        void shouldRejectIdWithGlobPatternCharacters() {
+            assertThatThrownBy(() -> store.store("id*", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid characters");
+
+            assertThatThrownBy(() -> store.store("id?", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid characters");
+
+            assertThatThrownBy(() -> store.store("id[0]", "answer", Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid characters");
+        }
+
+        @Test
+        @DisplayName("should reject invalid IDs in all public methods")
+        void shouldRejectInvalidIdsInAllPublicMethods() {
+            assertThatThrownBy(() -> store.get(null))
+                .isInstanceOf(IllegalArgumentException.class);
+
+            assertThatThrownBy(() -> store.getAndRemove("id*"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+            assertThatThrownBy(() -> store.remove("id\u0000"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+            assertThatThrownBy(() -> store.exists(""))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("should accept valid IDs")
+        void shouldAcceptValidIds() {
+            assertThatCode(() -> store.store("valid-id-123", "answer", Duration.ofMinutes(5)))
+                .doesNotThrowAnyException();
+
+            assertThatCode(() -> store.store("UPPER_case.with-dashes", "answer", Duration.ofMinutes(5)))
+                .doesNotThrowAnyException();
         }
     }
 

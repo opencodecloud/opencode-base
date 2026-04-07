@@ -1,5 +1,7 @@
 package cloud.opencode.base.lunar.exception;
 
+import java.io.Serial;
+
 /**
  * Date Conversion Exception
  * 日期转换异常
@@ -32,6 +34,9 @@ package cloud.opencode.base.lunar.exception;
  * @since JDK 25, opencode-base-lunar V1.0.0
  */
 public class DateConversionException extends LunarException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     /**
      * Create conversion exception

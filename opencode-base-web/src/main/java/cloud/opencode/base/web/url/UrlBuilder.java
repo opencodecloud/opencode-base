@@ -394,13 +394,37 @@ public final class UrlBuilder {
         if (path == null || path.isEmpty()) {
             return "";
         }
-        String result = path;
-        for (Map.Entry<String, String> entry : pathParams.entrySet()) {
-            String encoded = URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8);
-            validatePathParam(entry.getKey(), encoded);
-            result = result.replace("{" + entry.getKey() + "}", encoded);
+        if (pathParams.isEmpty()) {
+            return path;
         }
-        return result;
+        // Single-pass scan: replace {key} placeholders without per-param full-path String.replace()
+        StringBuilder sb = new StringBuilder(path.length() + 32);
+        int i = 0;
+        int len = path.length();
+        while (i < len) {
+            int open = path.indexOf('{', i);
+            if (open < 0) {
+                sb.append(path, i, len);
+                break;
+            }
+            sb.append(path, i, open);
+            int close = path.indexOf('}', open + 1);
+            if (close < 0) {
+                sb.append(path, open, len);
+                break;
+            }
+            String key = path.substring(open + 1, close);
+            String val = pathParams.get(key);
+            if (val != null) {
+                String encoded = URLEncoder.encode(val, StandardCharsets.UTF_8);
+                validatePathParam(key, encoded);
+                sb.append(encoded);
+            } else {
+                sb.append(path, open, close + 1);
+            }
+            i = close + 1;
+        }
+        return sb.toString();
     }
 
     private void validatePathParam(String name, String encodedValue) {

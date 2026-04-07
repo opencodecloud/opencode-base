@@ -161,7 +161,7 @@ class UndirectedWeightedGraph<V> extends UndirectedGraph<V> implements WeightedG
 
     @Override
     public double totalWeight() {
-        // Each edge is stored twice in undirected graph
+        // UndirectedGraph.edges() already deduplicates edges, no division needed
         return edges().stream()
             .mapToDouble(Edge::weight)
             .sum();

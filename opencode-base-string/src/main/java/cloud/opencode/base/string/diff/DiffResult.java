@@ -68,9 +68,8 @@ public record DiffResult(List<DiffLine> lines, int additions, int deletions, int
     }
 
     private static String escapeHtml(String str) {
-        return str.replace("&", "&amp;")
-                  .replace("<", "&lt;")
-                  .replace(">", "&gt;")
-                  .replace("\"", "&quot;");
+        // Delegate to the optimized single-pass HtmlUtil.escape().
+        // 委托给已优化的单遍历 HtmlUtil.escape()。
+        return cloud.opencode.base.string.escape.HtmlUtil.escape(str);
     }
 }

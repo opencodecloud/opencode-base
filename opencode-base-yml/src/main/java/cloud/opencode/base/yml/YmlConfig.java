@@ -50,6 +50,7 @@ public final class YmlConfig {
     private final long maxDocumentSize;
     private final FlowStyle defaultFlowStyle;
     private final ScalarStyle defaultScalarStyle;
+    private final boolean strictTypes;
 
     private YmlConfig(Builder builder) {
         this.indent = builder.indent;
@@ -61,6 +62,7 @@ public final class YmlConfig {
         this.maxDocumentSize = builder.maxDocumentSize;
         this.defaultFlowStyle = builder.defaultFlowStyle;
         this.defaultScalarStyle = builder.defaultScalarStyle;
+        this.strictTypes = builder.strictTypes;
     }
 
     /**
@@ -174,6 +176,21 @@ public final class YmlConfig {
     }
 
     /**
+     * Checks if strict types mode is enabled.
+     * 检查是否启用严格类型模式。
+     *
+     * <p>When enabled, YAML 1.1 boolean values (YES/NO/ON/OFF/y/n/Y/N) are
+     * treated as strings instead of being converted to booleans.</p>
+     * <p>启用时，YAML 1.1 布尔值（YES/NO/ON/OFF/y/n/Y/N）将被视为字符串，
+     * 而不会被转换为布尔值。</p>
+     *
+     * @return true if strict types is enabled | 如果启用严格类型模式则返回 true
+     */
+    public boolean isStrictTypes() {
+        return strictTypes;
+    }
+
+    /**
      * Flow Style - YAML output flow style
      * 流风格 - YAML 输出流风格
      */
@@ -248,6 +265,7 @@ public final class YmlConfig {
         private long maxDocumentSize = 10 * 1024 * 1024; // 10MB
         private FlowStyle defaultFlowStyle = FlowStyle.BLOCK;
         private ScalarStyle defaultScalarStyle = ScalarStyle.PLAIN;
+        private boolean strictTypes = false;
 
         private Builder() {}
 
@@ -356,6 +374,23 @@ public final class YmlConfig {
          */
         public Builder defaultScalarStyle(ScalarStyle scalarStyle) {
             this.defaultScalarStyle = scalarStyle;
+            return this;
+        }
+
+        /**
+         * Sets whether to enable strict types mode.
+         * 设置是否启用严格类型模式。
+         *
+         * <p>When enabled, YAML 1.1 boolean values (YES/NO/ON/OFF/y/n/Y/N) are
+         * treated as strings instead of being converted to booleans.</p>
+         * <p>启用时，YAML 1.1 布尔值（YES/NO/ON/OFF/y/n/Y/N）将被视为字符串，
+         * 而不会被转换为布尔值。</p>
+         *
+         * @param strictTypes whether strict types is enabled | 是否启用严格类型
+         * @return this builder | 此构建器
+         */
+        public Builder strictTypes(boolean strictTypes) {
+            this.strictTypes = strictTypes;
             return this;
         }
 

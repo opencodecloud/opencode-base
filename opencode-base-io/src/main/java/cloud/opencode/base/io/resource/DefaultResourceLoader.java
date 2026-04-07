@@ -86,7 +86,7 @@ public final class DefaultResourceLoader implements ResourceLoader {
             return new FileSystemResource(Path.of(path));
         }
 
-        // URL resource (http, https, ftp, etc.)
+        // URL resource (http, https, jar, etc. — protocol validated by UrlResource)
         if (isUrl(location)) {
             return new UrlResource(location);
         }

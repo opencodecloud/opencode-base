@@ -4,11 +4,11 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringJoiner;
 
 /**
  * Query String - URL Query String Parser/Builder
@@ -196,7 +196,7 @@ public final class QueryString {
      * @return the parameter names - 参数名集合
      */
     public Set<String> names() {
-        return Set.copyOf(params.keySet());
+        return Collections.unmodifiableSet(params.keySet());
     }
 
     /**
@@ -299,14 +299,17 @@ public final class QueryString {
         if (params.isEmpty()) {
             return "";
         }
-        StringJoiner joiner = new StringJoiner("&");
-        params.forEach((name, values) -> {
-            String encodedName = encode(name);
-            for (String value : values) {
-                joiner.add(encodedName + "=" + encode(value));
+        StringBuilder sb = new StringBuilder(64);
+        boolean first = true;
+        for (Map.Entry<String, List<String>> entry : params.entrySet()) {
+            String encodedName = encode(entry.getKey());
+            for (String value : entry.getValue()) {
+                if (!first) sb.append('&');
+                first = false;
+                sb.append(encodedName).append('=').append(encode(value));
             }
-        });
-        return joiner.toString();
+        }
+        return sb.toString();
     }
 
     @Override

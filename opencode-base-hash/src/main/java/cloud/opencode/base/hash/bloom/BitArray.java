@@ -286,6 +286,10 @@ public final class BitArray implements Serializable {
         if (bitSize <= 0) {
             throw new IllegalArgumentException("Invalid bit size: " + bitSize);
         }
+        // Cap at 2^31 bits (~256MB) to prevent OOM from malicious byte arrays
+        if (bitSize > (long) Integer.MAX_VALUE * 64L) {
+            throw new IllegalArgumentException("Bit size too large: " + bitSize);
+        }
 
         int length = (int) ((bitSize + 63) / 64);
         int expectedLength = 8 + length * 8;
@@ -328,6 +332,14 @@ public final class BitArray implements Serializable {
     @Serial
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();
+        if (bitSize <= 0) {
+            throw new java.io.InvalidObjectException("Invalid bitSize: " + bitSize);
+        }
+        // Cap at 2^31 bits (~256MB) to prevent OOM from malicious serialized data
+        if (bitSize > (long) Integer.MAX_VALUE * 64L) {
+            throw new java.io.InvalidObjectException(
+                    "bitSize too large for deserialization: " + bitSize);
+        }
         int length = (int) ((bitSize + 63) / 64);
         if (threadSafe) {
             // Reconstruct transient atomicData from the extra longs written by writeObject.

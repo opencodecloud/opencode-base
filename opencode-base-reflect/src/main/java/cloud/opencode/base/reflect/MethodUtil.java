@@ -49,8 +49,22 @@ import java.util.function.Predicate;
  */
 public final class MethodUtil {
 
-    private static final Map<Class<?>, List<Method>> METHOD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, List<Method>> METHOD_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
     private static final Map<MethodKey, Method> SINGLE_METHOD_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * Checks that the class is not a JDK platform type
+     * 检查类是否为JDK平台类型
+     */
+    private static void checkNotPlatformType(Class<?> clazz) {
+        String pkg = clazz.getPackageName();
+        if (pkg.startsWith("java.") || pkg.startsWith("javax.") || pkg.startsWith("sun.")
+                || pkg.startsWith("jdk.") || pkg.startsWith("com.sun.")) {
+            throw new OpenReflectException(clazz, "<method>", "setAccessible",
+                    "setAccessible denied for platform type: " + clazz.getName());
+        }
+    }
 
     private MethodUtil() {
     }
@@ -257,6 +271,7 @@ public final class MethodUtil {
      */
     public static Object invoke(Method method, Object target, Object... args) {
         try {
+            checkNotPlatformType(method.getDeclaringClass());
             ReflectUtil.setAccessible(method, target);
             return method.invoke(target, args);
         } catch (Exception e) {
@@ -417,16 +432,36 @@ public final class MethodUtil {
      */
     public static String getPropertyName(Method method) {
         String name = method.getName();
+        String suffix;
         if (name.startsWith("get") && name.length() > 3) {
-            return Character.toLowerCase(name.charAt(3)) + name.substring(4);
+            suffix = name.substring(3);
+        } else if (name.startsWith("is") && name.length() > 2) {
+            suffix = name.substring(2);
+        } else if (name.startsWith("set") && name.length() > 3) {
+            suffix = name.substring(3);
+        } else {
+            return null;
         }
-        if (name.startsWith("is") && name.length() > 2) {
-            return Character.toLowerCase(name.charAt(2)) + name.substring(3);
+        return decapitalize(suffix);
+    }
+
+    /**
+     * Decapitalizes a string following JavaBeans conventions.
+     * If the first two characters are both uppercase, the string is returned as-is
+     * (e.g., "URL" stays "URL", not "uRL").
+     * JavaBeans规范的首字母小写。如果前两个字符都是大写，则原样返回。
+     *
+     * @param str the string | 字符串
+     * @return the decapitalized string | 首字母小写的字符串
+     */
+    private static String decapitalize(String str) {
+        if (str == null || str.isEmpty()) {
+            return str;
         }
-        if (name.startsWith("set") && name.length() > 3) {
-            return Character.toLowerCase(name.charAt(3)) + name.substring(4);
+        if (str.length() > 1 && Character.isUpperCase(str.charAt(0)) && Character.isUpperCase(str.charAt(1))) {
+            return str;
         }
-        return null;
+        return Character.toLowerCase(str.charAt(0)) + str.substring(1);
     }
 
     /**

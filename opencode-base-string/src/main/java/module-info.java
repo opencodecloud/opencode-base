@@ -20,6 +20,8 @@
  *   <li>Joiner/Splitter/CharMatcher - Guava-style builders - Guava风格构建器</li>
  *   <li>OpenEscape - HTML/Java/SQL escaping - 转义处理</li>
  *   <li>OpenUnicode - Full-width/Chinese processing - Unicode处理</li>
+ *   <li>OpenGrapheme - Grapheme cluster operations (emoji-safe) - 字素簇操作（emoji安全）</li>
+ *   <li>OpenSlug - URL-friendly slug generation - URL友好别名生成</li>
  * </ul>
  *
  * @author Leon Soo
@@ -29,9 +31,6 @@ module cloud.opencode.base.string {
     // Required modules
     requires transitive cloud.opencode.base.core;
 
-    // Optional dependency for Jackson desensitization integration
-    requires static com.fasterxml.jackson.databind;
-
     // Export public API packages
     exports cloud.opencode.base.string;
     exports cloud.opencode.base.string.abbr;
@@ -40,7 +39,6 @@ module cloud.opencode.base.string {
     exports cloud.opencode.base.string.desensitize.annotation;
     exports cloud.opencode.base.string.desensitize.exception;
     exports cloud.opencode.base.string.desensitize.handler;
-    exports cloud.opencode.base.string.desensitize.jackson;
     exports cloud.opencode.base.string.desensitize.strategy;
     exports cloud.opencode.base.string.diff;
     exports cloud.opencode.base.string.escape;

@@ -13,6 +13,14 @@
 - **Lambda Lazy Evaluation**: Deferred message construction for performance
 - **Marker Support**: Log categorization and filtering via markers
 
+### V1.0.3 New Features
+- **Log Event Model**: Immutable `LogEvent` record carrying all event context (level, message, throwable, marker, MDC, timestamp, thread, caller)
+- **Caller Info**: `CallerInfo` record capturing class name, method, file, and line number via StackWalker
+- **Log Filter Pipeline**: `LogFilter` interface + `LogFilterChain` with built-in `LevelFilter`, `MarkerFilter`, `ThrottleFilter`
+- **Async Logger**: `AsyncLogger` wrapping any Logger with virtual-thread-based async dispatch, backpressure fallback, and graceful shutdown
+- **Dynamic Log Level**: `DynamicLevelManager` singleton for runtime per-logger log level adjustment without restart
+- **Color Console**: `ConsoleFormatter` with ANSI color output and `AnsiColor` enum, auto-detecting terminal capabilities
+
 ### Enhanced Features
 - **Structured Logging**: JSON-style key-value structured log entries for ELK/Loki
 - **Log Masking**: Sensitive data masking for passwords, phone numbers, ID cards
@@ -31,7 +39,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-log</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -96,6 +104,51 @@ String masked = LogMasking.mask("13812345678", MaskingStrategy.PHONE);
 // Output: 138****5678
 ```
 
+### Async Logging
+
+```java
+import cloud.opencode.base.log.async.AsyncLogger;
+
+Logger delegate = LoggerFactory.getLogger(MyService.class);
+try (AsyncLogger async = AsyncLogger.wrap(delegate)) {
+    async.info("Logged asynchronously via virtual thread");
+    async.flush(); // wait for pending messages
+}
+```
+
+### Log Filtering
+
+```java
+import cloud.opencode.base.log.filter.*;
+
+LogFilterChain chain = new LogFilterChain();
+chain.addFilter(new LevelFilter(LogLevel.WARN));           // only WARN+
+chain.addFilter(new ThrottleFilter(Duration.ofSeconds(5))); // deduplicate
+
+LogEvent event = LogEvent.builder(LogLevel.INFO, "test").build();
+FilterAction result = chain.apply(event); // DENY (below WARN)
+```
+
+### Dynamic Log Level
+
+```java
+import cloud.opencode.base.log.level.DynamicLevelManager;
+
+DynamicLevelManager manager = DynamicLevelManager.getInstance();
+manager.setLevel("com.example.MyService", LogLevel.DEBUG); // enable debug at runtime
+manager.resetLevel("com.example.MyService");               // restore default
+```
+
+### Caller Info
+
+```java
+import cloud.opencode.base.log.CallerInfo;
+
+CallerInfo info = CallerInfo.capture();
+System.out.println(info.toShortString());  // "MyClass.myMethod:42"
+System.out.println(info.toCompactString()); // "MyClass:42"
+```
+
 ## Class Reference
 
 | Class | Description |
@@ -130,6 +183,17 @@ String masked = LogMasking.mask("13812345678", MaskingStrategy.PHONE);
 | `LogProviderFactory` | Factory for discovering and managing log providers |
 | `MDCAdapter` | SPI interface for MDC implementation |
 | `NDCAdapter` | SPI interface for NDC implementation |
+| `LogEvent` | Immutable log event record carrying full context |
+| `CallerInfo` | Caller location record (class, method, file, line) |
+| `LogFilter` | Functional interface for log event filtering |
+| `LogFilterChain` | Thread-safe filter chain with short-circuit evaluation |
+| `LevelFilter` | Built-in filter by log level threshold |
+| `MarkerFilter` | Built-in filter by marker name |
+| `ThrottleFilter` | Built-in rate-limiting filter for duplicate messages |
+| `AsyncLogger` | Async logger wrapper using virtual threads |
+| `DynamicLevelManager` | Runtime log level management per logger |
+| `ConsoleFormatter` | Log line formatter with ANSI color support |
+| `AnsiColor` | ANSI color code enumeration |
 
 ## Requirements
 

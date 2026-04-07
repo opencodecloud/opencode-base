@@ -38,7 +38,7 @@ import java.util.function.Function;
  *         redisTemplate.delete(key))
  *     .build();
  *
- * // With Jedis
+ * // With Jedis (Redis 6.2+ for atomic GETDEL)
  * JedisPool pool = ...;
  * RedisCaptchaStore store = RedisCaptchaStore.builder()
  *     .keyPrefix("captcha:")
@@ -55,6 +55,11 @@ import java.util.function.Function;
  *     .deleter(key -> {
  *         try (Jedis jedis = pool.getResource()) {
  *             jedis.del(key);
+ *         }
+ *     })
+ *     .getAndRemoveCommand(key -> {
+ *         try (Jedis jedis = pool.getResource()) {
+ *             return jedis.getDel(key);
  *         }
  *     })
  *     .build();
@@ -80,6 +85,7 @@ public final class RedisCaptchaStore implements CaptchaStore {
     private final Function<String, String> getter;
     private final Consumer<String> deleter;
     private final Function<String, Boolean> existsChecker;
+    private final Function<String, String> getAndRemover;
 
     /**
      * Functional interface for Redis SET with TTL operation.
@@ -104,6 +110,7 @@ public final class RedisCaptchaStore implements CaptchaStore {
         this.getter = Objects.requireNonNull(builder.getter, "getter is required");
         this.deleter = Objects.requireNonNull(builder.deleter, "deleter is required");
         this.existsChecker = builder.existsChecker != null ? builder.existsChecker : key -> getter.apply(key) != null;
+        this.getAndRemover = builder.getAndRemover;
     }
 
     /**
@@ -129,9 +136,34 @@ public final class RedisCaptchaStore implements CaptchaStore {
         return Optional.ofNullable(value);
     }
 
+    /**
+     * Atomically retrieves and removes the CAPTCHA answer for the given id.
+     * 原子地获取并移除给定id的验证码答案。
+     *
+     * <p>If a {@code getAndRemoveCommand} was provided via the builder, it will be used
+     * to perform an atomic get-and-delete operation (e.g., Redis {@code GETDEL}).
+     * Otherwise, falls back to a non-atomic GET followed by DEL.</p>
+     * <p>如果通过构建器提供了 {@code getAndRemoveCommand}，则使用它执行原子的获取并删除操作
+     * （例如 Redis {@code GETDEL}）。否则回退到非原子的先GET后DEL操作。</p>
+     *
+     * <p><strong>Warning | 警告:</strong> Without {@code getAndRemoveCommand}, the fallback
+     * GET+DEL is <em>not atomic</em> — a concurrent caller may also read the same value
+     * before the DEL executes, allowing double-validation of a CAPTCHA.</p>
+     * <p>如果未配置 {@code getAndRemoveCommand}，回退的 GET+DEL <em>不是原子的</em> ——
+     * 并发调用者可能在 DEL 执行之前也读取到相同的值，导致验证码被重复验证。</p>
+     *
+     * @param id the CAPTCHA id | 验证码id
+     * @return the answer if present | 答案（如果存在）
+     */
     @Override
     public Optional<String> getAndRemove(String id) {
         String key = buildKey(id);
+        if (getAndRemover != null) {
+            String value = getAndRemover.apply(key);
+            return Optional.ofNullable(value);
+        }
+        // Fallback: non-atomic GET + DEL (see Javadoc warning)
+        // 回退: 非原子的 GET + DEL（参见 Javadoc 警告）
         String value = getter.apply(key);
         if (value != null) {
             deleter.accept(key);
@@ -186,7 +218,27 @@ public final class RedisCaptchaStore implements CaptchaStore {
         return keyPrefix;
     }
 
+    /**
+     * Builds a Redis key by prepending the key prefix to the given CAPTCHA ID,
+     * after validating the ID does not contain control characters or glob patterns.
+     * 通过在给定的 CAPTCHA ID 前添加键前缀来构建 Redis 键，
+     * 并验证 ID 不包含控制字符或 glob 模式字符。
+     *
+     * @param id the CAPTCHA ID | 验证码 ID
+     * @return the full Redis key | 完整的 Redis 键
+     * @throws IllegalArgumentException if the ID is null, blank, or contains invalid characters |
+     *                                  如果 ID 为 null、空白或包含无效字符
+     */
     private String buildKey(String id) {
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException("CAPTCHA ID must not be null or blank");
+        }
+        for (int i = 0; i < id.length(); i++) {
+            char c = id.charAt(i);
+            if (c < 0x20 || c == '*' || c == '?' || c == '[' || c == ']') {
+                throw new IllegalArgumentException("CAPTCHA ID contains invalid characters");
+            }
+        }
         return keyPrefix + id;
     }
 
@@ -194,12 +246,13 @@ public final class RedisCaptchaStore implements CaptchaStore {
      * Builder for RedisCaptchaStore.
      * RedisCaptchaStore的构建器。
      */
-    public static class Builder {
+    public static final class Builder {
         private String keyPrefix = DEFAULT_KEY_PREFIX;
         private RedisSetter setter;
         private Function<String, String> getter;
         private Consumer<String> deleter;
         private Function<String, Boolean> existsChecker;
+        private Function<String, String> getAndRemover;
 
         /**
          * Sets the key prefix.
@@ -258,6 +311,37 @@ public final class RedisCaptchaStore implements CaptchaStore {
          */
         public Builder existsChecker(Function<String, Boolean> existsChecker) {
             this.existsChecker = existsChecker;
+            return this;
+        }
+
+        /**
+         * Sets the atomic get-and-remove command for CAPTCHA validation.
+         * 设置用于验证码验证的原子获取并移除命令。
+         *
+         * <p>This function should atomically retrieve and delete a value by key,
+         * equivalent to Redis {@code GETDEL} (available since Redis 6.2).
+         * When provided, {@link RedisCaptchaStore#getAndRemove(String)} will use this
+         * function instead of the non-atomic GET+DEL fallback, preventing
+         * double-validation of CAPTCHAs under concurrent access.</p>
+         * <p>此函数应按键原子地获取并删除值，等同于 Redis {@code GETDEL}（Redis 6.2 起可用）。
+         * 提供后，{@link RedisCaptchaStore#getAndRemove(String)} 将使用此函数
+         * 而非非原子的 GET+DEL 回退方案，防止并发访问下的验证码重复验证。</p>
+         *
+         * <p><strong>Usage Example | 使用示例:</strong></p>
+         * <pre>{@code
+         * // With Jedis (Redis 6.2+)
+         * .getAndRemoveCommand(key -> {
+         *     try (Jedis jedis = pool.getResource()) {
+         *         return jedis.getDel(key);
+         *     }
+         * })
+         * }</pre>
+         *
+         * @param getAndRemover the atomic get-and-delete function | 原子获取并删除函数
+         * @return this builder | 此构建器
+         */
+        public Builder getAndRemoveCommand(Function<String, String> getAndRemover) {
+            this.getAndRemover = getAndRemover;
             return this;
         }
 

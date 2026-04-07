@@ -23,6 +23,15 @@
 - **ExpressionStrategy**：基于表达式语言的动态规则
 - **CompositeStrategy**：组合多个策略（AND/OR 逻辑）
 
+### 生命周期与分组管理 (V1.0.3+)
+- **功能生命周期**：`CREATED → ACTIVE → DEPRECATED → ARCHIVED` 状态流转
+- **功能过期**：可配置 `expiresAt` / `expiresAfter(Duration)` 自动过期
+- **功能分组**：按组批量启用/禁用功能
+- **快照与恢复**：捕获并恢复完整功能状态，支持快速回滚
+- **环境策略**：按环境（dev/staging/prod）自动切换功能激活状态
+- **测试支持**：`TestFeatureManager` 提供单元测试中的隔离功能测试
+- **统一异常**：`FeatureException` 继承 `OpenException`，统一错误处理
+
 ### 高级功能
 - **注解支持**：`@FeatureToggle` 和 `@FeatureVariant` 注解
 - **代理路由**：通过 `FeatureProxy` 动态变体路由
@@ -37,7 +46,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-feature</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -101,6 +110,78 @@ Feature feature = Feature.builder("complex")
     .build();
 ```
 
+### 生命周期与过期 (V1.0.3+)
+
+```java
+import cloud.opencode.base.feature.lifecycle.FeatureLifecycle;
+
+// 带过期时间的功能
+Feature promo = Feature.builder("summer-sale")
+    .expiresAt(Instant.parse("2026-09-01T00:00:00Z"))
+    .build();
+
+// 基于时长的过期
+Feature experiment = Feature.builder("experiment-v2")
+    .expiresAfter(Duration.ofDays(30))
+    .build();
+
+// 功能生命周期管理
+Feature legacy = Feature.builder("old-api")
+    .lifecycle(FeatureLifecycle.DEPRECATED)
+    .build();
+
+// 过期或已归档的功能自动返回 false
+features.isEnabled("summer-sale"); // 过期后返回 false
+```
+
+### 功能分组 (V1.0.3+)
+
+```java
+// 注册带分组的功能
+features.register(Feature.builder("dark-mode").group("ui").build());
+features.register(Feature.builder("new-layout").group("ui").build());
+
+// 批量操作
+features.enableGroup("ui");   // 启用所有 UI 功能
+features.disableGroup("ui");  // 禁用所有 UI 功能
+List<Feature> uiFeatures = features.getByGroup("ui");
+```
+
+### 快照与恢复 (V1.0.3+)
+
+```java
+// 捕获当前状态
+FeatureSnapshot snapshot = features.snapshot();
+
+// 进行变更...
+features.enable("risky-feature");
+
+// 出问题时回滚
+features.restore(snapshot);
+```
+
+### 环境策略 (V1.0.3+)
+
+```java
+Feature feature = Feature.builder("debug-panel")
+    .strategy(EnvironmentStrategy.builder()
+        .dev(true).staging(true).prod(false)
+        .build())
+    .build();
+```
+
+### 测试支持 (V1.0.3+)
+
+```java
+try (TestFeatureManager test = new TestFeatureManager()) {
+    test.withFeature("feature-a", true)
+        .withFeature("feature-b", false);
+
+    assertTrue(test.isEnabled("feature-a"));
+    assertFalse(test.isEnabled("feature-b"));
+} // 自动清理
+```
+
 ### 条件执行
 
 ```java
@@ -138,6 +219,8 @@ OpenFeature features = OpenFeature.create(new LruFeatureStore(maxSize));
 | `OpenFeature` | 功能开关管理的主门面类（单例） |
 | `Feature` | 表示功能开关定义的不可变记录 |
 | `FeatureContext` | 携带用户、租户和自定义属性的评估上下文 |
+| `FeatureGroup` | 表示功能分组的记录类 |
+| `FeatureSnapshot` | 捕获所有功能状态快照的记录类 |
 
 ### 注解包 (`cloud.opencode.base.feature.annotation`)
 | 类 | 说明 |
@@ -160,6 +243,7 @@ OpenFeature features = OpenFeature.create(new LruFeatureStore(maxSize));
 | `FeatureNotFoundException` | 功能键未找到异常 |
 | `FeatureSecurityException` | 功能安全违规异常 |
 | `FeatureStoreException` | 功能存储 I/O 错误异常 |
+| `FeatureExpiredException` | 功能过期异常 |
 | `FeatureErrorCode` | 功能错误码枚举 |
 
 ### 监听器包 (`cloud.opencode.base.feature.listener`)
@@ -202,6 +286,17 @@ OpenFeature features = OpenFeature.create(new LruFeatureStore(maxSize));
 | `DateRangeStrategy` | 基于时间窗口的激活 |
 | `ExpressionStrategy` | 使用表达式引擎的动态规则评估 |
 | `CompositeStrategy` | 组合多个策略（AND/OR 逻辑） |
+| `EnvironmentStrategy` | 按环境（dev/staging/prod）激活功能 |
+
+### 生命周期包 (`cloud.opencode.base.feature.lifecycle`)
+| 类 | 说明 |
+|---|------|
+| `FeatureLifecycle` | 功能生命周期状态枚举（CREATED、ACTIVE、DEPRECATED、ARCHIVED） |
+
+### 测试包 (`cloud.opencode.base.feature.testing`)
+| 类 | 说明 |
+|---|------|
+| `TestFeatureManager` | AutoCloseable 测试助手，用于隔离功能测试 |
 
 ## 环境要求
 

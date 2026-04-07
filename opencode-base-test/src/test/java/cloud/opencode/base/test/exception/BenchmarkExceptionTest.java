@@ -25,7 +25,7 @@ class BenchmarkExceptionTest {
         void shouldCreateWithErrorCode() {
             BenchmarkException ex = new BenchmarkException(TestErrorCode.BENCHMARK_FAILED);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.BENCHMARK_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.BENCHMARK_FAILED);
         }
 
         @Test
@@ -33,7 +33,7 @@ class BenchmarkExceptionTest {
         void shouldCreateWithErrorCodeAndDetail() {
             BenchmarkException ex = new BenchmarkException(TestErrorCode.BENCHMARK_TIMEOUT, "too slow");
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.BENCHMARK_TIMEOUT);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.BENCHMARK_TIMEOUT);
             assertThat(ex.getMessage()).contains("too slow");
         }
 
@@ -41,7 +41,7 @@ class BenchmarkExceptionTest {
         @DisplayName("Should create with message")
         void shouldCreateWithMessage() {
             BenchmarkException ex = new BenchmarkException("Custom message");
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
         }
 
         @Test
@@ -50,7 +50,7 @@ class BenchmarkExceptionTest {
             Throwable cause = new RuntimeException("root");
             BenchmarkException ex = new BenchmarkException("Custom message", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -75,7 +75,7 @@ class BenchmarkExceptionTest {
         void timeoutShouldCreateTimeoutException() {
             BenchmarkException ex = BenchmarkException.timeout("myBenchmark", 5000);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.BENCHMARK_TIMEOUT);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.BENCHMARK_TIMEOUT);
             assertThat(ex.getMessage()).contains("myBenchmark");
             assertThat(ex.getMessage()).contains("5000ms");
         }

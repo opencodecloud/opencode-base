@@ -55,15 +55,16 @@ public class CompositeAction implements Action {
 
     @Override
     public void execute(RuleContext context) {
-        List<Exception> errors = new ArrayList<>();
+        List<Exception> errors = null;
         for (Action action : actions) {
             try {
                 action.execute(context);
             } catch (Exception e) {
+                if (errors == null) errors = new ArrayList<>();
                 errors.add(e);
             }
         }
-        if (!errors.isEmpty()) {
+        if (errors != null) {
             RuntimeException primary = errors.getFirst() instanceof RuntimeException re
                 ? re : new RuntimeException(errors.getFirst());
             for (int i = 1; i < errors.size(); i++) {

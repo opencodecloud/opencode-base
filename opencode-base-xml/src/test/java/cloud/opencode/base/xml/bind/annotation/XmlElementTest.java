@@ -36,7 +36,7 @@ class XmlElementTest {
         void shouldTargetFieldAndMethod() {
             var target = XmlElement.class.getAnnotation(java.lang.annotation.Target.class);
             assertThat(target).isNotNull();
-            assertThat(target.value()).containsExactlyInAnyOrder(ElementType.FIELD, ElementType.METHOD);
+            assertThat(target.value()).containsExactlyInAnyOrder(ElementType.FIELD, ElementType.METHOD, ElementType.RECORD_COMPONENT);
         }
 
         @Test

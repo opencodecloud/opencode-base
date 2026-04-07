@@ -436,6 +436,46 @@ public final class CronBuilder {
         return this;
     }
 
+    // ==================== Day/Month Range | 日期/月份范围 ====================
+
+    /**
+     * Sets the day-of-month field to a range (e.g., 10-20)
+     * 设置月中日字段为范围（如10-20）
+     *
+     * @param from the start day (1-31) | 起始日（1-31）
+     * @param to   the end day (1-31) | 结束日（1-31）
+     * @return this builder | 此构建器
+     * @throws IllegalArgumentException if out of range | 如果超出范围
+     */
+    public CronBuilder dayOfMonthRange(int from, int to) {
+        validateRange(from, 1, 31, "day of month");
+        validateRange(to, 1, 31, "day of month");
+        if (from > to) {
+            throw new IllegalArgumentException("from must be <= to for day of month range, got: " + from + "-" + to);
+        }
+        this.dayOfMonth = from + "-" + to;
+        return this;
+    }
+
+    /**
+     * Sets the month field to a range (e.g., 3-9)
+     * 设置月份字段为范围（如3-9）
+     *
+     * @param from the start month (1-12) | 起始月份（1-12）
+     * @param to   the end month (1-12) | 结束月份（1-12）
+     * @return this builder | 此构建器
+     * @throws IllegalArgumentException if out of range | 如果超出范围
+     */
+    public CronBuilder monthRange(int from, int to) {
+        validateRange(from, 1, 12, "month");
+        validateRange(to, 1, 12, "month");
+        if (from > to) {
+            throw new IllegalArgumentException("from must be <= to for month range, got: " + from + "-" + to);
+        }
+        this.month = from + "-" + to;
+        return this;
+    }
+
     // ==================== Range/Step Helpers | 范围/步长辅助 ====================
 
     /**

@@ -25,7 +25,7 @@ import cloud.opencode.base.captcha.support.CaptchaStrength;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: No (mutable state) - 线程安全: 否（可变状态）</li>
+ *   <li>Thread-safe: Yes (volatile fields + thread-safe analyzer) - 线程安全: 是（volatile 字段 + 线程安全分析器）</li>
  *   <li>Null-safe: No (analyzer must not be null) - 空值安全: 否（分析器不能为null）</li>
  * </ul>
  *
@@ -37,8 +37,8 @@ import cloud.opencode.base.captcha.support.CaptchaStrength;
 public final class AntiBotStrategy {
 
     private final BehaviorAnalyzer analyzer;
-    private CaptchaStrength baseStrength = CaptchaStrength.MEDIUM;
-    private CaptchaType baseType = CaptchaType.ALPHANUMERIC;
+    private volatile CaptchaStrength baseStrength = CaptchaStrength.MEDIUM;
+    private volatile CaptchaType baseType = CaptchaType.ALPHANUMERIC;
 
     /**
      * Creates a new strategy with the given analyzer.

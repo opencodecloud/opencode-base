@@ -1,5 +1,6 @@
 package cloud.opencode.base.lunar.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,13 @@ class DateConversionExceptionTest {
             DateConversionException exception = new DateConversionException("test");
             assertThat(exception).isInstanceOf(LunarException.class);
         }
+
+        @Test
+        @DisplayName("继承OpenException")
+        void testExtendsOpenException() {
+            DateConversionException exception = new DateConversionException("test");
+            assertThat(exception).isInstanceOf(OpenException.class);
+        }
     }
 
     @Nested
@@ -39,7 +47,8 @@ class DateConversionExceptionTest {
             DateConversionException exception = new DateConversionException("Conversion failed");
 
             assertThat(exception.getMessage()).contains("Conversion failed");
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
+            assertThat(exception.getErrorCode()).isEqualTo("LUNAR_1001");
         }
 
         @Test
@@ -50,6 +59,7 @@ class DateConversionExceptionTest {
 
             assertThat(exception.getMessage()).contains("Conversion failed");
             assertThat(exception.getCause()).isSameAs(cause);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
         }
     }
 
@@ -62,7 +72,7 @@ class DateConversionExceptionTest {
         void testSolarToLunar() {
             DateConversionException exception = DateConversionException.solarToLunar(2024, 1, 15);
 
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
             assertThat(exception.getMessage()).contains("2024");
         }
 
@@ -71,7 +81,7 @@ class DateConversionExceptionTest {
         void testLunarToSolar() {
             DateConversionException exception = DateConversionException.lunarToSolar(2024, 6, 15, false);
 
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
             assertThat(exception.getMessage()).contains("2024");
         }
 
@@ -80,7 +90,7 @@ class DateConversionExceptionTest {
         void testLunarToSolarLeapMonth() {
             DateConversionException exception = DateConversionException.lunarToSolar(2024, 6, 15, true);
 
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.CONVERSION_FAILED);
             assertThat(exception.getMessage()).contains("闰");
         }
     }

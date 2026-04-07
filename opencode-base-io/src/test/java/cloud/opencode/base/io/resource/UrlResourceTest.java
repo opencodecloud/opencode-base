@@ -421,4 +421,62 @@ class UrlResourceTest {
             assertThat(resource.readString()).isEqualTo(content);
         }
     }
+
+    @Nested
+    @DisplayName("SSRF协议白名单测试")
+    class SsrfProtectionTests {
+
+        @Test
+        @DisplayName("ftp协议被拒绝")
+        void testFtpProtocolRejected() {
+            assertThatThrownBy(() -> new UrlResource("ftp://example.com/file.txt"))
+                    .isInstanceOf(OpenIOOperationException.class)
+                    .hasMessageContaining("SSRF protection");
+        }
+
+        @Test
+        @DisplayName("gopher协议被拒绝")
+        void testGopherProtocolRejected() {
+            assertThatThrownBy(() -> new UrlResource(URI.create("gopher://example.com")))
+                    .isInstanceOf(OpenIOOperationException.class)
+                    .hasMessageContaining("SSRF protection");
+        }
+
+        @Test
+        @DisplayName("http协议通过")
+        void testHttpProtocolAllowed() {
+            UrlResource resource = new UrlResource("http://example.com/test.txt");
+            assertThat(resource.getURL().getProtocol()).isEqualTo("http");
+        }
+
+        @Test
+        @DisplayName("https协议通过")
+        void testHttpsProtocolAllowed() {
+            UrlResource resource = new UrlResource("https://example.com/test.txt");
+            assertThat(resource.getURL().getProtocol()).isEqualTo("https");
+        }
+
+        @Test
+        @DisplayName("file协议通过")
+        void testFileProtocolAllowed() throws Exception {
+            UrlResource resource = new UrlResource("file:///tmp/test.txt");
+            assertThat(resource.getURL().getProtocol()).isEqualTo("file");
+        }
+
+        @Test
+        @DisplayName("jar协议通过")
+        void testJarProtocolAllowed() throws Exception {
+            UrlResource resource = new UrlResource("jar:file:///tmp/test.jar!/entry.txt");
+            assertThat(resource.getURL().getProtocol()).isEqualTo("jar");
+        }
+
+        @Test
+        @DisplayName("URL构造方法也校验协议")
+        void testUrlConstructorValidatesProtocol() throws Exception {
+            URL ftpUrl = URI.create("ftp://example.com/file").toURL();
+            assertThatThrownBy(() -> new UrlResource(ftpUrl))
+                    .isInstanceOf(OpenIOOperationException.class)
+                    .hasMessageContaining("SSRF protection");
+        }
+    }
 }

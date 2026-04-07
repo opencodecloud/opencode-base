@@ -125,12 +125,12 @@ public final class ImageValidator {
             throws ImageValidationException {
         // Check file exists
         if (!Files.exists(path)) {
-            throw new ImageValidationException("File not found: " + path);
+            throw new ImageValidationException("File not found");
         }
 
         // Check file is readable
         if (!Files.isReadable(path)) {
-            throw new ImageValidationException("File is not readable: " + path);
+            throw new ImageValidationException("File is not readable");
         }
 
         try {

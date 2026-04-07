@@ -2,6 +2,10 @@ package cloud.opencode.base.expression.parser;
 
 import cloud.opencode.base.expression.OpenExpressionException;
 
+import cloud.opencode.base.expression.ast.LiteralNode;
+import cloud.opencode.base.expression.ast.Node;
+import cloud.opencode.base.expression.ast.StringInterpolationNode;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -59,8 +63,14 @@ public class Tokenizer {
      *
      * @param expression the expression | 表达式
      */
+    private static final int MAX_EXPRESSION_LENGTH = 1_000_000;
+
     public Tokenizer(String expression) {
         this.expression = expression != null ? expression : "";
+        if (this.expression.length() > MAX_EXPRESSION_LENGTH) {
+            throw OpenExpressionException.parseError(
+                "Expression length " + this.expression.length() + " exceeds maximum " + MAX_EXPRESSION_LENGTH, 0);
+        }
         this.pos = 0;
         this.length = this.expression.length();
     }
@@ -112,10 +122,20 @@ public class Tokenizer {
             return readIdentifier();
         }
 
-        // Hash for variables
+        // Hash for variables or map literal #{
         if (c == '#') {
+            if (pos + 1 < length && expression.charAt(pos + 1) == '{') {
+                pos += 2;
+                return Token.of(TokenType.MAP_LBRACE, pos - 2, 2);
+            }
             pos++;
             return Token.of(TokenType.HASH, pos - 1);
+        }
+
+        // Tilde for bitwise NOT
+        if (c == '~') {
+            pos++;
+            return Token.of(TokenType.BIT_NOT, pos - 1);
         }
 
         // Operators and punctuation
@@ -159,14 +179,19 @@ public class Tokenizer {
             char c = expression.charAt(pos);
             if (Character.isDigit(c)) {
                 pos++;
-            } else if (c == '.' && !isDouble) {
+            } else if (c == '.' && !isDouble && pos + 1 < length && Character.isDigit(expression.charAt(pos + 1))) {
                 isDouble = true;
                 pos++;
             } else if ((c == 'e' || c == 'E') && pos + 1 < length) {
                 isDouble = true;
                 pos++;
-                if (expression.charAt(pos) == '+' || expression.charAt(pos) == '-') {
+                if (pos < length && (expression.charAt(pos) == '+' || expression.charAt(pos) == '-')) {
                     pos++;
+                }
+                // Verify at least one digit follows 'e'/'E' and optional sign
+                if (pos >= length || !Character.isDigit(expression.charAt(pos))) {
+                    throw OpenExpressionException.parseError(
+                        "Invalid scientific notation: expected digit after exponent", start);
                 }
             } else if (c == 'L' || c == 'l') {
                 pos++;
@@ -216,6 +241,8 @@ public class Tokenizer {
             case "not" -> TokenType.NOT;
             case "matches" -> TokenType.MATCHES;
             case "instanceof" -> TokenType.INSTANCEOF;
+            case "in" -> TokenType.IN;
+            case "between" -> TokenType.BETWEEN;
             default -> TokenType.IDENTIFIER;
         };
 
@@ -232,7 +259,14 @@ public class Tokenizer {
 
         switch (c) {
             case '+' -> { return Token.of(TokenType.PLUS, start); }
-            case '-' -> { return Token.of(TokenType.MINUS, start); }
+            case '-' -> {
+                if (pos < length && expression.charAt(pos) == '>') {
+                    pos++;
+                    return Token.of(TokenType.ARROW, start, 2);
+                }
+                return Token.of(TokenType.MINUS, start);
+            }
+            case '^' -> { return Token.of(TokenType.BIT_XOR, start); }
             case '/' -> { return Token.of(TokenType.SLASH, start); }
             case '%' -> { return Token.of(TokenType.PERCENT, start); }
             case '(' -> { return Token.of(TokenType.LPAREN, start); }
@@ -248,8 +282,11 @@ public class Tokenizer {
                     pos++;
                     return Token.of(TokenType.SAFE_NAV, start, 2);
                 }
+                if (pos < length && expression.charAt(pos) == ':') {
+                    pos++;
+                    return Token.of(TokenType.ELVIS, start, 2);
+                }
                 if (pos < length && expression.charAt(pos) == '[') {
-                    // This is .?[ but we already consumed '.', need to handle differently
                     return Token.of(TokenType.QUESTION, start);
                 }
                 return Token.of(TokenType.QUESTION, start);
@@ -284,12 +321,20 @@ public class Tokenizer {
                     pos++;
                     return Token.of(TokenType.LE, start, 2);
                 }
+                if (pos < length && expression.charAt(pos) == '<') {
+                    pos++;
+                    return Token.of(TokenType.LSHIFT, start, 2);
+                }
                 return Token.of(TokenType.LT, start);
             }
             case '>' -> {
                 if (pos < length && expression.charAt(pos) == '=') {
                     pos++;
                     return Token.of(TokenType.GE, start, 2);
+                }
+                if (pos < length && expression.charAt(pos) == '>') {
+                    pos++;
+                    return Token.of(TokenType.RSHIFT, start, 2);
                 }
                 return Token.of(TokenType.GT, start);
             }
@@ -298,14 +343,14 @@ public class Tokenizer {
                     pos++;
                     return Token.of(TokenType.AND, start, 2);
                 }
-                throw OpenExpressionException.parseError("Unexpected character '&'", start);
+                return Token.of(TokenType.BIT_AND, start);
             }
             case '|' -> {
                 if (pos < length && expression.charAt(pos) == '|') {
                     pos++;
                     return Token.of(TokenType.OR, start, 2);
                 }
-                throw OpenExpressionException.parseError("Unexpected character '|'", start);
+                return Token.of(TokenType.BIT_OR, start);
             }
             case '.' -> {
                 // Check for collection operators

@@ -110,6 +110,8 @@ public class DefaultLogProvider implements LogProvider {
             return lastDot >= 0 ? name.substring(lastDot + 1) : name;
         }
 
+        private static final int MAX_ARG_LENGTH = 1024;
+
         private String formatMessage(String format, Object... args) {
             if (args == null || args.length == 0) return format;
             StringBuilder sb = new StringBuilder();
@@ -118,7 +120,7 @@ public class DefaultLogProvider implements LogProvider {
             while (i < format.length()) {
                 if (i < format.length() - 1 && format.charAt(i) == '{' && format.charAt(i + 1) == '}') {
                     if (argIndex < args.length) {
-                        sb.append(args[argIndex++]);
+                        sb.append(safeToString(args[argIndex++]));
                     } else {
                         sb.append("{}");
                     }
@@ -129,6 +131,21 @@ public class DefaultLogProvider implements LogProvider {
                 }
             }
             return sb.toString();
+        }
+
+        private static String safeToString(Object arg) {
+            if (arg == null) {
+                return "null";
+            }
+            try {
+                String s = arg.toString();
+                if (s.length() > MAX_ARG_LENGTH) {
+                    return s.substring(0, MAX_ARG_LENGTH) + "...(truncated)";
+                }
+                return s;
+            } catch (RuntimeException e) {
+                return "[toString() error: " + e.getClass().getSimpleName() + "]";
+            }
         }
 
         // TRACE
@@ -286,7 +303,7 @@ public class DefaultLogProvider implements LogProvider {
 
     private static class DefaultNDCAdapter implements NDCAdapter {
         private final ThreadLocal<Deque<String>> stack = ThreadLocal.withInitial(ArrayDeque::new);
-        private int maxDepth = 100;
+        private volatile int maxDepth = 100;
 
         @Override
         public void push(String message) {
@@ -318,6 +335,9 @@ public class DefaultLogProvider implements LogProvider {
 
         @Override
         public void setMaxDepth(int maxDepth) {
+            if (maxDepth < 1) {
+                throw new IllegalArgumentException("maxDepth must be >= 1, got: " + maxDepth);
+            }
             this.maxDepth = maxDepth;
         }
 

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.*;
@@ -295,6 +296,89 @@ class ScopedValueUtilTest {
                 assertThat(sv.isBound()).isTrue();
                 assertThat(sv.get()).isNull();
             });
+        }
+    }
+
+    @Nested
+    @DisplayName("getIfBound 测试")
+    class GetIfBoundTests {
+
+        @Test
+        @DisplayName("已绑定时返回 present Optional")
+        void testGetIfBoundWhenBound() {
+            ScopedValue<String> sv = ScopedValue.newInstance();
+
+            ScopedValueUtil.runWhere(sv, "hello", () -> {
+                Optional<String> result = ScopedValueUtil.getIfBound(sv);
+                assertThat(result).isPresent().contains("hello");
+            });
+        }
+
+        @Test
+        @DisplayName("未绑定时返回 empty Optional")
+        void testGetIfBoundWhenNotBound() {
+            ScopedValue<String> sv = ScopedValue.newInstance();
+            Optional<String> result = ScopedValueUtil.getIfBound(sv);
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("绑定 null 值时返回 empty Optional（而非 NPE）")
+        void testGetIfBoundWithNullValue() {
+            ScopedValue<String> sv = ScopedValue.newInstance();
+
+            ScopedValueUtil.runWhere(sv, null, () -> {
+                assertThat(sv.isBound()).isTrue();
+                Optional<String> result = ScopedValueUtil.getIfBound(sv);
+                // Should return empty Optional for null value, NOT throw NPE
+                assertThat(result).isEmpty();
+            });
+        }
+    }
+
+    @Nested
+    @DisplayName("runWhere(Carrier) 测试")
+    class RunWhereCarrierTests {
+
+        @Test
+        @DisplayName("通过 Carrier 同时绑定两个 ScopedValue")
+        void testRunWhereWithCarrier() {
+            ScopedValue<String> sv1 = ScopedValue.newInstance();
+            ScopedValue<Integer> sv2 = ScopedValue.newInstance();
+            AtomicReference<String> captured1 = new AtomicReference<>();
+            AtomicReference<Integer> captured2 = new AtomicReference<>();
+
+            ScopedValue.Carrier carrier = ScopedValue.where(sv1, "carrierVal")
+                    .where(sv2, 99);
+
+            ScopedValueUtil.runWhere(carrier, () -> {
+                captured1.set(sv1.get());
+                captured2.set(sv2.get());
+            });
+
+            assertThat(captured1.get()).isEqualTo("carrierVal");
+            assertThat(captured2.get()).isEqualTo(99);
+        }
+    }
+
+    @Nested
+    @DisplayName("callWhere(Carrier) 测试")
+    class CallWhereCarrierTests {
+
+        @Test
+        @DisplayName("通过 Carrier 调用并返回计算值")
+        void testCallWhereWithCarrier() throws Throwable {
+            ScopedValue<String> sv1 = ScopedValue.newInstance();
+            ScopedValue<Integer> sv2 = ScopedValue.newInstance();
+
+            ScopedValue.Carrier carrier = ScopedValue.where(sv1, "prefix")
+                    .where(sv2, 200);
+
+            String result = ScopedValueUtil.callWhere(carrier, () -> {
+                return sv1.get() + "-" + sv2.get();
+            });
+
+            assertThat(result).isEqualTo("prefix-200");
         }
     }
 }

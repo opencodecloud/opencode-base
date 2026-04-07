@@ -103,7 +103,7 @@ class FeatureErrorCodeTest {
         @Test
         @DisplayName("枚举值数量")
         void testValueCount() {
-            assertThat(FeatureErrorCode.values()).hasSize(13);
+            assertThat(FeatureErrorCode.values()).hasSize(15);
         }
     }
 }

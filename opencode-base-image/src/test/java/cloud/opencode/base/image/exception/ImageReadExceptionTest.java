@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageReadException 异常测试")
 class ImageReadExceptionTest {
@@ -28,8 +29,8 @@ class ImageReadExceptionTest {
         void testConstructorWithMessage() {
             ImageReadException ex = new ImageReadException("Failed to read");
 
-            assertThat(ex.getMessage()).isEqualTo("Failed to read");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.READ_FAILED);
+            assertThat(ex.getRawMessage()).isEqualTo("Failed to read");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.READ_FAILED);
             assertThat(ex.getPath()).isNull();
         }
 
@@ -39,8 +40,8 @@ class ImageReadExceptionTest {
             Path path = Path.of("/test/image.jpg");
             ImageReadException ex = new ImageReadException(path);
 
-            assertThat(ex.getMessage()).contains("/test/image.jpg");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.READ_FAILED);
+            assertThat(ex.getRawMessage()).contains("/test/image.jpg");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.READ_FAILED);
             assertThat(ex.getPath()).isEqualTo(path);
         }
 
@@ -51,7 +52,7 @@ class ImageReadExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             ImageReadException ex = new ImageReadException(path, cause);
 
-            assertThat(ex.getMessage()).contains("/test/image.jpg");
+            assertThat(ex.getRawMessage()).contains("/test/image.jpg");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getPath()).isEqualTo(path);
         }
@@ -62,7 +63,7 @@ class ImageReadExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             ImageReadException ex = new ImageReadException("Read error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Read error");
+            assertThat(ex.getRawMessage()).isEqualTo("Read error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getPath()).isNull();
         }
@@ -100,6 +101,22 @@ class ImageReadExceptionTest {
             ImageReadException ex = new ImageReadException("Test");
 
             assertThat(ex).isInstanceOf(ImageIOException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageReadException ex = new ImageReadException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageReadException ex = new ImageReadException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

@@ -112,14 +112,30 @@ public final class OpenUrl {
         if (path == null) {
             return null;
         }
-        StringBuilder sb = new StringBuilder();
-        for (String segment : path.split("/", -1)) {
+        // Iterate over slash-separated segments using indexOf to avoid String[] allocation.
+        // URLEncoder.encode uses '+' for spaces (application/x-www-form-urlencoded),
+        // but path segments per RFC 3986 require '%20' for spaces — rewrite inline.
+        StringBuilder sb = new StringBuilder(path.length() + 16);
+        int start = 0;
+        int len = path.length();
+        while (start <= len) {
+            int slash = path.indexOf('/', start);
+            int end = slash < 0 ? len : slash;
             if (sb.length() > 0) {
-                sb.append("/");
+                sb.append('/');
             }
-            // URLEncoder.encode uses '+' for spaces (application/x-www-form-urlencoded),
-            // but path segments per RFC 3986 require '%20' for spaces
-            sb.append(encode(segment).replace("+", "%20"));
+            String encoded = URLEncoder.encode(path.substring(start, end), StandardCharsets.UTF_8);
+            // Replace '+' (space encoding) with '%20' character-by-character — no extra String alloc
+            for (int i = 0; i < encoded.length(); i++) {
+                char c = encoded.charAt(i);
+                if (c == '+') {
+                    sb.append("%20");
+                } else {
+                    sb.append(c);
+                }
+            }
+            if (slash < 0) break;
+            start = slash + 1;
         }
         return sb.toString();
     }
@@ -213,16 +229,21 @@ public final class OpenUrl {
      * @return the effective port - 有效端口
      */
     public static int getEffectivePort(String url) {
-        int port = getPort(url);
-        if (port > 0) {
-            return port;
-        }
-        String scheme = getScheme(url);
-        if ("https".equalsIgnoreCase(scheme)) {
-            return 443;
-        }
-        if ("http".equalsIgnoreCase(scheme)) {
-            return 80;
+        try {
+            URI uri = URI.create(url);
+            int port = uri.getPort();
+            if (port > 0) {
+                return port;
+            }
+            String scheme = uri.getScheme();
+            if ("https".equalsIgnoreCase(scheme)) {
+                return 443;
+            }
+            if ("http".equalsIgnoreCase(scheme)) {
+                return 80;
+            }
+        } catch (Exception ignored) {
+            // Fall through
         }
         return -1;
     }
@@ -316,9 +337,11 @@ public final class OpenUrl {
             if (part == null || part.isEmpty()) {
                 continue;
             }
-            if (sb.length() > 0 && !sb.toString().endsWith("/") && !part.startsWith("/")) {
-                sb.append("/");
-            } else if (sb.toString().endsWith("/") && part.startsWith("/")) {
+            boolean sbEndsWithSlash = sb.length() > 0 && sb.charAt(sb.length() - 1) == '/';
+            boolean partStartsWithSlash = part.startsWith("/");
+            if (sb.length() > 0 && !sbEndsWithSlash && !partStartsWithSlash) {
+                sb.append('/');
+            } else if (sbEndsWithSlash && partStartsWithSlash) {
                 part = part.substring(1);
             }
             sb.append(part);

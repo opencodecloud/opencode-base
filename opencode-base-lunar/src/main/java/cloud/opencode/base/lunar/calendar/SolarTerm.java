@@ -3,8 +3,10 @@ package cloud.opencode.base.lunar.calendar;
 import cloud.opencode.base.lunar.internal.SolarTermData;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Solar Term (24 Solar Terms)
@@ -238,35 +240,64 @@ public enum SolarTerm {
     }
 
     /**
-     * Get solar term by date (returns null if not a solar term day)
-     * 按日期获取节气（如果不是节气日返回null）
+     * Get solar term by date
+     * 按日期获取节气
      *
      * @param date the date | 日期
-     * @return the solar term or null | 节气或null
+     * @return Optional containing the solar term if the date is a solar term day,
+     *         otherwise empty | 如果日期是节气日则返回包含节气的Optional，否则返回空
      */
-    public static SolarTerm of(LocalDate date) {
+    public static Optional<SolarTerm> of(LocalDate date) {
         int year = date.getYear();
         for (SolarTerm term : values()) {
             if (term.getDate(year).equals(date)) {
-                return term;
+                return Optional.of(term);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
-     * Get all solar terms for a year
-     * 获取一年所有节气
+     * Get all solar terms for a year with their dates
+     * 获取一年所有节气及日期
      *
      * @param year the year | 年份
-     * @return list of solar terms with dates | 节气及日期列表
+     * @return list of solar term information | 节气信息列表
      */
-    public static List<SolarTerm> ofYear(int year) {
-        List<SolarTerm> terms = new ArrayList<>(24);
+    public static List<SolarTermInfo> ofYear(int year) {
+        List<SolarTermInfo> terms = new ArrayList<>(24);
         for (SolarTerm term : values()) {
-            terms.add(term);
+            terms.add(new SolarTermInfo(term, term.getDate(year)));
         }
         return terms;
+    }
+
+    /**
+     * Get the closest solar term to the given date
+     * 获取最接近给定日期的节气
+     *
+     * @param date the date | 日期
+     * @return the closest solar term information | 最接近的节气信息
+     */
+    public static SolarTermInfo getClosest(LocalDate date) {
+        int year = date.getYear();
+        SolarTerm closestTerm = null;
+        LocalDate closestDate = null;
+        long minDistance = Long.MAX_VALUE;
+
+        // Check current year and adjacent years (for dates near year boundaries)
+        for (int y = year - 1; y <= year + 1; y++) {
+            for (SolarTerm term : values()) {
+                LocalDate termDate = term.getDate(y);
+                long distance = Math.abs(ChronoUnit.DAYS.between(date, termDate));
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestTerm = term;
+                    closestDate = termDate;
+                }
+            }
+        }
+        return new SolarTermInfo(closestTerm, closestDate);
     }
 
     /**

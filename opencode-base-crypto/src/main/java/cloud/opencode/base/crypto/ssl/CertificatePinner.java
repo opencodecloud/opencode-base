@@ -230,6 +230,18 @@ public final class CertificatePinner {
             if (base64.isEmpty()) {
                 throw new IllegalArgumentException("Pin hash must not be empty after prefix");
             }
+            try {
+                byte[] decoded = java.util.Base64.getDecoder().decode(base64);
+                if (decoded.length != 32) {
+                    throw new IllegalArgumentException(
+                            "SHA-256 pin must decode to 32 bytes, got: " + decoded.length);
+                }
+            } catch (IllegalArgumentException e) {
+                if (e.getMessage() != null && e.getMessage().startsWith("SHA-256")) {
+                    throw e;
+                }
+                throw new IllegalArgumentException("Invalid Base64 in pin: " + pin, e);
+            }
             pins.add(pin);
             return this;
         }

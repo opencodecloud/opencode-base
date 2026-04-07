@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.*;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +57,7 @@ class JsonProviderTest {
             assertThat(JsonProvider.class.getMethod("fromJson", String.class, Type.class)).isNotNull();
             assertThat(JsonProvider.class.getMethod("fromJson", String.class, TypeReference.class)).isNotNull();
             assertThat(JsonProvider.class.getMethod("fromJson", byte[].class, Class.class)).isNotNull();
+            assertThat(JsonProvider.class.getMethod("fromJson", byte[].class, TypeReference.class)).isNotNull();
             assertThat(JsonProvider.class.getMethod("fromJson", InputStream.class, Class.class)).isNotNull();
             assertThat(JsonProvider.class.getMethod("fromJson", Reader.class, Class.class)).isNotNull();
 
@@ -269,7 +271,7 @@ class JsonProviderTest {
 
         @Override
         public byte[] toJsonBytes(Object obj) {
-            return toJson(obj).getBytes();
+            return toJson(obj).getBytes(StandardCharsets.UTF_8);
         }
 
         @Override
@@ -311,7 +313,12 @@ class JsonProviderTest {
 
         @Override
         public <T> T fromJson(byte[] json, Class<T> clazz) {
-            return fromJson(new String(json), clazz);
+            return fromJson(new String(json, StandardCharsets.UTF_8), clazz);
+        }
+
+        @Override
+        public <T> T fromJson(byte[] json, TypeReference<T> typeReference) {
+            return fromJson(new String(json, StandardCharsets.UTF_8), typeReference);
         }
 
         @Override

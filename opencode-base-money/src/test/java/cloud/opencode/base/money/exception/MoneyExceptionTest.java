@@ -1,5 +1,6 @@
 package cloud.opencode.base.money.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,10 @@ class MoneyExceptionTest {
         void testMessageConstructor() {
             MoneyException ex = new MoneyException("Test error");
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.UNKNOWN);
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.UNKNOWN);
+            assertThat(ex.getComponent()).isEqualTo("money");
+            assertThat(ex.getErrorCode()).isEqualTo("0");
         }
 
         @Test
@@ -35,8 +38,9 @@ class MoneyExceptionTest {
         void testMessageCodeConstructor() {
             MoneyException ex = new MoneyException("Test error", MoneyErrorCode.INVALID_AMOUNT);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.INVALID_AMOUNT);
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.INVALID_AMOUNT);
+            assertThat(ex.getErrorCode()).isEqualTo("1001");
         }
 
         @Test
@@ -45,9 +49,9 @@ class MoneyExceptionTest {
             Throwable cause = new RuntimeException("Cause");
             MoneyException ex = new MoneyException("Test error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.UNKNOWN);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.UNKNOWN);
         }
 
         @Test
@@ -56,21 +60,51 @@ class MoneyExceptionTest {
             Throwable cause = new RuntimeException("Cause");
             MoneyException ex = new MoneyException("Test error", cause, MoneyErrorCode.CURRENCY_MISMATCH);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.CURRENCY_MISMATCH);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.CURRENCY_MISMATCH);
+            assertThat(ex.getErrorCode()).isEqualTo("2001");
         }
     }
 
     @Nested
-    @DisplayName("RuntimeException继承测试")
+    @DisplayName("继承测试")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            MoneyException ex = new MoneyException("Test");
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("是RuntimeException子类")
         void testIsRuntimeException() {
             MoneyException ex = new MoneyException("Test");
             assertThat(ex).isInstanceOf(RuntimeException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("消息格式化测试")
+    class MessageFormatTests {
+
+        @Test
+        @DisplayName("getMessage包含组件名和错误码")
+        void testFormattedMessage() {
+            MoneyException ex = new MoneyException("Amount invalid", MoneyErrorCode.INVALID_AMOUNT);
+
+            assertThat(ex.getMessage()).contains("[money]");
+            assertThat(ex.getMessage()).contains("(1001)");
+            assertThat(ex.getMessage()).contains("Amount invalid");
+        }
+
+        @Test
+        @DisplayName("getComponent返回money")
+        void testComponent() {
+            MoneyException ex = new MoneyException("Test");
+            assertThat(ex.getComponent()).isEqualTo("money");
         }
     }
 }

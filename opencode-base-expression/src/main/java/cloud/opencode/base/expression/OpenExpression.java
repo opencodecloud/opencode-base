@@ -322,6 +322,48 @@ public final class OpenExpression {
         return StandardContext.builder();
     }
 
+    // ==================== Variable Discovery | 变量发现 ====================
+
+    /**
+     * Extract variable names from expression
+     * 从表达式中提取变量名
+     *
+     * @param expression the expression string | 表达式字符串
+     * @return set of variable names | 变量名集合
+     */
+    public static java.util.Set<String> extractVariables(String expression) {
+        return VariableExtractor.extract(expression);
+    }
+
+    // ==================== Template | 模板 ====================
+
+    /**
+     * Render expression template with variables
+     * 使用变量渲染表达式模板
+     *
+     * <p>Supports ${expression} placeholders.</p>
+     * <p>支持 ${expression} 占位符。</p>
+     *
+     * @param template the template string | 模板字符串
+     * @param variables the variable map | 变量映射
+     * @return the rendered string | 渲染后的字符串
+     */
+    public static String render(String template, Map<String, Object> variables) {
+        return ExpressionTemplate.render(template, variables);
+    }
+
+    /**
+     * Render expression template with context
+     * 使用上下文渲染表达式模板
+     *
+     * @param template the template string | 模板字符串
+     * @param context the evaluation context | 求值上下文
+     * @return the rendered string | 渲染后的字符串
+     */
+    public static String render(String template, EvaluationContext context) {
+        return ExpressionTemplate.render(template, context);
+    }
+
     // ==================== Utilities | 工具方法 ====================
 
     /**

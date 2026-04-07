@@ -401,6 +401,79 @@ class MethodMetadataTest {
     }
 
     @Nested
+    @DisplayName("Generic Type Tests")
+    class GenericTypeTests {
+
+        @Test
+        @DisplayName("Should store generic signature")
+        void shouldStoreGenericSignature() {
+            MethodMetadata metadata = new MethodMetadata(
+                    "test", "java.util.List", List.of(), List.of(), List.of(),
+                    Modifier.PUBLIC, false, false, false, List.of(), List.of(),
+                    "public <T> java.util.List<T> test()", "java.util.List<T>", List.of()
+            );
+
+            assertThat(metadata.getGenericSignature()).isEqualTo("public <T> java.util.List<T> test()");
+        }
+
+        @Test
+        @DisplayName("Should store generic return type")
+        void shouldStoreGenericReturnType() {
+            MethodMetadata metadata = new MethodMetadata(
+                    "getList", "java.util.List", List.of(), List.of(), List.of(),
+                    Modifier.PUBLIC, false, false, false, List.of(), List.of(),
+                    null, "java.util.List<java.lang.String>", List.of()
+            );
+
+            assertThat(metadata.getGenericReturnType()).isEqualTo("java.util.List<java.lang.String>");
+        }
+
+        @Test
+        @DisplayName("Should store generic parameter types")
+        void shouldStoreGenericParameterTypes() {
+            MethodMetadata metadata = new MethodMetadata(
+                    "process", "void",
+                    List.of("java.util.List", "java.util.Map"),
+                    List.of("items", "config"),
+                    List.of(),
+                    Modifier.PUBLIC, false, false, false, List.of(), List.of(),
+                    null, "void",
+                    List.of("java.util.List<java.lang.String>", "java.util.Map<java.lang.String, java.lang.Integer>")
+            );
+
+            assertThat(metadata.getGenericParameterTypes())
+                    .containsExactly("java.util.List<java.lang.String>",
+                            "java.util.Map<java.lang.String, java.lang.Integer>");
+        }
+
+        @Test
+        @DisplayName("Should default to null/empty for old constructor")
+        void shouldDefaultToNullEmptyForOldConstructor() {
+            MethodMetadata metadata = new MethodMetadata(
+                    "test", "void", List.of(), List.of(), List.of(),
+                    Modifier.PUBLIC, false, false, false, List.of(), List.of()
+            );
+
+            assertThat(metadata.getGenericSignature()).isNull();
+            assertThat(metadata.getGenericReturnType()).isNull();
+            assertThat(metadata.getGenericParameterTypes()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should return immutable generic parameter types")
+        void shouldReturnImmutableGenericParameterTypes() {
+            MethodMetadata metadata = new MethodMetadata(
+                    "test", "void", List.of(), List.of(), List.of(),
+                    Modifier.PUBLIC, false, false, false, List.of(), List.of(),
+                    null, null, List.of("java.util.List<String>")
+            );
+
+            assertThatThrownBy(() -> metadata.getGenericParameterTypes().add("extra"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("Equals and HashCode Tests")
     class EqualsAndHashCodeTests {
 

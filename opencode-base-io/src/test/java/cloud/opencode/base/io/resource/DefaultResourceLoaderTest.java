@@ -1,5 +1,6 @@
 package cloud.opencode.base.io.resource;
 
+import cloud.opencode.base.io.exception.OpenIOOperationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -114,13 +115,13 @@ class DefaultResourceLoaderTest {
         }
 
         @Test
-        @DisplayName("加载ftp:前缀资源")
+        @DisplayName("加载ftp:前缀资源被SSRF防护拒绝")
         void testGetResourceFtp() {
             DefaultResourceLoader loader = new DefaultResourceLoader();
 
-            Resource resource = loader.getResource("ftp://example.com/test.txt");
-
-            assertThat(resource).isInstanceOf(UrlResource.class);
+            assertThatThrownBy(() -> loader.getResource("ftp://example.com/test.txt"))
+                    .isInstanceOf(OpenIOOperationException.class)
+                    .hasMessageContaining("SSRF protection");
         }
 
         @Test

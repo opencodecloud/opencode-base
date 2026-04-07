@@ -1,6 +1,7 @@
 package cloud.opencode.base.pool;
 
 import cloud.opencode.base.pool.factory.KeyedPooledObjectFactory;
+import cloud.opencode.base.pool.factory.SimplePooledObjectFactory;
 import cloud.opencode.base.pool.impl.GenericKeyedObjectPool;
 import cloud.opencode.base.pool.impl.GenericObjectPool;
 import cloud.opencode.base.pool.impl.SoftReferencePool;
@@ -10,6 +11,8 @@ import cloud.opencode.base.pool.policy.EvictionPolicy;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * OpenPool - Pool Component Facade Entry Class
@@ -29,7 +32,15 @@ import java.util.List;
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
- * // Create generic pool with default config
+ * // Simplest: create pool from Supplier
+ * ObjectPool<StringBuilder> pool = OpenPool.createPool(StringBuilder::new);
+ *
+ * // Create pool from Supplier + Consumer (with destroyer)
+ * ObjectPool<Connection> pool = OpenPool.createPool(
+ *     () -> DriverManager.getConnection(url),
+ *     Connection::close);
+ *
+ * // Create generic pool with factory
  * ObjectPool<Connection> pool = OpenPool.createPool(factory);
  *
  * // Create pool with custom config
@@ -43,10 +54,10 @@ import java.util.List;
  * KeyedObjectPool<String, Connection> keyedPool =
  *     OpenPool.createKeyedPool(keyedFactory, config);
  *
- * // Create eviction policy
+ * // Create eviction policy (with max age for connection recycling)
  * EvictionPolicy<Connection> policy = OpenPool.allEviction(
  *     OpenPool.idleTimeEviction(Duration.ofMinutes(30)),
- *     OpenPool.lfuEviction(5));
+ *     OpenPool.maxAgeEviction(Duration.ofHours(1)));
  * }</pre>
  *
  *
@@ -93,6 +104,60 @@ public final class OpenPool {
             PooledObjectFactory<T> factory,
             PoolConfig config) {
         return new GenericObjectPool<>(factory, config);
+    }
+
+    // ==================== Simplified Pool Factory Methods ====================
+
+    /**
+     * Creates a pool from a Supplier (simplest API).
+     * 从Supplier创建池（最简API）。
+     *
+     * @param <T>     the object type - 对象类型
+     * @param creator the object creator - 对象创建器
+     * @return the object pool - 对象池
+     */
+    public static <T> ObjectPool<T> createPool(Supplier<T> creator) {
+        return createPool(SimplePooledObjectFactory.of(creator));
+    }
+
+    /**
+     * Creates a pool from a Supplier with a destroyer Consumer.
+     * 从Supplier和销毁Consumer创建池。
+     *
+     * @param <T>       the object type - 对象类型
+     * @param creator   the object creator - 对象创建器
+     * @param destroyer the object destroyer - 对象销毁器
+     * @return the object pool - 对象池
+     */
+    public static <T> ObjectPool<T> createPool(Supplier<T> creator, Consumer<T> destroyer) {
+        return createPool(SimplePooledObjectFactory.of(creator, destroyer));
+    }
+
+    /**
+     * Creates a pool from a Supplier with custom configuration.
+     * 从Supplier和自定义配置创建池。
+     *
+     * @param <T>     the object type - 对象类型
+     * @param creator the object creator - 对象创建器
+     * @param config  the pool configuration - 池配置
+     * @return the object pool - 对象池
+     */
+    public static <T> ObjectPool<T> createPool(Supplier<T> creator, PoolConfig config) {
+        return createPool(SimplePooledObjectFactory.of(creator), config);
+    }
+
+    /**
+     * Creates a pool from a Supplier with a destroyer and custom configuration.
+     * 从Supplier、销毁Consumer和自定义配置创建池。
+     *
+     * @param <T>       the object type - 对象类型
+     * @param creator   the object creator - 对象创建器
+     * @param destroyer the object destroyer - 对象销毁器
+     * @param config    the pool configuration - 池配置
+     * @return the object pool - 对象池
+     */
+    public static <T> ObjectPool<T> createPool(Supplier<T> creator, Consumer<T> destroyer, PoolConfig config) {
+        return createPool(SimplePooledObjectFactory.of(creator, destroyer), config);
     }
 
     // ==================== Keyed Pool Factory Methods ====================
@@ -288,5 +353,22 @@ public final class OpenPool {
     @SafeVarargs
     public static <T> EvictionPolicy<T> anyEviction(EvictionPolicy<T>... policies) {
         return new EvictionPolicy.Composite<>(List.of(policies), false);
+    }
+
+    /**
+     * Creates a max age eviction policy.
+     * 创建最大生命周期驱逐策略。
+     *
+     * <p>Evicts objects that have exceeded the specified lifetime since creation.
+     * Essential for database connections that must be recycled periodically.</p>
+     * <p>驱逐自创建以来超过指定生命周期的对象。
+     * 对于必须定期回收的数据库连接至关重要。</p>
+     *
+     * @param <T>         the object type - 对象类型
+     * @param maxLifetime the maximum object lifetime - 最大对象生命周期
+     * @return the eviction policy - 驱逐策略
+     */
+    public static <T> EvictionPolicy<T> maxAgeEviction(Duration maxLifetime) {
+        return new EvictionPolicy.MaxAge<>(maxLifetime);
     }
 }

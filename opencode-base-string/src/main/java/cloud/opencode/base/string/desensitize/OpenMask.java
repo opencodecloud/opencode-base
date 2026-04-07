@@ -2,6 +2,9 @@ package cloud.opencode.base.string.desensitize;
 
 import cloud.opencode.base.string.desensitize.strategy.*;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Data Masking Utility - Provides data desensitization and masking methods.
  * 数据脱敏工具 - 提供数据脱敏和掩码方法。
@@ -62,9 +65,18 @@ public final class OpenMask {
 
     public static String maskEmail(String email) {
         if (email == null || !email.contains("@")) return email;
-        String[] parts = email.split("@");
-        if (parts[0].length() <= 1) return email;
-        return parts[0].charAt(0) + "***" + parts[0].charAt(parts[0].length() - 1) + "@" + parts[1];
+        String[] parts = email.split("@", 2);
+        String local = parts[0];
+        String domain = parts.length > 1 ? parts[1] : "";
+        if (local.isEmpty()) return email;
+        // Always mask: show only first char + "***" (+ last char if length > 2)
+        if (local.length() == 1) {
+            return "*@" + domain;
+        }
+        if (local.length() == 2) {
+            return local.charAt(0) + "*@" + domain;
+        }
+        return local.charAt(0) + "***" + local.charAt(local.length() - 1) + "@" + domain;
     }
 
     public static String bankCard(String cardNo) {
@@ -101,9 +113,35 @@ public final class OpenMask {
         return mask(str, keepLen, keepLen, maskChar);
     }
 
+    /**
+     * Masks all occurrences of a regex pattern in a string.
+     * 使用正则表达式模式掩码字符串中所有匹配项。
+     *
+     * <p><strong>Security | 安全性:</strong>
+     * The {@code pattern} parameter is compiled as a regular expression.
+     * To prevent ReDoS, patterns longer than 200 characters are rejected.
+     * The mask replacement is treated as a literal string (not a regex replacement),
+     * so backreferences such as {@code $1} in {@code maskChar} have no effect.
+     * 参数 {@code pattern} 被编译为正则表达式。为防止 ReDoS，长度超过 200 字符的模式会被拒绝。
+     * 掩码替换视为字面量（非正则替换），{@code maskChar} 中的反向引用（如 {@code $1}）不生效。
+     * </p>
+     *
+     * @param str      the string to mask | 要掩码的字符串
+     * @param pattern  the regex pattern to match | 要匹配的正则表达式模式
+     * @param maskChar the character to replace each match | 替换每个匹配的字符
+     * @return the masked string, or {@code null} if input is null |
+     *         掩码后的字符串，如果输入为null则返回null
+     * @throws IllegalArgumentException if pattern exceeds 200 characters |
+     *                                  如果模式超过200字符
+     */
     public static String maskByPattern(String str, String pattern, char maskChar) {
         if (str == null) return null;
-        return str.replaceAll(pattern, String.valueOf(maskChar));
+        if (pattern != null && pattern.length() > 200) {
+            throw new IllegalArgumentException(
+                    "Mask pattern exceeds maximum length of 200 characters (length: " + pattern.length() + ")");
+        }
+        return Pattern.compile(pattern).matcher(str)
+                .replaceAll(Matcher.quoteReplacement(String.valueOf(maskChar)));
     }
 
     public static String desensitize(String value, DesensitizeType type) {

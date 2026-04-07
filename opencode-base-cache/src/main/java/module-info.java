@@ -29,6 +29,9 @@ module cloud.opencode.base.cache {
     // Required modules
     requires transitive cloud.opencode.base.core;
 
+    // Optional: BloomFilter from hash module
+    requires static cloud.opencode.base.hash;
+
     // Optional: JMX support for cache monitoring
     requires static java.management;
 
@@ -42,15 +45,12 @@ module cloud.opencode.base.cache {
     exports cloud.opencode.base.cache.dlq;
     exports cloud.opencode.base.cache.event;
     exports cloud.opencode.base.cache.exception;
-    exports cloud.opencode.base.cache.metrics;
     exports cloud.opencode.base.cache.model;
     exports cloud.opencode.base.cache.multilevel;
     exports cloud.opencode.base.cache.protection;
     exports cloud.opencode.base.cache.query;
     exports cloud.opencode.base.cache.reactive;
-    exports cloud.opencode.base.cache.resilience;
     exports cloud.opencode.base.cache.spi;
-    exports cloud.opencode.base.cache.spring;
     exports cloud.opencode.base.cache.testing;
     exports cloud.opencode.base.cache.ttl;
     exports cloud.opencode.base.cache.util;

@@ -355,8 +355,19 @@ public class WriteBehindCache<K, V> implements Cache<K, V>, AutoCloseable {
             flushTask.cancel(false);
         }
 
-        // Flush remaining writes
-        flushBatch();
+        // Flush remaining writes with bounded attempts to prevent infinite loop
+        // if writer continuously fails or concurrent writes keep arriving
+        int maxFlushAttempts = 100;
+        int attempts = 0;
+        while (pendingCount.get() > 0 && attempts < maxFlushAttempts) {
+            flushBatch();
+            attempts++;
+        }
+        if (pendingCount.get() > 0) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Write-behind shutdown: {0} pending writes remain after {1} flush attempts",
+                    pendingCount.get(), maxFlushAttempts);
+        }
 
         scheduler.shutdown();
         try {

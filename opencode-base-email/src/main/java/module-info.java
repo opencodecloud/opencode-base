@@ -2,11 +2,11 @@
  * OpenCode Base Email Module
  * OpenCode 基础邮件模块
  *
- * <p>Provides email sending and receiving utilities based on JDK 25 and Jakarta Mail,
- * supporting SMTP/SMTPS, IMAP, OAuth2 authentication, email templates,
- * attachments, and retry mechanisms.</p>
- * <p>提供基于 JDK 25 和 Jakarta Mail 的邮件收发工具，支持 SMTP/SMTPS、IMAP、
- * OAuth2 认证、邮件模板、附件和重试机制。</p>
+ * <p>Provides email sending and receiving utilities based on JDK 25 with built-in
+ * SMTP/SMTPS, IMAP, POP3 protocol implementations, OAuth2 authentication,
+ * email templates, attachments, and retry mechanisms.</p>
+ * <p>提供基于 JDK 25 的邮件收发工具，内置 SMTP/SMTPS、IMAP、POP3 协议实现，
+ * 支持 OAuth2 认证、邮件模板、附件和重试机制。</p>
  *
  * <p><strong>Key Features | 主要功能:</strong></p>
  * <ul>
@@ -31,9 +31,6 @@ module cloud.opencode.base.email {
     // Optional: OAuth2 support for modern email authentication
     requires static cloud.opencode.base.oauth2;
 
-    // Jakarta Mail API (JPMS-aware since 2.1.x)
-    requires jakarta.mail;
-
     // Export public API packages
     exports cloud.opencode.base.email;
     exports cloud.opencode.base.email.attachment;
@@ -45,6 +42,12 @@ module cloud.opencode.base.email {
     exports cloud.opencode.base.email.security;
     exports cloud.opencode.base.email.sender;
     exports cloud.opencode.base.email.template;
+    exports cloud.opencode.base.email.testing;
+    exports cloud.opencode.base.email.protocol;
+    exports cloud.opencode.base.email.protocol.imap;
+    exports cloud.opencode.base.email.protocol.mime;
+    exports cloud.opencode.base.email.protocol.smtp;
+    exports cloud.opencode.base.email.protocol.pop3;
 
     // Internal packages - not exported
     // cloud.opencode.base.email.internal

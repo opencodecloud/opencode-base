@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageWriteException 异常测试")
 class ImageWriteExceptionTest {
@@ -28,8 +29,8 @@ class ImageWriteExceptionTest {
         void testConstructorWithMessage() {
             ImageWriteException ex = new ImageWriteException("Failed to write");
 
-            assertThat(ex.getMessage()).isEqualTo("Failed to write");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.WRITE_FAILED);
+            assertThat(ex.getRawMessage()).isEqualTo("Failed to write");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.WRITE_FAILED);
             assertThat(ex.getPath()).isNull();
         }
 
@@ -39,8 +40,8 @@ class ImageWriteExceptionTest {
             Path path = Path.of("/test/output.jpg");
             ImageWriteException ex = new ImageWriteException(path);
 
-            assertThat(ex.getMessage()).contains("/test/output.jpg");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.WRITE_FAILED);
+            assertThat(ex.getRawMessage()).contains("/test/output.jpg");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.WRITE_FAILED);
             assertThat(ex.getPath()).isEqualTo(path);
         }
 
@@ -51,7 +52,7 @@ class ImageWriteExceptionTest {
             Throwable cause = new RuntimeException("Disk full");
             ImageWriteException ex = new ImageWriteException(path, cause);
 
-            assertThat(ex.getMessage()).contains("/test/output.jpg");
+            assertThat(ex.getRawMessage()).contains("/test/output.jpg");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getPath()).isEqualTo(path);
         }
@@ -62,7 +63,7 @@ class ImageWriteExceptionTest {
             Throwable cause = new RuntimeException("Write error");
             ImageWriteException ex = new ImageWriteException("Write failed", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Write failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Write failed");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getPath()).isNull();
         }
@@ -100,6 +101,22 @@ class ImageWriteExceptionTest {
             ImageWriteException ex = new ImageWriteException("Test");
 
             assertThat(ex).isInstanceOf(ImageIOException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageWriteException ex = new ImageWriteException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageWriteException ex = new ImageWriteException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

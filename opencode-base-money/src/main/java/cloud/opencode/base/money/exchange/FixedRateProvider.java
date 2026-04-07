@@ -4,6 +4,7 @@ import cloud.opencode.base.money.Currency;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -120,6 +121,9 @@ public final class FixedRateProvider implements ExchangeRateProvider {
      * @return this provider | 此提供者
      */
     public FixedRateProvider addRate(Currency source, Currency target, BigDecimal rate) {
+        Objects.requireNonNull(source, "Source currency must not be null");
+        Objects.requireNonNull(target, "Target currency must not be null");
+        Objects.requireNonNull(rate, "Rate must not be null");
         String key = makeKey(source, target);
         rates.put(key, ExchangeRate.of(source, target, rate));
         return this;

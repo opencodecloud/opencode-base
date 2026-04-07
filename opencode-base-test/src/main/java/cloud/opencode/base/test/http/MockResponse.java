@@ -51,6 +51,13 @@ public final class MockResponse {
     public static MockResponse withStatus(int statusCode, String body) { return new MockResponse(statusCode, body, Map.of()); }
 
     public MockResponse withHeader(String name, String value) {
+        java.util.Objects.requireNonNull(name, "Header name must not be null");
+        if (name.chars().anyMatch(c -> c == '\r' || c == '\n')) {
+            throw new IllegalArgumentException("Header name must not contain CR or LF");
+        }
+        if (value != null && value.chars().anyMatch(c -> c == '\r' || c == '\n')) {
+            throw new IllegalArgumentException("Header value must not contain CR or LF");
+        }
         Map<String, String> newHeaders = new LinkedHashMap<>(this.headers);
         newHeaders.put(name, value);
         return new MockResponse(this.statusCode, this.body, newHeaders);

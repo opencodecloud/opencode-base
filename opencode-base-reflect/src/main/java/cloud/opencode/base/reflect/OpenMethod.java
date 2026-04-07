@@ -85,6 +85,9 @@ public final class OpenMethod {
     public static Method getMethod(Class<?> clazz, String methodName, boolean forceAccess, Class<?>... parameterTypes) {
         Objects.requireNonNull(clazz, "clazz must not be null");
         Objects.requireNonNull(methodName, "methodName must not be null");
+        if (forceAccess) {
+            checkNotPlatformType(clazz);
+        }
 
         Class<?> current = clazz;
         while (current != null) {
@@ -130,6 +133,7 @@ public final class OpenMethod {
         // Try to find compatible method
         for (Method method : getAllMethods(clazz)) {
             if (method.getName().equals(methodName) && isAssignable(method.getParameterTypes(), parameterTypes)) {
+                checkNotPlatformType(method.getDeclaringClass());
                 method.setAccessible(true);
                 return method;
             }
@@ -249,6 +253,7 @@ public final class OpenMethod {
         Class<?>[] paramTypes = getTypesFromArgs(args);
         Method method = getMatchingMethod(target.getClass(), methodName, paramTypes);
         if (forceAccess) {
+            checkNotPlatformType(method.getDeclaringClass());
             method.setAccessible(true);
         }
         try {
@@ -293,6 +298,7 @@ public final class OpenMethod {
     public static Object invokeStaticMethod(Class<?> clazz, String methodName, Object... args) {
         Class<?>[] paramTypes = getTypesFromArgs(args);
         Method method = getMatchingMethod(clazz, methodName, paramTypes);
+        checkNotPlatformType(method.getDeclaringClass());
         method.setAccessible(true);
         try {
             return method.invoke(null, args);
@@ -482,5 +488,18 @@ public final class OpenMethod {
         if (primitiveType == char.class) return Character.class;
         if (primitiveType == short.class) return Short.class;
         return primitiveType;
+    }
+
+    /**
+     * Checks that the class is not a JDK platform type
+     * 检查类是否为JDK平台类型
+     */
+    private static void checkNotPlatformType(Class<?> clazz) {
+        String pkg = clazz.getPackageName();
+        if (pkg.startsWith("java.") || pkg.startsWith("javax.") || pkg.startsWith("sun.")
+                || pkg.startsWith("jdk.") || pkg.startsWith("com.sun.")) {
+            throw new OpenReflectException(clazz, "<method>", "setAccessible",
+                    "setAccessible denied for platform type: " + clazz.getName());
+        }
     }
 }

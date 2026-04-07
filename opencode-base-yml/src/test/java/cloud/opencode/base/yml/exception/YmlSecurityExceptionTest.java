@@ -28,7 +28,7 @@ class YmlSecurityExceptionTest {
                 SecurityViolationType.ALIAS_LIMIT_EXCEEDED, "Too many aliases");
 
             assertThat(exception.getMessage())
-                .isEqualTo("YAML Security violation [ALIAS_LIMIT_EXCEEDED]: Too many aliases");
+                .contains("YAML Security violation [ALIAS_LIMIT_EXCEEDED]: Too many aliases");
         }
 
         @Test
@@ -73,7 +73,7 @@ class YmlSecurityExceptionTest {
                 SecurityViolationType.DOCUMENT_SIZE_EXCEEDED, "Document too large", cause);
 
             assertThat(exception.getMessage())
-                .isEqualTo("YAML Security violation [DOCUMENT_SIZE_EXCEEDED]: Document too large");
+                .contains("YAML Security violation [DOCUMENT_SIZE_EXCEEDED]: Document too large");
         }
 
         @Test

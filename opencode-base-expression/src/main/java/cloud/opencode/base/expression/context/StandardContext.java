@@ -121,13 +121,16 @@ public class StandardContext implements EvaluationContext {
         if (value == null && parent != null && !variables.containsKey(name)) {
             return parent.getVariable(name);
         }
-        return value;
+        return value == NULL_SENTINEL ? null : value;
     }
+
+    /** Sentinel for null values in ConcurrentHashMap (which does not allow null values). */
+    private static final Object NULL_SENTINEL = new Object();
 
     @Override
     public void setVariable(String name, Object value) {
         if (name != null) {
-            variables.put(name, value);
+            variables.put(name, value != null ? value : NULL_SENTINEL);
         }
     }
 
@@ -148,7 +151,7 @@ public class StandardContext implements EvaluationContext {
         if (parent != null) {
             allVars.putAll(parent.getVariables());
         }
-        allVars.putAll(variables);
+        variables.forEach((k, v) -> allVars.put(k, v == NULL_SENTINEL ? null : v));
         return Collections.unmodifiableMap(allVars);
     }
 
@@ -174,7 +177,112 @@ public class StandardContext implements EvaluationContext {
 
     @Override
     public EvaluationContext createChild() {
-        return new StandardContext(rootObject, functionRegistry, propertyAccessors, typeConverter, sandbox, this);
+        return new ChildContext(this, this);
+    }
+
+    /**
+     * Lightweight child context that shares parent's infrastructure
+     * 轻量级子上下文，共享父级基础设施
+     *
+     * <p>Avoids allocating ConcurrentHashMap, ArrayList copy, and PropertyAccessor
+     * instances per child. Only creates a small HashMap for local variable bindings.
+     * Typically used by collection filter/projection and lambda evaluation where
+     * thousands of child contexts may be created per expression.</p>
+     * <p>避免为每个子上下文分配 ConcurrentHashMap、ArrayList 副本和 PropertyAccessor 实例。
+     * 仅为局部变量绑定创建一个小型 HashMap。通常用于集合过滤/投影和 Lambda 求值，
+     * 每个表达式可能创建数千个子上下文。</p>
+     */
+    private static final class ChildContext implements EvaluationContext {
+        private final EvaluationContext parent;
+        private final StandardContext root;
+        private HashMap<String, Object> localVars;
+
+        ChildContext(StandardContext root, EvaluationContext parent) {
+            this.root = root;
+            this.parent = parent;
+        }
+
+        @Override
+        public Object getRootObject() {
+            return root.getRootObject();
+        }
+
+        @Override
+        public void setRootObject(Object root) {
+            this.root.setRootObject(root);
+        }
+
+        @Override
+        public Object getVariable(String name) {
+            if (name == null) {
+                return null;
+            }
+            if (localVars != null) {
+                Object value = localVars.get(name);
+                if (value != null) {
+                    return value == NULL_SENTINEL ? null : value;
+                }
+                if (localVars.containsKey(name)) {
+                    return null;
+                }
+            }
+            return parent.getVariable(name);
+        }
+
+        @Override
+        public void setVariable(String name, Object value) {
+            if (name != null) {
+                if (localVars == null) {
+                    localVars = new HashMap<>(4);
+                }
+                localVars.put(name, value != null ? value : NULL_SENTINEL);
+            }
+        }
+
+        @Override
+        public boolean hasVariable(String name) {
+            if (name == null) {
+                return false;
+            }
+            if (localVars != null && localVars.containsKey(name)) {
+                return true;
+            }
+            return parent.hasVariable(name);
+        }
+
+        @Override
+        public Map<String, Object> getVariables() {
+            Map<String, Object> allVars = new HashMap<>(parent.getVariables());
+            if (localVars != null) {
+                localVars.forEach((k, v) -> allVars.put(k, v == NULL_SENTINEL ? null : v));
+            }
+            return Collections.unmodifiableMap(allVars);
+        }
+
+        @Override
+        public FunctionRegistry getFunctionRegistry() {
+            return root.getFunctionRegistry();
+        }
+
+        @Override
+        public List<PropertyAccessor> getPropertyAccessors() {
+            return root.getPropertyAccessors();
+        }
+
+        @Override
+        public TypeConverter getTypeConverter() {
+            return root.getTypeConverter();
+        }
+
+        @Override
+        public Sandbox getSandbox() {
+            return root.getSandbox();
+        }
+
+        @Override
+        public EvaluationContext createChild() {
+            return new ChildContext(root, this);
+        }
     }
 
     /**

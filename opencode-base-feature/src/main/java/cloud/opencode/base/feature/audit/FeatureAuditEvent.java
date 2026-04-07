@@ -82,6 +82,13 @@ public record FeatureAuditEvent(
      */
     public String toLogString() {
         return String.format("[%s] %s: feature=%s, operator=%s, %s -> %s",
-            timestamp, action, featureKey, operatorId, oldValue, newValue);
+            timestamp, sanitize(action), sanitize(featureKey), sanitize(operatorId), oldValue, newValue);
+    }
+
+    private static String sanitize(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return value.replace("\r", "").replace("\n", " ");
     }
 }

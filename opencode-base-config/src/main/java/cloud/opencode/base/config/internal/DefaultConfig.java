@@ -54,21 +54,28 @@ public class DefaultConfig implements Config, AutoCloseable {
 
     private final CompositeConfigSource source;
     private final ConverterRegistry converters;
+    private final boolean relaxedBinding;
+    private final ConcurrentHashMap<String, String> relaxedKeyCache = new ConcurrentHashMap<>();
     private final List<ConfigListener> globalListeners = new CopyOnWriteArrayList<>();
     private final Map<String, List<ConfigListener>> keyListeners = new ConcurrentHashMap<>();
     private volatile PlaceholderResolver placeholderResolver;
     private ConfigWatcher watcher;
 
     public DefaultConfig(CompositeConfigSource source, ConverterRegistry converters) {
+        this(source, converters, false);
+    }
+
+    public DefaultConfig(CompositeConfigSource source, ConverterRegistry converters, boolean relaxedBinding) {
         this.source = source;
         this.converters = converters;
+        this.relaxedBinding = relaxedBinding;
     }
 
     // ============ Basic Retrieval ============
 
     @Override
     public String getString(String key) {
-        String value = source.getProperty(key);
+        String value = resolveProperty(key);
         if (value == null) {
             throw OpenConfigException.keyNotFound(key);
         }
@@ -77,7 +84,7 @@ public class DefaultConfig implements Config, AutoCloseable {
 
     @Override
     public String getString(String key, String defaultValue) {
-        String value = source.getProperty(key);
+        String value = resolveProperty(key);
         return value != null ? resolvePlaceholders(value) : defaultValue;
     }
 
@@ -141,7 +148,7 @@ public class DefaultConfig implements Config, AutoCloseable {
 
     @Override
     public <T> T get(String key, Class<T> type, T defaultValue) {
-        String value = source.getProperty(key);
+        String value = resolveProperty(key);
         if (value == null) {
             return defaultValue;
         }
@@ -176,7 +183,7 @@ public class DefaultConfig implements Config, AutoCloseable {
 
     @Override
     public Optional<String> getOptional(String key) {
-        String value = source.getProperty(key);
+        String value = resolveProperty(key);
         return Optional.ofNullable(value).map(this::resolvePlaceholders);
     }
 
@@ -276,11 +283,43 @@ public class DefaultConfig implements Config, AutoCloseable {
         }
     }
 
+    /**
+     * Resolve a property value by key, with relaxed binding fallback.
+     * 根据键解析属性值，支持宽松绑定回退。
+     */
+    private String resolveProperty(String key) {
+        String value = source.getProperty(key);
+        if (value != null || !relaxedBinding) {
+            return value;
+        }
+
+        // Relaxed binding: try to find a matching key via normalization
+        // Use empty string as sentinel for negative cache (computeIfAbsent ignores null)
+        String resolvedKey = relaxedKeyCache.computeIfAbsent(key, k ->
+            RelaxedKeyResolver.resolve(k, source.getProperties().keySet()).orElse(""));
+
+        if (!resolvedKey.isEmpty()) {
+            return source.getProperty(resolvedKey);
+        }
+        return null;
+    }
+
+    /**
+     * Clear the relaxed key cache (called on source reload).
+     * 清除宽松键缓存（在源重载时调用）。
+     */
+    private void clearRelaxedKeyCache() {
+        relaxedKeyCache.clear();
+    }
+
     private String resolvePlaceholders(String value) {
         return placeholderResolver != null ? placeholderResolver.resolve(value) : value;
     }
 
     private void notifyListeners(ConfigChangeEvent event) {
+        // Clear relaxed key cache on any config change
+        clearRelaxedKeyCache();
+
         // Global listeners
         globalListeners.forEach(listener -> {
             try {

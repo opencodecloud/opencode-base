@@ -51,16 +51,17 @@ public final class LruEvictionPolicy<K, V> implements EvictionPolicy<K, V> {
     /** Creates a new LruEvictionPolicy instance | 创建新的 LruEvictionPolicy 实例 */
     public LruEvictionPolicy() {}
 
-    private final LinkedHashMap<K, Long> accessOrder = new LinkedHashMap<>(16, 0.75f, true);
+    private static final Boolean PRESENT = Boolean.TRUE;
+    private final LinkedHashMap<K, Boolean> accessOrder = new LinkedHashMap<>(16, 0.75f, true);
 
     @Override
     public void recordAccess(CacheEntry<K, V> entry) {
-        accessOrder.put(entry.key(), System.nanoTime());
+        accessOrder.put(entry.key(), PRESENT);
     }
 
     @Override
     public void recordWrite(CacheEntry<K, V> entry) {
-        accessOrder.put(entry.key(), System.nanoTime());
+        accessOrder.put(entry.key(), PRESENT);
     }
 
     @Override

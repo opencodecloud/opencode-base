@@ -22,6 +22,7 @@
 module cloud.opencode.base.classloader {
     // Required modules
     requires transitive cloud.opencode.base.core;
+    requires java.sql;
 
     // Export public API packages
     exports cloud.opencode.base.classloader;
@@ -30,4 +31,13 @@ module cloud.opencode.base.classloader {
     exports cloud.opencode.base.classloader.metadata;
     exports cloud.opencode.base.classloader.resource;
     exports cloud.opencode.base.classloader.scanner;
+    exports cloud.opencode.base.classloader.leak;
+    exports cloud.opencode.base.classloader.security;
+    exports cloud.opencode.base.classloader.index;
+    exports cloud.opencode.base.classloader.graalvm;
+    exports cloud.opencode.base.classloader.plugin;
+    exports cloud.opencode.base.classloader.diagnostic;
+    exports cloud.opencode.base.classloader.service;
+    exports cloud.opencode.base.classloader.dependency;
+    exports cloud.opencode.base.classloader.conflict;
 }

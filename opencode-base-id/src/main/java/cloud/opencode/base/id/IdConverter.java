@@ -75,6 +75,12 @@ public final class IdConverter {
     private static final String BASE32_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
     /**
+     * Base58 alphabet (Bitcoin-style: no 0, O, I, l — avoids visually ambiguous characters)
+     * Base58字母表（比特币风格：无0、O、I、l — 避免视觉歧义字符）
+     */
+    private static final String BASE58_CHARS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+    /**
      * Base62 decode table
      */
     private static final int[] BASE62_DECODE = new int[128];
@@ -88,6 +94,11 @@ public final class IdConverter {
      * Base32 Crockford decode table
      */
     private static final int[] BASE32_DECODE = new int[128];
+
+    /**
+     * Base58 decode table
+     */
+    private static final int[] BASE58_DECODE = new int[128];
 
     static {
         // Initialize Base62 decode
@@ -111,6 +122,14 @@ public final class IdConverter {
         BASE32_DECODE['O'] = BASE32_DECODE['o'] = 0;
         BASE32_DECODE['I'] = BASE32_DECODE['i'] = 1;
         BASE32_DECODE['L'] = BASE32_DECODE['l'] = 1;
+
+        // Initialize Base58 decode
+        for (int i = 0; i < 128; i++) {
+            BASE58_DECODE[i] = -1;
+        }
+        for (int i = 0; i < BASE58_CHARS.length(); i++) {
+            BASE58_DECODE[BASE58_CHARS.charAt(i)] = i;
+        }
     }
 
     private IdConverter() {
@@ -332,6 +351,103 @@ public final class IdConverter {
         for (int i = start; i < str.length(); i++) {
             char c = str.charAt(i);
             if (c >= 128 || BASE36_DECODE[c] < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ==================== Base58 ====================
+
+    /**
+     * Converts a long ID to Base58 string (Bitcoin-style alphabet, no ambiguous characters)
+     * 将长整型ID转换为Base58字符串（比特币风格字母表，无歧义字符）
+     *
+     * <p>Base58 avoids visually ambiguous characters (0, O, I, l) making it
+     * suitable for human-readable short IDs in URLs and QR codes.</p>
+     * <p>Base58避免视觉上模糊的字符（0、O、I、l），适合在URL和QR码中使用人类可读的短ID。</p>
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>
+     * toBase58(0L)          = "1"  // zero maps to '1' (Bitcoin convention)
+     * toBase58(57L)         = "z"
+     * toBase58(58L)         = "21"
+     * toBase58(1000000000L) = "2QGPK"
+     * </pre>
+     *
+     * <p><strong>Performance | 性能:</strong></p>
+     * <p>Time: O(log₅₈ n), Space: O(1)</p>
+     * <p>时间: O(log₅₈ n), 空间: O(1)</p>
+     *
+     * @param id the ID (treated as unsigned long) | ID（视为无符号长整型）
+     * @return Base58 encoded string | Base58编码字符串
+     */
+    public static String toBase58(long id) {
+        if (id == 0) {
+            return "1";
+        }
+        StringBuilder sb = new StringBuilder();
+        long remaining = id;
+        // Use unsigned arithmetic to handle the full long range
+        while (Long.compareUnsigned(remaining, 0L) != 0) {
+            int rem = (int) Long.remainderUnsigned(remaining, 58);
+            sb.append(BASE58_CHARS.charAt(rem));
+            remaining = Long.divideUnsigned(remaining, 58);
+        }
+        return sb.reverse().toString();
+    }
+
+    /**
+     * Converts a Base58 string back to long ID
+     * 将Base58字符串转换回长整型ID
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>
+     * fromBase58("1")       = 0L
+     * fromBase58("2QGPK")   = 1000000000L
+     * fromBase58("21")      = 58L
+     * </pre>
+     *
+     * <p><strong>Performance | 性能:</strong></p>
+     * <p>Time: O(n) where n=string length, Space: O(1)</p>
+     *
+     * @param base58 the Base58 encoded string | Base58编码字符串
+     * @return the decoded ID | 解码的ID
+     * @throws IllegalArgumentException if the string is null, empty, or contains invalid characters | 字符串为null、空或含无效字符时抛出
+     */
+    public static long fromBase58(String base58) {
+        if (base58 == null || base58.isEmpty()) {
+            throw new IllegalArgumentException("Base58 string cannot be null or empty");
+        }
+        long result = 0;
+        for (int i = 0; i < base58.length(); i++) {
+            char c = base58.charAt(i);
+            if (c >= 128 || BASE58_DECODE[c] < 0) {
+                throw new IllegalArgumentException("Invalid Base58 character: '" + c + "'");
+            }
+            try {
+                result = Math.addExact(Math.multiplyExact(result, 58), BASE58_DECODE[c]);
+            } catch (ArithmeticException e) {
+                throw new IllegalArgumentException("Base58 value overflows long range: " + base58);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Validates whether a string is valid Base58
+     * 验证字符串是否是有效的Base58
+     *
+     * @param str the string to validate | 要验证的字符串
+     * @return true if the string is a valid Base58 value | 如果是有效Base58字符串则返回true
+     */
+    public static boolean isValidBase58(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (c >= 128 || BASE58_DECODE[c] < 0) {
                 return false;
             }
         }

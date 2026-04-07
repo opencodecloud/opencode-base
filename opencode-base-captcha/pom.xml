@@ -22,7 +22,7 @@
     <parent>
         <groupId>cloud.opencode.base</groupId>
         <artifactId>opencode-base-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.3</version>
     </parent>
 
     <artifactId>opencode-base-captcha</artifactId>
@@ -30,6 +30,12 @@
     <description>OpenCode Base Captcha - Zero-dependency CAPTCHA generation library with multiple types support</description>
 
     <dependencies>
+        <!-- Core dependency for OpenException base class -->
+        <dependency>
+            <groupId>cloud.opencode.base</groupId>
+            <artifactId>opencode-base-core</artifactId>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

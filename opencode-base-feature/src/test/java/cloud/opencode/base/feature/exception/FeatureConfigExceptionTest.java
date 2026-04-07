@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 @DisplayName("FeatureConfigException 测试")
 class FeatureConfigExceptionTest {
@@ -26,8 +26,9 @@ class FeatureConfigExceptionTest {
         void testMessageConstructor() {
             FeatureConfigException ex = new FeatureConfigException("Config error");
 
-            assertThat(ex.getMessage()).isEqualTo("Config error");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.INVALID_CONFIG);
+            assertThat(ex.getRawMessage()).isEqualTo("Config error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (2003) Config error");
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.INVALID_CONFIG);
         }
 
         @Test
@@ -37,8 +38,9 @@ class FeatureConfigExceptionTest {
                     "Strategy error", FeatureErrorCode.INVALID_STRATEGY
             );
 
-            assertThat(ex.getMessage()).isEqualTo("Strategy error");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.INVALID_STRATEGY);
+            assertThat(ex.getRawMessage()).isEqualTo("Strategy error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (2001) Strategy error");
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.INVALID_STRATEGY);
         }
 
         @Test
@@ -47,9 +49,10 @@ class FeatureConfigExceptionTest {
             Throwable cause = new RuntimeException("cause");
             FeatureConfigException ex = new FeatureConfigException("Config error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Config error");
+            assertThat(ex.getRawMessage()).isEqualTo("Config error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (2003) Config error");
             assertThat(ex.getCause()).isSameAs(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.INVALID_CONFIG);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.INVALID_CONFIG);
         }
     }
 

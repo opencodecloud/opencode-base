@@ -1,5 +1,7 @@
 package cloud.opencode.base.core.tuple;
 
+import cloud.opencode.base.core.func.TriFunction;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -300,7 +302,7 @@ class TripleTest {
         @Test
         @DisplayName("TriFunction 作为函数式接口")
         void testTriFunction() {
-            Triple.TriFunction<Integer, Integer, Integer, Integer> sum = (a, b, c) -> a + b + c;
+            TriFunction<Integer, Integer, Integer, Integer> sum = (a, b, c) -> a + b + c;
             assertThat(sum.apply(1, 2, 3)).isEqualTo(6);
         }
     }

@@ -56,6 +56,8 @@ public final class VerifyCodeUtil {
     private static final String NUMERIC = "0123456789";
     private static final String ALPHABETIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     private static final String ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String NUMERIC_NO_CONFUSING = "23456789";
+    private static final String ALPHABETIC_NO_CONFUSING = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
     private static final String ALPHANUMERIC_NO_CONFUSING = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
     private VerifyCodeUtil() {
@@ -106,7 +108,10 @@ public final class VerifyCodeUtil {
      * 生成范围内的数字验证码
      */
     public static String numericRange(int min, int max) {
-        int value = SECURE_RANDOM.nextInt(max - min + 1) + min;
+        if (min > max) {
+            throw new IllegalArgumentException("min must be <= max, got min=" + min + ", max=" + max);
+        }
+        int value = SECURE_RANDOM.nextInt((int) Math.min((long) max - min + 1, Integer.MAX_VALUE)) + min;
         int length = String.valueOf(max).length();
         return String.format("%0" + length + "d", value);
     }
@@ -177,8 +182,8 @@ public final class VerifyCodeUtil {
 
         public String build() {
             String chars = switch (type) {
-                case NUMERIC -> NUMERIC;
-                case ALPHABETIC -> ALPHABETIC;
+                case NUMERIC -> excludeConfusing ? NUMERIC_NO_CONFUSING : NUMERIC;
+                case ALPHABETIC -> excludeConfusing ? ALPHABETIC_NO_CONFUSING : ALPHABETIC;
                 case ALPHANUMERIC -> excludeConfusing ? ALPHANUMERIC_NO_CONFUSING : ALPHANUMERIC;
                 case CUSTOM -> customChars != null ? customChars : NUMERIC;
             };

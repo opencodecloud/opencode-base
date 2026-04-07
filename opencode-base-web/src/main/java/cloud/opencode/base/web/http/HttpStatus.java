@@ -1,5 +1,8 @@
 package cloud.opencode.base.web.http;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * HTTP Status - HTTP Response Status Code Enumeration
  * HTTP 状态 - HTTP 响应状态码枚举
@@ -119,6 +122,16 @@ public enum HttpStatus {
     NOT_EXTENDED(510, "Not Extended"),
     NETWORK_AUTHENTICATION_REQUIRED(511, "Network Authentication Required");
 
+    private static final Map<Integer, HttpStatus> CODE_MAP;
+
+    static {
+        Map<Integer, HttpStatus> map = new HashMap<>();
+        for (HttpStatus s : values()) {
+            map.put(s.code, s);
+        }
+        CODE_MAP = Map.copyOf(map);
+    }
+
     private final int code;
     private final String reason;
 
@@ -215,12 +228,7 @@ public enum HttpStatus {
      * @return the HttpStatus or null if not found - HttpStatus 或如果未找到返回 null
      */
     public static HttpStatus fromCode(int code) {
-        for (HttpStatus status : values()) {
-            if (status.code == code) {
-                return status;
-            }
-        }
-        return null;
+        return CODE_MAP.get(code);
     }
 
     /**

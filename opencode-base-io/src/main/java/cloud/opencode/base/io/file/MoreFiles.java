@@ -466,8 +466,8 @@ public final class MoreFiles {
                 byte[] buf2 = new byte[DEFAULT_BUFFER_SIZE];
 
                 while (true) {
-                    int read1 = in1.read(buf1);
-                    int read2 = in2.read(buf2);
+                    int read1 = readFully(in1, buf1);
+                    int read2 = readFully(in2, buf2);
 
                     if (read1 != read2) {
                         return false;
@@ -487,6 +487,27 @@ public final class MoreFiles {
     }
 
     // ==================== Utility Methods | 工具方法 ====================
+
+    /**
+     * Reads from an InputStream until the buffer is full or EOF is reached.
+     * 从 InputStream 读取直到缓冲区满或达到 EOF。
+     *
+     * @param in  the input stream | 输入流
+     * @param buf the buffer to fill | 要填充的缓冲区
+     * @return the total bytes read, or -1 if EOF at start | 总读取字节数，如果开始时即 EOF 返回 -1
+     * @throws IOException if an I/O error occurs | 如果发生 I/O 错误
+     */
+    private static int readFully(InputStream in, byte[] buf) throws IOException {
+        int totalRead = 0;
+        while (totalRead < buf.length) {
+            int bytesRead = in.read(buf, totalRead, buf.length - totalRead);
+            if (bytesRead == -1) {
+                return totalRead == 0 ? -1 : totalRead;
+            }
+            totalRead += bytesRead;
+        }
+        return totalRead;
+    }
 
     /**
      * Checks if a directory is empty.

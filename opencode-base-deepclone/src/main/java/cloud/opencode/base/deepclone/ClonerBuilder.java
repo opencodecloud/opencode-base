@@ -66,6 +66,9 @@ public final class ClonerBuilder {
     private boolean cloneTransient = false;
     private boolean useCache = true;
     private int maxDepth = 100;
+    private ClonePolicy policy = ClonePolicy.STANDARD;
+    private FieldFilter fieldFilter;
+    private CloneListener listener;
 
     ClonerBuilder() {
     }
@@ -188,6 +191,44 @@ public final class ClonerBuilder {
         return this;
     }
 
+    // ==================== Policy, Filter & Listener | 策略、过滤器与监听器 ====================
+
+    /**
+     * Sets the clone policy
+     * 设置克隆策略
+     *
+     * @param policy the clone policy | 克隆策略
+     * @return this builder | 此构建器
+     */
+    public ClonerBuilder policy(ClonePolicy policy) {
+        this.policy = policy != null ? policy : ClonePolicy.STANDARD;
+        return this;
+    }
+
+    /**
+     * Sets the field filter for programmatic field exclusion
+     * 设置编程式字段排除的字段过滤器
+     *
+     * @param filter the field filter | 字段过滤器
+     * @return this builder | 此构建器
+     */
+    public ClonerBuilder filter(FieldFilter filter) {
+        this.fieldFilter = filter;
+        return this;
+    }
+
+    /**
+     * Sets the clone listener for lifecycle events
+     * 设置克隆生命周期事件的监听器
+     *
+     * @param listener the clone listener | 克隆监听器
+     * @return this builder | 此构建器
+     */
+    public ClonerBuilder listener(CloneListener listener) {
+        this.listener = listener;
+        return this;
+    }
+
     // ==================== Build | 构建 ====================
 
     /**
@@ -208,6 +249,9 @@ public final class ClonerBuilder {
         // Configure cloner
         cloner.setMaxDepth(maxDepth);
         cloner.setCloneTransient(cloneTransient);
+        cloner.setPolicy(policy);
+        cloner.setFieldFilter(fieldFilter);
+        cloner.setListener(listener);
 
         // Register immutable types
         for (Class<?> type : immutableTypes) {

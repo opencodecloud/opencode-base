@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
 /**
@@ -51,7 +50,7 @@ import java.util.function.Function;
 public final class MockInvocationHandler implements InvocationHandler {
 
     private final Class<?> mockedType;
-    private final List<Invocation> invocations = new CopyOnWriteArrayList<>();
+    private final List<Invocation> invocations = Collections.synchronizedList(new ArrayList<>());
     private final Map<StubKey, Stub> stubs = new ConcurrentHashMap<>();
 
     /**
@@ -83,17 +82,20 @@ public final class MockInvocationHandler implements InvocationHandler {
         Invocation invocation = Invocation.of(method, args);
         invocations.add(invocation);
 
-        // Look for stub
-        StubKey key = new StubKey(methodName, args);
-        Stub stub = stubs.get(key);
+        // Fast-path: skip stub lookup when no stubs are configured
+        if (!stubs.isEmpty()) {
+            // Look for stub
+            StubKey key = new StubKey(methodName, args);
+            Stub stub = stubs.get(key);
 
-        // Try without args match
-        if (stub == null) {
-            stub = stubs.get(new StubKey(methodName, null));
-        }
+            // Try without args match
+            if (stub == null) {
+                stub = stubs.get(new StubKey(methodName, null));
+            }
 
-        if (stub != null) {
-            return stub.apply(args);
+            if (stub != null) {
+                return stub.apply(args);
+            }
         }
 
         // Return default value

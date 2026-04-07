@@ -1,17 +1,13 @@
 package cloud.opencode.base.email.security;
 
 import cloud.opencode.base.email.exception.EmailSecurityException;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.Enumeration;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.regex.Pattern;
@@ -39,7 +35,7 @@ import java.util.regex.Pattern;
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
  * DkimConfig dkim = DkimConfig.load("example.com", "mail", keyPath);
- * DkimSigner.sign(mimeMessage, dkim);
+ * String signedMessage = DkimSigner.sign(rawMessage, dkim);
  * }</pre>
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
@@ -64,27 +60,25 @@ public final class DkimSigner {
     }
 
     /**
-     * Sign a message with DKIM
-     * 使用DKIM签名消息
+     * Sign a raw MIME message with DKIM
+     * 使用DKIM签名原始MIME消息
      *
-     * @param message the message to sign | 要签名的消息
-     * @param config  the DKIM configuration | DKIM配置
+     * @param rawMessage the raw MIME message string | 原始MIME消息字符串
+     * @param config     the DKIM configuration | DKIM配置
+     * @return the signed message with DKIM-Signature header prepended | 带有DKIM-Signature头的签名消息
      * @throws EmailSecurityException if signing fails | 签名失败时抛出
      */
-    public static void sign(MimeMessage message, DkimConfig config) {
+    public static String sign(String rawMessage, DkimConfig config) {
         if (config == null) {
-            return;
+            return rawMessage;
         }
 
         try {
-            // Save changes to ensure headers are finalized
-            message.saveChanges();
-
             // Build the DKIM signature
-            String signature = buildSignature(message, config);
+            String signature = buildSignature(rawMessage, config);
 
-            // Add the signature header
-            message.setHeader(DKIM_SIGNATURE_HEADER, signature);
+            // Prepend DKIM-Signature as the first header in the message
+            return DKIM_SIGNATURE_HEADER + ": " + signature + "\r\n" + rawMessage;
 
         } catch (Exception e) {
             throw new EmailSecurityException("Failed to sign message with DKIM", e);
@@ -94,17 +88,38 @@ public final class DkimSigner {
     /**
      * Build DKIM signature value
      */
-    private static String buildSignature(MimeMessage message, DkimConfig config) throws Exception {
+    private static String buildSignature(String rawMessage, DkimConfig config) throws Exception {
         String domain = config.domain();
         String selector = config.selector();
         PrivateKey privateKey = config.privateKey();
         Set<String> headersToSign = config.headersToSign();
 
+        // Split message into headers and body at the first blank line
+        String headers = "";
+        String body = "";
+        int bodySeparator = rawMessage.indexOf("\r\n\r\n");
+        if (bodySeparator >= 0) {
+            headers = rawMessage.substring(0, bodySeparator);
+            body = rawMessage.substring(bodySeparator + 4);
+        } else {
+            int lfSeparator = rawMessage.indexOf("\n\n");
+            if (lfSeparator >= 0) {
+                headers = rawMessage.substring(0, lfSeparator);
+                body = rawMessage.substring(lfSeparator + 2);
+            } else {
+                headers = rawMessage;
+            }
+        }
+
         // Get body hash (bh)
-        String bodyHash = computeBodyHash(message);
+        String bodyHash = computeBodyHash(body);
+
+        // Normalize and split header section once (avoids redundant regex work per header)
+        String normalizedHeaders = LINE_ENDING_PATTERN.matcher(headers).replaceAll("\r\n");
+        String[] headerLines = CRLF_PATTERN.split(normalizedHeaders, -1);
 
         // Build header list (h)
-        String headerList = buildHeaderList(message, headersToSign);
+        String headerList = buildHeaderList(headerLines, headersToSign);
 
         // Current timestamp
         long timestamp = Instant.now().getEpochSecond();
@@ -115,7 +130,7 @@ public final class DkimSigner {
         );
 
         // Canonicalize headers for signing
-        String canonicalizedHeaders = canonicalizeHeaders(message, headersToSign);
+        String canonicalizedHeaders = canonicalizeHeaders(headerLines, headersToSign);
 
         // Add the DKIM-Signature header itself (without b= value) to the signing data
         String dkimHeaderForSigning = relaxedHeaderCanonicalization(
@@ -135,35 +150,28 @@ public final class DkimSigner {
      */
     private static String buildSignatureTemplate(String domain, String selector,
                                                   String headerList, String bodyHash, long timestamp) {
-        return "v=1; a=" + ALGORITHM + "; c=" + CANONICALIZATION + "; " +
-                "d=" + domain + "; s=" + selector + "; " +
-                "t=" + timestamp + "; " +
-                "h=" + headerList + "; " +
-                "bh=" + bodyHash + "; " +
-                "b=";
+        StringBuilder sb = new StringBuilder(256);
+        sb.append("v=1; a=").append(ALGORITHM)
+          .append("; c=").append(CANONICALIZATION)
+          .append("; d=").append(domain)
+          .append("; s=").append(selector)
+          .append("; t=").append(timestamp)
+          .append("; h=").append(headerList)
+          .append("; bh=").append(bodyHash)
+          .append("; b=");
+        return sb.toString();
     }
 
     /**
      * Compute body hash (bh tag)
      */
-    private static String computeBodyHash(MimeMessage message) throws Exception {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        message.writeTo(baos);
-        String fullMessage = baos.toString(StandardCharsets.UTF_8);
-
-        // Extract body (after first blank line)
-        int bodyStart = fullMessage.indexOf("\r\n\r\n");
-        if (bodyStart == -1) {
-            bodyStart = fullMessage.indexOf("\n\n");
-        }
-        String body = bodyStart >= 0 ? fullMessage.substring(bodyStart + 4) : "";
-
+    private static String computeBodyHash(String body) throws Exception {
         // Apply relaxed body canonicalization
-        body = relaxedBodyCanonicalization(body);
+        String canonicalBody = relaxedBodyCanonicalization(body);
 
         // Compute SHA-256 hash
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hash = digest.digest(body.getBytes(StandardCharsets.UTF_8));
+        byte[] hash = digest.digest(canonicalBody.getBytes(StandardCharsets.UTF_8));
 
         return Base64.getEncoder().encodeToString(hash);
     }
@@ -180,13 +188,17 @@ public final class DkimSigner {
     }
 
     /**
-     * Build header list for h= tag
+     * Build header list for h= tag using pre-split header lines.
+     * 使用预分割的邮件头行构建 h= 标签的邮件头列表。
+     *
+     * @param headerLines  pre-normalized and pre-split header lines | 预规范化并预分割的邮件头行
+     * @param headersToSign set of header names to sign | 要签名的邮件头名称集合
+     * @return colon-separated list of header names present in the message | 消息中存在的邮件头名称（冒号分隔）
      */
-    private static String buildHeaderList(MimeMessage message, Set<String> headersToSign)
-            throws MessagingException {
+    private static String buildHeaderList(String[] headerLines, Set<String> headersToSign) {
         StringJoiner joiner = new StringJoiner(":");
         for (String header : headersToSign) {
-            if (message.getHeader(header) != null) {
+            if (findHeaderValueFromLines(headerLines, header) != null) {
                 joiner.add(header.toLowerCase());
             }
         }
@@ -194,19 +206,58 @@ public final class DkimSigner {
     }
 
     /**
-     * Canonicalize headers for signing
+     * Canonicalize headers for signing using pre-split header lines.
+     * 使用预分割的邮件头行规范化签名邮件头。
+     *
+     * @param headerLines  pre-normalized and pre-split header lines | 预规范化并预分割的邮件头行
+     * @param headersToSign set of header names to sign | 要签名的邮件头名称集合
+     * @return canonicalized header string for signing | 用于签名的规范化邮件头字符串
      */
-    private static String canonicalizeHeaders(MimeMessage message, Set<String> headersToSign)
-            throws MessagingException {
+    private static String canonicalizeHeaders(String[] headerLines, Set<String> headersToSign) {
         StringBuilder sb = new StringBuilder();
         for (String headerName : headersToSign) {
-            String[] values = message.getHeader(headerName);
-            if (values != null && values.length > 0) {
-                sb.append(relaxedHeaderCanonicalization(headerName, values[0]));
+            String value = findHeaderValueFromLines(headerLines, headerName);
+            if (value != null) {
+                sb.append(relaxedHeaderCanonicalization(headerName, value));
                 sb.append("\r\n");
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * Find a header value from pre-split header lines by name (case-insensitive).
+     * Handles folded headers (continuation lines starting with whitespace).
+     * 从预分割的邮件头行中按名称（不区分大小写）查找邮件头值。
+     * 处理折叠邮件头（以空白字符开头的续行）。
+     *
+     * @param lines      pre-normalized, CRLF-split header lines | 预规范化的 CRLF 分割邮件头行
+     * @param headerName the header name to find | 要查找的邮件头名称
+     * @return the header value, or null if not found | 邮件头值，未找到返回 null
+     */
+    private static String findHeaderValueFromLines(String[] lines, String headerName) {
+        String lowerName = headerName.toLowerCase();
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            int colonIdx = line.indexOf(':');
+            if (colonIdx > 0) {
+                String name = line.substring(0, colonIdx).trim();
+                if (name.toLowerCase().equals(lowerName)) {
+                    // Found the header; collect value including any continuation lines
+                    StringBuilder value = new StringBuilder(line.substring(colonIdx + 1));
+                    for (int j = i + 1; j < lines.length; j++) {
+                        if (!lines[j].isEmpty() && (lines[j].charAt(0) == ' ' || lines[j].charAt(0) == '\t')) {
+                            value.append("\r\n").append(lines[j]);
+                        } else {
+                            break;
+                        }
+                    }
+                    return value.toString().trim();
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -236,7 +287,7 @@ public final class DkimSigner {
         body = LINE_ENDING_PATTERN.matcher(body).replaceAll("\r\n");
 
         // Reduce whitespace at end of lines
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(body.length() + 64);
         for (String line : CRLF_PATTERN.split(body, -1)) {
             // Reduce WSP sequences to single SP
             String canonLine = WHITESPACE_REDUCE_PATTERN.matcher(line).replaceAll(" ");

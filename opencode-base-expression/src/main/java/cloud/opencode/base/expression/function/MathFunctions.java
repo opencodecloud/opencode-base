@@ -1,5 +1,7 @@
 package cloud.opencode.base.expression.function;
 
+import cloud.opencode.base.expression.OpenExpressionException;
+
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -118,7 +120,12 @@ public final class MathFunctions {
         // Power/Root
         functions.put("pow", args -> {
             if (args.length < 2) return 0;
-            return Math.pow(toDouble(args[0]), toDouble(args[1]));
+            double exponent = toDouble(args[1]);
+            if (Math.abs(exponent) > 1000) {
+                throw OpenExpressionException.evaluationError(
+                        "Exponent " + exponent + " exceeds maximum absolute value of 1000");
+            }
+            return Math.pow(toDouble(args[0]), exponent);
         });
 
         functions.put("sqrt", args -> {
@@ -323,9 +330,16 @@ public final class MathFunctions {
 
     private static int toInt(Object value) {
         if (value == null) return 0;
-        if (value instanceof Number n) return n.intValue();
+        if (value instanceof Number n) {
+            long l = n.longValue();
+            if (l > Integer.MAX_VALUE || l < Integer.MIN_VALUE) {
+                throw OpenExpressionException.evaluationError(
+                        "Integer value out of range: " + l);
+            }
+            return (int) l;
+        }
         try {
-            return Integer.parseInt(value.toString());
+            return Integer.parseInt(value.toString().trim());
         } catch (NumberFormatException e) {
             return 0;
         }

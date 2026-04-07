@@ -8,6 +8,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.*;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -727,6 +730,650 @@ class CronExpressionTest {
         void should_be_serializable() {
             CronExpression expr = CronExpression.parse("30 10 * * *");
             assertThat(expr).isInstanceOf(java.io.Serializable.class);
+        }
+    }
+
+    // ==================== Configurable maxYears Tests ====================
+
+    @Nested
+    @DisplayName("可配置搜索窗口测试")
+    class ConfigurableMaxYearsTests {
+
+        @Test
+        @DisplayName("nextExecution(from, maxYears) 正常搜索")
+        void should_find_next_with_custom_max_years() {
+            CronExpression expr = CronExpression.parse("0 0 29 2 *"); // Feb 29
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            ZonedDateTime next = expr.nextExecution(from, 10);
+            assertThat(next).isEqualTo(zdt(2028, 2, 29, 0, 0));
+        }
+
+        @Test
+        @DisplayName("nextExecution 搜索窗口过小返回null")
+        void should_return_null_when_max_years_too_small() {
+            CronExpression expr = CronExpression.parse("0 0 29 2 *"); // Feb 29
+            ZonedDateTime from = zdt(2026, 3, 1, 0, 0);
+            // maxYears=1: only searches through 2027, next Feb 29 is 2028
+            ZonedDateTime next = expr.nextExecution(from, 1);
+            assertThat(next).isNull();
+        }
+
+        @Test
+        @DisplayName("previousExecution(from, maxYears) 正常搜索")
+        void should_find_previous_with_custom_max_years() {
+            CronExpression expr = CronExpression.parse("0 0 29 2 *"); // Feb 29
+            ZonedDateTime from = zdt(2029, 1, 1, 0, 0);
+            ZonedDateTime prev = expr.previousExecution(from, 10);
+            assertThat(prev).isEqualTo(zdt(2028, 2, 29, 0, 0));
+        }
+
+        @Test
+        @DisplayName("maxYears < 1 应抛出异常")
+        void should_throw_on_max_years_below_1() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            assertThatThrownBy(() -> expr.nextExecution(from, 0))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> expr.previousExecution(from, 0))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("maxYears > 100 应抛出异常")
+        void should_throw_on_max_years_above_100() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            assertThatThrownBy(() -> expr.nextExecution(from, 101))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> expr.previousExecution(from, 101))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    // ==================== Duration Convenience Tests ====================
+
+    @Nested
+    @DisplayName("时间间隔便利方法测试")
+    class DurationConvenienceTests {
+
+        @Test
+        @DisplayName("timeToNextExecution 返回正确的Duration")
+        void should_return_correct_time_to_next() {
+            CronExpression expr = CronExpression.parse("30 10 * * *");
+            ZonedDateTime from = zdt(2026, 3, 15, 10, 0);
+            Duration duration = expr.timeToNextExecution(from);
+            assertThat(duration).isNotNull();
+            assertThat(duration).isEqualTo(Duration.ofMinutes(30));
+        }
+
+        @Test
+        @DisplayName("timeFromLastExecution 返回正确的Duration")
+        void should_return_correct_time_from_last() {
+            CronExpression expr = CronExpression.parse("30 10 * * *");
+            ZonedDateTime from = zdt(2026, 3, 15, 11, 0);
+            Duration duration = expr.timeFromLastExecution(from);
+            assertThat(duration).isNotNull();
+            assertThat(duration).isEqualTo(Duration.ofMinutes(30));
+        }
+
+        @Test
+        @DisplayName("timeToNextExecution(null) 应抛出 NullPointerException")
+        void should_throw_npe_on_null_time_to_next() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            assertThatThrownBy(() -> expr.timeToNextExecution(null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("timeFromLastExecution(null) 应抛出 NullPointerException")
+        void should_throw_npe_on_null_time_from_last() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            assertThatThrownBy(() -> expr.timeFromLastExecution(null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    // ==================== Count Executions Between Tests ====================
+
+    @Nested
+    @DisplayName("区间执行计数测试")
+    class CountExecutionsBetweenTests {
+
+        @Test
+        @DisplayName("每天午夜7天应有7次执行")
+        void should_count_daily_over_7_days() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            ZonedDateTime to = zdt(2026, 1, 8, 0, 0);
+            long count = expr.countExecutionsBetween(from, to);
+            assertThat(count).isEqualTo(7);
+        }
+
+        @Test
+        @DisplayName("每小时24小时应有24次执行")
+        void should_count_hourly_over_24_hours() {
+            CronExpression expr = CronExpression.parse("0 * * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            ZonedDateTime to = zdt(2026, 1, 2, 0, 0);
+            long count = expr.countExecutionsBetween(from, to);
+            assertThat(count).isEqualTo(24);
+        }
+
+        @Test
+        @DisplayName("from >= to 应抛出异常")
+        void should_throw_when_from_not_before_to() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime t = zdt(2026, 1, 1, 0, 0);
+            assertThatThrownBy(() -> expr.countExecutionsBetween(t, t))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> expr.countExecutionsBetween(t, t.minusDays(1)))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("null参数应抛出 NullPointerException")
+        void should_throw_npe_on_null() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime t = zdt(2026, 1, 1, 0, 0);
+            assertThatThrownBy(() -> expr.countExecutionsBetween(null, t))
+                    .isInstanceOf(NullPointerException.class);
+            assertThatThrownBy(() -> expr.countExecutionsBetween(t, null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    // ==================== Executions Between Tests ====================
+
+    @Nested
+    @DisplayName("区间执行列表测试")
+    class ExecutionsBetweenTests {
+
+        @Test
+        @DisplayName("executionsBetween 返回正确的列表")
+        void should_list_executions_between() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            ZonedDateTime to = zdt(2026, 1, 4, 0, 0);
+            List<ZonedDateTime> list = expr.executionsBetween(from, to);
+            assertThat(list).hasSize(3);
+            assertThat(list.get(0)).isEqualTo(zdt(2026, 1, 2, 0, 0));
+            assertThat(list.get(1)).isEqualTo(zdt(2026, 1, 3, 0, 0));
+            assertThat(list.get(2)).isEqualTo(zdt(2026, 1, 4, 0, 0));
+        }
+
+        @Test
+        @DisplayName("executionsBetween 返回不可修改列表")
+        void should_return_unmodifiable_list() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            ZonedDateTime to = zdt(2026, 1, 3, 0, 0);
+            List<ZonedDateTime> list = expr.executionsBetween(from, to);
+            assertThatThrownBy(() -> list.add(zdt(2026, 1, 5, 0, 0)))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+
+        @Test
+        @DisplayName("executionsBetween 带limit限制")
+        void should_respect_limit() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            ZonedDateTime to = zdt(2026, 12, 31, 23, 59);
+            List<ZonedDateTime> list = expr.executionsBetween(from, to, 5);
+            assertThat(list).hasSize(5);
+        }
+
+        @Test
+        @DisplayName("executionsBetween from >= to 应抛出异常")
+        void should_throw_when_from_not_before_to() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime t = zdt(2026, 1, 1, 0, 0);
+            assertThatThrownBy(() -> expr.executionsBetween(t, t))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("executionsBetween limit超出范围应抛出异常")
+        void should_throw_on_invalid_limit() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            ZonedDateTime to = zdt(2026, 12, 31, 23, 59);
+            assertThatThrownBy(() -> expr.executionsBetween(from, to, 0))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> expr.executionsBetween(from, to, 1_000_001))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    // ==================== isEquivalentTo Tests ====================
+
+    @Nested
+    @DisplayName("等价性测试")
+    class EquivalenceTests {
+
+        @Test
+        @DisplayName("@daily 等价于 0 0 * * *")
+        void should_be_equivalent_daily_macro() {
+            CronExpression daily = CronExpression.parse("@daily");
+            CronExpression explicit = CronExpression.parse("0 0 * * *");
+            assertThat(daily.isEquivalentTo(explicit)).isTrue();
+        }
+
+        @Test
+        @DisplayName("@daily 不等价于 0 1 * * *")
+        void should_not_be_equivalent_different_hour() {
+            CronExpression daily = CronExpression.parse("@daily");
+            CronExpression oneAm = CronExpression.parse("0 1 * * *");
+            assertThat(daily.isEquivalentTo(oneAm)).isFalse();
+        }
+
+        @Test
+        @DisplayName("isEquivalentTo(null) 返回false")
+        void should_return_false_for_null() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            assertThat(expr.isEquivalentTo(null)).isFalse();
+        }
+
+        @Test
+        @DisplayName("自身等价")
+        void should_be_equivalent_to_self() {
+            CronExpression expr = CronExpression.parse("*/5 * * * *");
+            assertThat(expr.isEquivalentTo(expr)).isTrue();
+        }
+
+        @Test
+        @DisplayName("不同特殊字符不等价")
+        void should_not_be_equivalent_different_specials() {
+            CronExpression a = CronExpression.parse("0 0 L * *");
+            CronExpression b = CronExpression.parse("0 0 LW * *");
+            assertThat(a.isEquivalentTo(b)).isFalse();
+        }
+    }
+
+    // ==================== Explain Tests ====================
+
+    @Nested
+    @DisplayName("解释测试")
+    class ExplainTests {
+
+        @Test
+        @DisplayName("explain 返回正确的CronExplanation")
+        void should_return_valid_explanation() {
+            CronExpression expr = CronExpression.parse("0 9 * * MON-FRI");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            CronExplanation explanation = expr.explain(from);
+            assertThat(explanation).isNotNull();
+            assertThat(explanation.expression()).isEqualTo("0 9 * * MON-FRI");
+            assertThat(explanation.description()).isNotBlank();
+            assertThat(explanation.nextExecutions()).isNotEmpty();
+            assertThat(explanation.nextExecutions()).hasSizeLessThanOrEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("explain 预估间隔正确")
+        void should_have_reasonable_interval() {
+            CronExpression expr = CronExpression.parse("0 0 * * *"); // daily
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0);
+            CronExplanation explanation = expr.explain(from);
+            assertThat(explanation.estimatedInterval()).isEqualTo(Duration.ofHours(24));
+        }
+
+        @Test
+        @DisplayName("explain(null) 应抛出 NullPointerException")
+        void should_throw_npe_on_null() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            assertThatThrownBy(() -> expr.explain(null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    // ==================== Describe with Locale Tests ====================
+
+    @Nested
+    @DisplayName("多语言描述测试")
+    class DescribeLocaleTests {
+
+        @Test
+        @DisplayName("describe(Locale.CHINESE) 返回中文")
+        void should_describe_in_chinese() {
+            String desc = CronExpression.parse("*/5 * * * *").describe(Locale.CHINESE);
+            assertThat(desc).contains("5");
+            // Chinese description should contain Chinese characters
+            assertThat(desc).containsPattern("[\\u4e00-\\u9fff]");
+        }
+
+        @Test
+        @DisplayName("describe(Locale.ENGLISH) 返回英文")
+        void should_describe_in_english() {
+            String desc = CronExpression.parse("*/5 * * * *").describe(Locale.ENGLISH);
+            assertThat(desc).containsIgnoringCase("5 minutes");
+        }
+
+        @Test
+        @DisplayName("describe(Locale.SIMPLIFIED_CHINESE) 返回中文")
+        void should_describe_in_simplified_chinese() {
+            String desc = CronExpression.parse("0 0 * * *").describe(Locale.SIMPLIFIED_CHINESE);
+            assertThat(desc).containsPattern("[\\u4e00-\\u9fff]");
+        }
+
+        @Test
+        @DisplayName("describe(null) 应抛出 NullPointerException")
+        void should_throw_npe_on_null_locale() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            assertThatThrownBy(() -> expr.describe((Locale) null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    // ==================== DST Tests ====================
+
+    @Nested
+    @DisplayName("夏令时测试")
+    class DstTests {
+
+        @Test
+        @DisplayName("春进（Spring Forward）跳过不存在的时间")
+        void should_handle_spring_forward() {
+            // US Eastern: 2026-03-08 2:00 AM → 3:00 AM (spring forward)
+            ZoneId eastern = ZoneId.of("America/New_York");
+            CronExpression expr = CronExpression.parse("30 2 * * *"); // 2:30 AM daily
+            ZonedDateTime from = ZonedDateTime.of(2026, 3, 7, 23, 0, 0, 0, eastern);
+            ZonedDateTime next = expr.nextExecution(from);
+
+            // 2:30 AM does not exist on March 8 (clock jumps from 2:00 to 3:00)
+            // Should skip to March 9 at 2:30 AM
+            assertThat(next).isNotNull();
+            assertThat(next.getDayOfMonth()).isEqualTo(9);
+            assertThat(next.getHour()).isEqualTo(2);
+            assertThat(next.getMinute()).isEqualTo(30);
+        }
+    }
+
+    // ==================== Stream Tests ====================
+
+    @Nested
+    @DisplayName("Stream 流式调度测试")
+    class StreamTests {
+
+        @Test
+        @DisplayName("stream 返回正确的前3个元素")
+        void should_return_first_3_elements() {
+            CronExpression expr = CronExpression.parse("0 0 * * *"); // daily at midnight
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            List<ZonedDateTime> first3 = expr.stream(from).limit(3).toList();
+
+            assertThat(first3).hasSize(3);
+            assertThat(first3.get(0)).isEqualTo(zdt(2026, 1, 2, 0, 0));
+            assertThat(first3.get(1)).isEqualTo(zdt(2026, 1, 3, 0, 0));
+            assertThat(first3.get(2)).isEqualTo(zdt(2026, 1, 4, 0, 0));
+        }
+
+        @Test
+        @DisplayName("stream 配合 takeWhile 在边界处停止")
+        void should_stop_at_boundary_with_takeWhile() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            ZonedDateTime boundary = zdt(2026, 1, 5, 0, 0, 0);
+
+            List<ZonedDateTime> results = expr.stream(from)
+                    .takeWhile(t -> t.isBefore(boundary))
+                    .toList();
+
+            assertThat(results).hasSize(3);
+            assertThat(results).allMatch(t -> t.isBefore(boundary));
+        }
+
+        @Test
+        @DisplayName("stream 是惰性的（limit 不会预先计算所有值）")
+        void should_be_lazy() {
+            CronExpression expr = CronExpression.parse("* * * * *"); // every minute
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+
+            // If not lazy, this would attempt to compute an enormous number of elements
+            List<ZonedDateTime> first5 = expr.stream(from).limit(5).toList();
+            assertThat(first5).hasSize(5);
+            assertThat(first5.get(0)).isEqualTo(zdt(2026, 1, 1, 0, 1));
+        }
+
+        @Test
+        @DisplayName("reverseStream 返回降序时间")
+        void should_return_descending_times() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            ZonedDateTime from = zdt(2026, 1, 5, 12, 0, 0);
+            List<ZonedDateTime> results = expr.reverseStream(from).limit(3).toList();
+
+            assertThat(results).hasSize(3);
+            assertThat(results.get(0)).isEqualTo(zdt(2026, 1, 5, 0, 0));
+            assertThat(results.get(1)).isEqualTo(zdt(2026, 1, 4, 0, 0));
+            assertThat(results.get(2)).isEqualTo(zdt(2026, 1, 3, 0, 0));
+        }
+
+        @Test
+        @DisplayName("stream(null) 抛出 NullPointerException")
+        void should_throw_npe_on_null_from() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            assertThatThrownBy(() -> expr.stream(null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("reverseStream(null) 抛出 NullPointerException")
+        void should_throw_npe_on_null_from_reverse() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            assertThatThrownBy(() -> expr.reverseStream(null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    // ==================== TemporalAdjuster Tests ====================
+
+    @Nested
+    @DisplayName("TemporalAdjuster 时间调节器测试")
+    class TemporalAdjusterTests {
+
+        @Test
+        @DisplayName("ZonedDateTime.with(cronExpr) 返回下次执行时间")
+        void should_adjust_to_next_execution() {
+            CronExpression expr = CronExpression.parse("30 10 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            ZonedDateTime result = (ZonedDateTime) from.with(expr);
+
+            assertThat(result).isEqualTo(zdt(2026, 1, 1, 10, 30));
+        }
+
+        @Test
+        @DisplayName("with(cronExpr) 结果与 nextExecution 一致")
+        void should_match_nextExecution() {
+            CronExpression expr = CronExpression.parse("0 9 * * MON-FRI");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0); // Thursday
+            ZonedDateTime viaWith = (ZonedDateTime) from.with(expr);
+            ZonedDateTime viaNext = expr.nextExecution(from);
+
+            assertThat(viaWith).isEqualTo(viaNext);
+        }
+
+        @Test
+        @DisplayName("无法匹配的表达式抛出 DateTimeException")
+        void should_throw_when_no_execution_found() {
+            // Feb 30 never exists - with maxYears=4 default, this should fail
+            CronExpression expr = CronExpression.parse("0 0 30 2 *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+
+            assertThatThrownBy(() -> from.with(expr))
+                    .isInstanceOf(DateTimeException.class);
+        }
+    }
+
+    // ==================== Filtered Scheduling Tests ====================
+
+    @Nested
+    @DisplayName("Filtered Scheduling 过滤调度测试")
+    class FilteredSchedulingTests {
+
+        @Test
+        @DisplayName("nextExecution 配合工作日过滤跳过周末")
+        void should_skip_weekends_with_weekday_filter() {
+            // Every day at 9:00, but filter for weekdays only
+            CronExpression expr = CronExpression.parse("0 9 * * *");
+            // 2026-01-03 is Saturday
+            ZonedDateTime from = zdt(2026, 1, 2, 12, 0, 0); // Friday afternoon
+            ZonedDateTime result = expr.nextExecution(from,
+                    t -> t.getDayOfWeek().getValue() <= 5);
+
+            assertThat(result).isNotNull();
+            // Should skip Sat (3rd) and Sun (4th), land on Monday (5th)
+            assertThat(result).isEqualTo(zdt(2026, 1, 5, 9, 0));
+            assertThat(result.getDayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
+        }
+
+        @Test
+        @DisplayName("nextExecution 配合节假日排除集合")
+        void should_skip_holidays() {
+            CronExpression expr = CronExpression.parse("0 9 * * *");
+            Set<LocalDate> holidays = Set.of(
+                    LocalDate.of(2026, 1, 1),
+                    LocalDate.of(2026, 1, 2)
+            );
+            ZonedDateTime from = zdt(2025, 12, 31, 12, 0, 0);
+            ZonedDateTime result = expr.nextExecution(from,
+                    t -> !holidays.contains(t.toLocalDate()));
+
+            assertThat(result).isNotNull();
+            assertThat(result).isEqualTo(zdt(2026, 1, 3, 9, 0));
+        }
+
+        @Test
+        @DisplayName("nextExecution 配合始终为 false 的过滤器返回 null")
+        void should_return_null_for_always_false_filter() {
+            CronExpression expr = CronExpression.parse("0 9 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            ZonedDateTime result = expr.nextExecution(from, _ -> false);
+
+            assertThat(result).isNull();
+        }
+
+        @Test
+        @DisplayName("previousExecution 配合过滤器正确工作")
+        void should_filter_previous_execution() {
+            CronExpression expr = CronExpression.parse("0 9 * * *");
+            // 2026-01-05 is Monday; look backward skipping weekends
+            ZonedDateTime from = zdt(2026, 1, 5, 12, 0, 0);
+            ZonedDateTime result = expr.previousExecution(from,
+                    t -> t.getDayOfWeek().getValue() <= 5);
+
+            assertThat(result).isNotNull();
+            // Monday 9:00 should match since it's a weekday
+            assertThat(result).isEqualTo(zdt(2026, 1, 5, 9, 0));
+        }
+
+        @Test
+        @DisplayName("nextExecution(null, filter) 抛出 NullPointerException")
+        void should_throw_npe_on_null_from() {
+            CronExpression expr = CronExpression.parse("0 9 * * *");
+            assertThatThrownBy(() -> expr.nextExecution(null, _ -> true))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("nextExecution(from, null) 抛出 NullPointerException")
+        void should_throw_npe_on_null_filter() {
+            CronExpression expr = CronExpression.parse("0 9 * * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            assertThatThrownBy(() -> expr.nextExecution(from, null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    // ==================== Overlap Detection Tests ====================
+
+    @Nested
+    @DisplayName("Overlap Detection 重叠检测测试")
+    class OverlapDetectionTests {
+
+        @Test
+        @DisplayName("每天午夜 与 每月1号午夜 在1号重叠")
+        void should_find_overlap_on_first_of_month() {
+            CronExpression daily = CronExpression.parse("0 0 * * *");
+            CronExpression monthly = CronExpression.parse("0 0 1 * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+
+            ZonedDateTime overlap = daily.nextOverlap(monthly, from);
+            assertThat(overlap).isNotNull();
+            assertThat(overlap).isEqualTo(zdt(2026, 2, 1, 0, 0));
+        }
+
+        @Test
+        @DisplayName("周一9点 与 周五17点 无重叠")
+        void should_not_find_overlap_for_disjoint_schedules() {
+            CronExpression mon9 = CronExpression.parse("0 9 * * MON");
+            CronExpression fri17 = CronExpression.parse("0 17 * * FRI");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+
+            ZonedDateTime overlap = mon9.nextOverlap(fri17, from);
+            assertThat(overlap).isNull();
+        }
+
+        @Test
+        @DisplayName("等价的每天表达式总是重叠")
+        void should_always_overlap_for_equivalent_schedules() {
+            CronExpression expr1 = CronExpression.parse("0 0 * * *");
+            CronExpression expr2 = CronExpression.parse("@daily");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+
+            ZonedDateTime overlap = expr1.nextOverlap(expr2, from);
+            assertThat(overlap).isNotNull();
+            assertThat(overlap).isEqualTo(zdt(2026, 1, 2, 0, 0));
+        }
+
+        @Test
+        @DisplayName("hasOverlapBetween 范围内有重叠返回 true")
+        void should_return_true_when_overlap_in_range() {
+            CronExpression daily = CronExpression.parse("0 0 * * *");
+            CronExpression monthly = CronExpression.parse("0 0 1 * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            ZonedDateTime to = zdt(2026, 3, 1, 0, 0, 0);
+
+            assertThat(daily.hasOverlapBetween(monthly, from, to)).isTrue();
+        }
+
+        @Test
+        @DisplayName("hasOverlapBetween 范围内无重叠返回 false")
+        void should_return_false_when_no_overlap_in_range() {
+            CronExpression mon9 = CronExpression.parse("0 9 * * MON");
+            CronExpression fri17 = CronExpression.parse("0 17 * * FRI");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            ZonedDateTime to = zdt(2026, 12, 31, 23, 59, 59);
+
+            assertThat(mon9.hasOverlapBetween(fri17, from, to)).isFalse();
+        }
+
+        @Test
+        @DisplayName("null 参数抛出 NullPointerException")
+        void should_throw_npe_on_null_args() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            CronExpression other = CronExpression.parse("0 0 1 * *");
+            ZonedDateTime from = zdt(2026, 1, 1, 0, 0, 0);
+            ZonedDateTime to = zdt(2026, 12, 31, 0, 0, 0);
+
+            assertThatThrownBy(() -> expr.nextOverlap(null, from))
+                    .isInstanceOf(NullPointerException.class);
+            assertThatThrownBy(() -> expr.nextOverlap(other, null))
+                    .isInstanceOf(NullPointerException.class);
+            assertThatThrownBy(() -> expr.hasOverlapBetween(null, from, to))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("from >= to 抛出 IllegalArgumentException")
+        void should_throw_iae_when_from_not_before_to() {
+            CronExpression expr = CronExpression.parse("0 0 * * *");
+            CronExpression other = CronExpression.parse("0 0 1 * *");
+            ZonedDateTime time = zdt(2026, 1, 1, 0, 0, 0);
+
+            assertThatThrownBy(() -> expr.hasOverlapBetween(other, time, time))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> expr.hasOverlapBetween(other,
+                    zdt(2026, 6, 1, 0, 0, 0), zdt(2026, 1, 1, 0, 0, 0)))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 }

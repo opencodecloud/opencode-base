@@ -2,6 +2,7 @@
 package cloud.opencode.base.json.diff;
 
 import cloud.opencode.base.json.JsonNode;
+import cloud.opencode.base.json.exception.OpenJsonProcessingException;
 import cloud.opencode.base.json.patch.JsonPatch;
 
 import java.util.*;
@@ -79,12 +80,22 @@ public final class JsonDiff {
         @Override
         public String toString() {
             return switch (type) {
-                case ADDED -> "ADDED " + path + ": " + targetValue;
-                case REMOVED -> "REMOVED " + path + ": " + sourceValue;
-                case CHANGED -> "CHANGED " + path + ": " + sourceValue + " -> " + targetValue;
+                case ADDED -> "ADDED " + path + ": " + truncateValue(targetValue);
+                case REMOVED -> "REMOVED " + path + ": " + truncateValue(sourceValue);
+                case CHANGED -> "CHANGED " + path + ": " + truncateValue(sourceValue) + " -> " + truncateValue(targetValue);
                 case TYPE_CHANGED -> "TYPE_CHANGED " + path + ": " +
                         getTypeName(sourceValue) + " -> " + getTypeName(targetValue);
             };
+        }
+
+        private String truncateValue(JsonNode node) {
+            if (node == null) return "null";
+            if (node.isNull()) return "null";
+            if (node.isObject()) return "{...}(" + node.size() + " keys)";
+            if (node.isArray()) return "[...](" + node.size() + " items)";
+            String s = node.asString();
+            if (s != null && s.length() > 50) return s.substring(0, 50) + "...";
+            return String.valueOf(node);
         }
 
         private String getTypeName(JsonNode node) {
@@ -180,10 +191,15 @@ public final class JsonDiff {
             if (isIdentical()) {
                 return "Documents are identical";
             }
-            long added = differences.stream().filter(d -> d.type() == DiffType.ADDED).count();
-            long removed = differences.stream().filter(d -> d.type() == DiffType.REMOVED).count();
-            long changed = differences.stream().filter(d -> d.type() == DiffType.CHANGED).count();
-            long typeChanged = differences.stream().filter(d -> d.type() == DiffType.TYPE_CHANGED).count();
+            int added = 0, removed = 0, changed = 0, typeChanged = 0;
+            for (Difference d : differences) {
+                switch (d.type()) {
+                    case ADDED -> added++;
+                    case REMOVED -> removed++;
+                    case CHANGED -> changed++;
+                    case TYPE_CHANGED -> typeChanged++;
+                }
+            }
 
             StringBuilder sb = new StringBuilder("Differences: ");
             List<String> parts = new ArrayList<>();
@@ -208,10 +224,12 @@ public final class JsonDiff {
      * @param target the target document - 目标文档
      * @return the diff result - 差异结果
      */
+    private static final int MAX_DEPTH = 512;
+
     public static DiffResult diff(JsonNode source, JsonNode target) {
         List<Difference> differences = new ArrayList<>();
-        compareNodes(source, target, "", differences);
-        return new DiffResult(List.copyOf(differences), source, target);
+        compareNodes(source, target, "", differences, 0);
+        return new DiffResult(Collections.unmodifiableList(differences), source, target);
     }
 
     /**
@@ -226,7 +244,12 @@ public final class JsonDiff {
         return diff(source, target).isIdentical();
     }
 
-    private static void compareNodes(JsonNode source, JsonNode target, String path, List<Difference> differences) {
+    private static void compareNodes(JsonNode source, JsonNode target, String path, List<Difference> differences, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw OpenJsonProcessingException.pathError(
+                    "Diff nesting depth exceeds maximum of " + MAX_DEPTH);
+        }
+
         // Handle nulls
         if (source == null || source.isNull()) {
             if (target != null && !target.isNull()) {
@@ -247,9 +270,9 @@ public final class JsonDiff {
 
         // Compare by type
         if (source.isObject()) {
-            compareObjects(source, target, path, differences);
+            compareObjects(source, target, path, differences, depth);
         } else if (source.isArray()) {
-            compareArrays(source, target, path, differences);
+            compareArrays(source, target, path, differences, depth);
         } else {
             // Scalar comparison
             if (!nodesEqual(source, target)) {
@@ -258,8 +281,8 @@ public final class JsonDiff {
         }
     }
 
-    private static void compareObjects(JsonNode source, JsonNode target, String path, List<Difference> differences) {
-        Set<String> allKeys = new LinkedHashSet<>();
+    private static void compareObjects(JsonNode source, JsonNode target, String path, List<Difference> differences, int depth) {
+        Set<String> allKeys = new LinkedHashSet<>(source.size() + target.size());
         allKeys.addAll(source.keys());
         allKeys.addAll(target.keys());
 
@@ -273,12 +296,12 @@ public final class JsonDiff {
             } else if (targetChild == null) {
                 differences.add(new Difference(DiffType.REMOVED, childPath, sourceChild, null));
             } else {
-                compareNodes(sourceChild, targetChild, childPath, differences);
+                compareNodes(sourceChild, targetChild, childPath, differences, depth + 1);
             }
         }
     }
 
-    private static void compareArrays(JsonNode source, JsonNode target, String path, List<Difference> differences) {
+    private static void compareArrays(JsonNode source, JsonNode target, String path, List<Difference> differences, int depth) {
         int maxLen = Math.max(source.size(), target.size());
 
         for (int i = 0; i < maxLen; i++) {
@@ -291,7 +314,7 @@ public final class JsonDiff {
             } else if (targetChild == null) {
                 differences.add(new Difference(DiffType.REMOVED, childPath, sourceChild, null));
             } else {
-                compareNodes(sourceChild, targetChild, childPath, differences);
+                compareNodes(sourceChild, targetChild, childPath, differences, depth + 1);
             }
         }
     }

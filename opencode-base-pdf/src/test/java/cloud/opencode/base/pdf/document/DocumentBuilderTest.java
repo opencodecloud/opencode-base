@@ -1,5 +1,7 @@
 package cloud.opencode.base.pdf.document;
 
+import cloud.opencode.base.pdf.content.PdfColor;
+import cloud.opencode.base.pdf.content.PdfWatermark;
 import cloud.opencode.base.pdf.font.PdfFont;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,7 +18,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-pdf V1.0.0
+ * @since JDK 25, opencode-base-pdf V1.0.3
  */
 @DisplayName("DocumentBuilder 测试")
 class DocumentBuilderTest {
@@ -430,6 +432,187 @@ class DocumentBuilderTest {
 
             assertThat(entry.path()).isEqualTo(path);
             assertThat(entry.name()).isEqualTo("TestFont");
+        }
+    }
+
+    @Nested
+    @DisplayName("水印设置测试")
+    class WatermarkTests {
+
+        @Test
+        @DisplayName("watermark(PdfWatermark) 设置水印对象")
+        void testWatermarkObject() {
+            PdfWatermark watermark = PdfWatermark.text("CONFIDENTIAL").opacity(0.3f);
+            DocumentBuilder builder = DocumentBuilder.create().watermark(watermark);
+
+            assertThat(builder.getWatermark()).isSameAs(watermark);
+            assertThat(builder.getWatermark().getText()).isEqualTo("CONFIDENTIAL");
+        }
+
+        @Test
+        @DisplayName("watermark(String) 便捷方法创建水印")
+        void testWatermarkString() {
+            DocumentBuilder builder = DocumentBuilder.create().watermark("DRAFT");
+
+            assertThat(builder.getWatermark()).isNotNull();
+            assertThat(builder.getWatermark().getText()).isEqualTo("DRAFT");
+        }
+
+        @Test
+        @DisplayName("watermark(String) null 清除水印")
+        void testWatermarkStringNull() {
+            DocumentBuilder builder = DocumentBuilder.create()
+                .watermark("DRAFT")
+                .watermark((String) null);
+
+            assertThat(builder.getWatermark()).isNull();
+        }
+
+        @Test
+        @DisplayName("watermark(PdfWatermark) null 清除水印")
+        void testWatermarkObjectNull() {
+            DocumentBuilder builder = DocumentBuilder.create()
+                .watermark(PdfWatermark.text("X"))
+                .watermark((PdfWatermark) null);
+
+            assertThat(builder.getWatermark()).isNull();
+        }
+
+        @Test
+        @DisplayName("默认无水印")
+        void testDefaultNoWatermark() {
+            DocumentBuilder builder = DocumentBuilder.create();
+
+            assertThat(builder.getWatermark()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("页眉设置测试")
+    class HeaderTests {
+
+        @Test
+        @DisplayName("header(PdfHeader) 设置页眉对象")
+        void testHeaderObject() {
+            PdfHeader header = PdfHeader.builder()
+                .left("Report")
+                .right("Page {page}");
+            DocumentBuilder builder = DocumentBuilder.create().header(header);
+
+            assertThat(builder.getHeader()).isSameAs(header);
+        }
+
+        @Test
+        @DisplayName("header(String) 便捷方法创建页眉")
+        void testHeaderString() {
+            DocumentBuilder builder = DocumentBuilder.create().header("Document Title");
+
+            assertThat(builder.getHeader()).isNotNull();
+            assertThat(builder.getHeader().getCenter()).isEqualTo("Document Title");
+        }
+
+        @Test
+        @DisplayName("header(String) null 清除页眉")
+        void testHeaderStringNull() {
+            DocumentBuilder builder = DocumentBuilder.create()
+                .header("Title")
+                .header((String) null);
+
+            assertThat(builder.getHeader()).isNull();
+        }
+
+        @Test
+        @DisplayName("header(PdfHeader) null 清除页眉")
+        void testHeaderObjectNull() {
+            DocumentBuilder builder = DocumentBuilder.create()
+                .header(PdfHeader.of("X"))
+                .header((PdfHeader) null);
+
+            assertThat(builder.getHeader()).isNull();
+        }
+
+        @Test
+        @DisplayName("默认无页眉")
+        void testDefaultNoHeader() {
+            DocumentBuilder builder = DocumentBuilder.create();
+
+            assertThat(builder.getHeader()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("页脚设置测试")
+    class FooterTests {
+
+        @Test
+        @DisplayName("footer(PdfFooter) 设置页脚对象")
+        void testFooterObject() {
+            PdfFooter footer = PdfFooter.builder()
+                .center("Page {page} of {total}");
+            DocumentBuilder builder = DocumentBuilder.create().footer(footer);
+
+            assertThat(builder.getFooter()).isSameAs(footer);
+        }
+
+        @Test
+        @DisplayName("footer(String) 便捷方法创建页脚")
+        void testFooterString() {
+            DocumentBuilder builder = DocumentBuilder.create().footer("Page {page}");
+
+            assertThat(builder.getFooter()).isNotNull();
+            assertThat(builder.getFooter().getCenter()).isEqualTo("Page {page}");
+        }
+
+        @Test
+        @DisplayName("footer(String) null 清除页脚")
+        void testFooterStringNull() {
+            DocumentBuilder builder = DocumentBuilder.create()
+                .footer("Footer")
+                .footer((String) null);
+
+            assertThat(builder.getFooter()).isNull();
+        }
+
+        @Test
+        @DisplayName("footer(PdfFooter) null 清除页脚")
+        void testFooterObjectNull() {
+            DocumentBuilder builder = DocumentBuilder.create()
+                .footer(PdfFooter.of("X"))
+                .footer((PdfFooter) null);
+
+            assertThat(builder.getFooter()).isNull();
+        }
+
+        @Test
+        @DisplayName("默认无页脚")
+        void testDefaultNoFooter() {
+            DocumentBuilder builder = DocumentBuilder.create();
+
+            assertThat(builder.getFooter()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("水印/页眉/页脚链式调用测试")
+    class WatermarkHeaderFooterFluentTests {
+
+        @Test
+        @DisplayName("完整链式调用包含水印/页眉/页脚")
+        void testFullFluentApiWithDecorations() {
+            DocumentBuilder builder = DocumentBuilder.create()
+                .title("Report")
+                .author("Author")
+                .watermark("CONFIDENTIAL")
+                .header("Report Header")
+                .footer("Page {page} of {total}");
+
+            assertThat(builder.getTitle()).isEqualTo("Report");
+            assertThat(builder.getWatermark()).isNotNull();
+            assertThat(builder.getWatermark().getText()).isEqualTo("CONFIDENTIAL");
+            assertThat(builder.getHeader()).isNotNull();
+            assertThat(builder.getHeader().getCenter()).isEqualTo("Report Header");
+            assertThat(builder.getFooter()).isNotNull();
+            assertThat(builder.getFooter().getCenter()).isEqualTo("Page {page} of {total}");
         }
     }
 }

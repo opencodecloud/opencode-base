@@ -1,5 +1,6 @@
 package cloud.opencode.base.reflect.proxy;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -44,7 +45,37 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ProxyUtil {
 
-    private static final Map<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
+    /**
+     * Composite key for proxy class cache (weak ClassLoader + interface)
+     * 代理类缓存的复合键（弱引用ClassLoader + 接口）
+     */
+    private static final class ProxyClassKey {
+        private final WeakReference<ClassLoader> loaderRef;
+        private final Class<?> iface;
+        private final int hashCode;
+
+        ProxyClassKey(ClassLoader loader, Class<?> iface) {
+            this.loaderRef = new WeakReference<>(loader);
+            this.iface = iface;
+            this.hashCode = System.identityHashCode(loader) * 31 + iface.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ProxyClassKey that)) return false;
+            ClassLoader thisLoader = this.loaderRef.get();
+            ClassLoader thatLoader = that.loaderRef.get();
+            return thisLoader != null && thisLoader == thatLoader && iface == that.iface;
+        }
+
+        @Override
+        public int hashCode() {
+            return hashCode;
+        }
+    }
+
+    private static final Map<ProxyClassKey, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     private ProxyUtil() {
     }
@@ -61,8 +92,9 @@ public final class ProxyUtil {
      */
     public static Class<?> getProxyClass(ClassLoader loader, Class<?>... interfaces) {
         if (interfaces.length == 1) {
-            return PROXY_CLASS_CACHE.computeIfAbsent(interfaces[0],
-                    iface -> Proxy.getProxyClass(loader, iface));
+            ProxyClassKey key = new ProxyClassKey(loader, interfaces[0]);
+            return PROXY_CLASS_CACHE.computeIfAbsent(key,
+                    k -> Proxy.getProxyClass(loader, interfaces[0]));
         }
         return Proxy.getProxyClass(loader, interfaces);
     }

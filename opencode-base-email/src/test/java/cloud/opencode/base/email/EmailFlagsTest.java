@@ -1,6 +1,5 @@
 package cloud.opencode.base.email;
 
-import jakarta.mail.Flags;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -40,18 +39,13 @@ class EmailFlagsTest {
     }
 
     @Nested
-    @DisplayName("from()")
-    class FromMethod {
+    @DisplayName("fromImapFlags()")
+    class FromImapFlagsMethod {
 
         @Test
-        @DisplayName("should create from Jakarta Mail Flags")
-        void shouldCreateFromJakartaMailFlags() {
-            Flags mailFlags = new Flags();
-            mailFlags.add(Flags.Flag.SEEN);
-            mailFlags.add(Flags.Flag.FLAGGED);
-            mailFlags.add(Flags.Flag.ANSWERED);
-
-            EmailFlags flags = EmailFlags.from(mailFlags);
+        @DisplayName("should create from IMAP flags string")
+        void shouldCreateFromImapFlagsString() {
+            EmailFlags flags = EmailFlags.fromImapFlags("(\\Seen \\Flagged \\Answered)");
 
             assertThat(flags.seen()).isTrue();
             assertThat(flags.flagged()).isTrue();
@@ -63,27 +57,66 @@ class EmailFlagsTest {
         @Test
         @DisplayName("should return UNREAD for null flags")
         void shouldReturnUnreadForNullFlags() {
-            EmailFlags flags = EmailFlags.from(null);
+            EmailFlags flags = EmailFlags.fromImapFlags(null);
 
             assertThat(flags).isEqualTo(EmailFlags.UNREAD);
+        }
+
+        @Test
+        @DisplayName("should return UNREAD for blank flags")
+        void shouldReturnUnreadForBlankFlags() {
+            EmailFlags flags = EmailFlags.fromImapFlags("");
+
+            assertThat(flags).isEqualTo(EmailFlags.UNREAD);
+        }
+
+        @Test
+        @DisplayName("should parse all flag types")
+        void shouldParseAllFlagTypes() {
+            EmailFlags flags = EmailFlags.fromImapFlags(
+                    "(\\Seen \\Answered \\Flagged \\Deleted \\Draft \\Recent)");
+
+            assertThat(flags.seen()).isTrue();
+            assertThat(flags.answered()).isTrue();
+            assertThat(flags.flagged()).isTrue();
+            assertThat(flags.deleted()).isTrue();
+            assertThat(flags.draft()).isTrue();
+            assertThat(flags.recent()).isTrue();
         }
     }
 
     @Nested
-    @DisplayName("toMailFlags()")
-    class ToMailFlagsMethod {
+    @DisplayName("toImapFlags()")
+    class ToImapFlagsMethod {
 
         @Test
-        @DisplayName("should convert to Jakarta Mail Flags")
-        void shouldConvertToJakartaMailFlags() {
+        @DisplayName("should convert to IMAP flags string")
+        void shouldConvertToImapFlagsString() {
             EmailFlags flags = new EmailFlags(true, true, true, false, false, false);
 
-            Flags mailFlags = flags.toMailFlags();
+            String imapFlags = flags.toImapFlags();
 
-            assertThat(mailFlags.contains(Flags.Flag.SEEN)).isTrue();
-            assertThat(mailFlags.contains(Flags.Flag.ANSWERED)).isTrue();
-            assertThat(mailFlags.contains(Flags.Flag.FLAGGED)).isTrue();
-            assertThat(mailFlags.contains(Flags.Flag.DELETED)).isFalse();
+            assertThat(imapFlags).contains("\\Seen");
+            assertThat(imapFlags).contains("\\Answered");
+            assertThat(imapFlags).contains("\\Flagged");
+            assertThat(imapFlags).doesNotContain("\\Deleted");
+            assertThat(imapFlags).startsWith("(");
+            assertThat(imapFlags).endsWith(")");
+        }
+
+        @Test
+        @DisplayName("should round-trip through IMAP flags string")
+        void shouldRoundTripThroughImapFlagsString() {
+            EmailFlags original = new EmailFlags(true, false, true, false, true, false);
+
+            String imapFlags = original.toImapFlags();
+            EmailFlags restored = EmailFlags.fromImapFlags(imapFlags);
+
+            assertThat(restored.seen()).isEqualTo(original.seen());
+            assertThat(restored.answered()).isEqualTo(original.answered());
+            assertThat(restored.flagged()).isEqualTo(original.flagged());
+            assertThat(restored.deleted()).isEqualTo(original.deleted());
+            assertThat(restored.draft()).isEqualTo(original.draft());
         }
     }
 

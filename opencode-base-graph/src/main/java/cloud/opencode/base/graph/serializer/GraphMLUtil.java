@@ -118,6 +118,12 @@ public final class GraphMLUtil {
             "<graph[^>]+edgedefault=\"(directed|undirected)\"",
             Pattern.MULTILINE);
 
+    /**
+     * Maximum GraphML input size for parsing (10 MB).
+     * GraphML解析输入的最大大小（10 MB）。
+     */
+    private static final int MAX_INPUT_LENGTH = 10 * 1024 * 1024;
+
     private GraphMLUtil() {
         // Utility class
     }
@@ -308,6 +314,10 @@ public final class GraphMLUtil {
         if (graphml == null || graphml.isBlank()) {
             return new DirectedGraph<>();
         }
+        if (graphml.length() > MAX_INPUT_LENGTH) {
+            throw new IllegalArgumentException(
+                    "GraphML input exceeds maximum size of " + MAX_INPUT_LENGTH + " characters");
+        }
 
         // Determine if directed
         boolean directed = true;
@@ -387,6 +397,10 @@ public final class GraphMLUtil {
     public static Graph<String> readFromFile(Path path,
                                               Map<String, Map<String, String>> vertexAttributes,
                                               Map<String, Map<String, String>> edgeAttributes) throws IOException {
+        if (Files.size(path) > MAX_INPUT_LENGTH) {
+            throw new IllegalArgumentException(
+                    "GraphML file exceeds maximum size of " + MAX_INPUT_LENGTH + " bytes");
+        }
         String graphml = Files.readString(path, StandardCharsets.UTF_8);
         return fromGraphML(graphml, vertexAttributes, edgeAttributes);
     }

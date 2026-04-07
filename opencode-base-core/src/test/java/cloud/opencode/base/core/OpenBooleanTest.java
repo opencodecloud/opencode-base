@@ -204,7 +204,7 @@ class OpenBooleanTest {
         void testAnd() {
             assertThat(OpenBoolean.and(true, true, true)).isTrue();
             assertThat(OpenBoolean.and(true, false, true)).isFalse();
-            assertThat(OpenBoolean.and()).isFalse();
+            assertThat(OpenBoolean.and()).isTrue();
         }
 
         @Test

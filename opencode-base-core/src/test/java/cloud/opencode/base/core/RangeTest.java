@@ -24,7 +24,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
+import java.util.stream.IntStream;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -714,6 +717,42 @@ class RangeTest {
             assertFalse(range.contains(0.5));
             assertTrue(range.contains(1.0));
             assertTrue(range.contains(10.0));
+        }
+    }
+
+    // ==================== Predicate Tests ====================
+
+    @Nested
+    @DisplayName("Predicate support")
+    class PredicateTests {
+        @Test void testDelegatesToContains() {
+            Range<Integer> range = Range.closed(1, 10);
+            assertThat(range.test(5)).isTrue();
+            assertThat(range.test(0)).isFalse();
+            assertThat(range.test(11)).isFalse();
+        }
+
+        @Test void usableAsStreamFilter() {
+            Range<Integer> range = Range.closed(3, 7);
+            List<Integer> result = IntStream.rangeClosed(1, 10)
+                .boxed().filter(range).toList();
+            assertThat(result).containsExactly(3, 4, 5, 6, 7);
+        }
+
+        @Test void composableWithOtherPredicates() {
+            Range<Integer> range = Range.closed(1, 100);
+            Predicate<Integer> evenAndInRange = range.and(n -> n % 2 == 0);
+            assertThat(evenAndInRange.test(4)).isTrue();
+            assertThat(evenAndInRange.test(3)).isFalse();
+            assertThat(evenAndInRange.test(200)).isFalse();
+        }
+
+        @Test void negatable() {
+            Range<Integer> range = Range.closed(1, 5);
+            Predicate<Integer> outside = range.negate();
+            assertThat(outside.test(0)).isTrue();
+            assertThat(outside.test(3)).isFalse();
+            assertThat(outside.test(6)).isTrue();
         }
     }
 }

@@ -7,7 +7,7 @@
     <parent>
         <groupId>cloud.opencode.base</groupId>
         <artifactId>opencode-base-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.3</version>
     </parent>
 
     <artifactId>opencode-base-core</artifactId>
@@ -17,6 +17,14 @@
     <description>Core utilities - zero dependency base library for JDK 25+</description>
 
     <dependencies>
+        <!-- JSpecify null-safety annotations (compile-only) -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>1.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- 测试依赖 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

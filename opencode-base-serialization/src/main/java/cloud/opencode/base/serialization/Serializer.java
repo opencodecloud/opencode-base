@@ -1,7 +1,14 @@
 
 package cloud.opencode.base.serialization;
 
+import cloud.opencode.base.serialization.exception.OpenSerializationException;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Type;
+import java.util.Objects;
 
 /**
  * Serializer - Core Serialization Interface
@@ -120,10 +127,8 @@ public interface Serializer {
      * Checks if this serializer supports the given type.
      * 检查此序列化器是否支持给定类型。
      *
-     * <p>Some serializers have specific type requirements.
-     * For example, ProtobufSerializer only supports Protobuf Message types.</p>
-     * <p>某些序列化器有特定的类型要求。
-     * 例如，ProtobufSerializer 仅支持 Protobuf Message 类型。</p>
+     * <p>Some serializers have specific type requirements.</p>
+     * <p>某些序列化器有特定的类型要求。</p>
      *
      * @param type the type to check - 要检查的类型
      * @return true if supported - 如果支持则返回 true
@@ -143,5 +148,113 @@ public interface Serializer {
      */
     default boolean isTextBased() {
         return false;
+    }
+
+    // ==================== Streaming API | 流式 API ====================
+
+    /**
+     * Serializes an object to an output stream.
+     * 将对象序列化到输出流。
+     *
+     * <p>Default implementation serializes to byte array then writes to stream.</p>
+     * <p>默认实现先序列化为字节数组再写入流。</p>
+     *
+     * @param obj the object to serialize | 要序列化的对象
+     * @param out the output stream | 输出流
+     * @throws OpenSerializationException if serialization fails | 序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    default void serialize(Object obj, OutputStream out) {
+        Objects.requireNonNull(out, "OutputStream must not be null");
+        try {
+            byte[] data = serialize(obj);
+            out.write(data);
+            out.flush();
+        } catch (IOException e) {
+            throw new OpenSerializationException("Failed to write serialized data to stream", e);
+        }
+    }
+
+    /**
+     * Deserializes from an input stream.
+     * 从输入流反序列化。
+     *
+     * <p>Default implementation reads all bytes then deserializes.</p>
+     * <p>默认实现先读取所有字节再反序列化。</p>
+     *
+     * @param in   the input stream | 输入流
+     * @param type the target class | 目标类
+     * @param <T>  the target type | 目标类型
+     * @return the deserialized object | 反序列化后的对象
+     * @throws OpenSerializationException if deserialization fails | 反序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    default <T> T deserialize(InputStream in, Class<T> type) {
+        Objects.requireNonNull(in, "InputStream must not be null");
+        Objects.requireNonNull(type, "Type must not be null");
+        try {
+            byte[] data = readLimited(in);
+            return deserialize(data, type);
+        } catch (IOException e) {
+            throw new OpenSerializationException("Failed to read data from stream", e);
+        }
+    }
+
+    /**
+     * Deserializes a generic type from an input stream.
+     * 从输入流反序列化泛型类型。
+     *
+     * @param in      the input stream | 输入流
+     * @param typeRef the type reference | 类型引用
+     * @param <T>     the target type | 目标类型
+     * @return the deserialized object | 反序列化后的对象
+     * @throws OpenSerializationException if deserialization fails | 反序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    default <T> T deserialize(InputStream in, TypeReference<T> typeRef) {
+        Objects.requireNonNull(in, "InputStream must not be null");
+        Objects.requireNonNull(typeRef, "TypeReference must not be null");
+        try {
+            byte[] data = readLimited(in);
+            return deserialize(data, typeRef);
+        } catch (IOException e) {
+            throw new OpenSerializationException("Failed to read data from stream", e);
+        }
+    }
+
+    // ==================== Internal Helpers | 内部辅助 ====================
+
+    /**
+     * Reads from an InputStream with a size limit to prevent OOM DoS.
+     * 从 InputStream 读取并限制大小，防止 OOM DoS。
+     */
+    private static byte[] readLimited(InputStream in) throws IOException {
+        final int maxStreamSize = 256 * 1024 * 1024; // 256 MB
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(8192);
+        byte[] buffer = new byte[8192];
+        long totalRead = 0;
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+            totalRead += bytesRead;
+            if (totalRead > maxStreamSize) {
+                throw new OpenSerializationException(
+                        "Input stream exceeds maximum size limit of " + maxStreamSize + " bytes");
+            }
+            bos.write(buffer, 0, bytesRead);
+        }
+        return bos.toByteArray();
+    }
+
+    // ==================== Metadata API | 元数据 API ====================
+
+    /**
+     * Returns metadata information about this serializer.
+     * 返回此序列化器的元数据信息。
+     *
+     * @return the serializer info | 序列化器信息
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    default SerializerInfo info() {
+        return new SerializerInfo(getFormat(), getMimeType(), isTextBased(), false, false, getFormat() + " serializer");
     }
 }

@@ -179,6 +179,10 @@ public final class XmlBinder {
      * Unmarshals XML element to object.
      * 将 XML 元素解组为对象。
      *
+     * <p>Supports both regular classes (via no-arg constructor) and records
+     * (via canonical constructor with component values from XML).</p>
+     * <p>支持普通类（通过无参构造函数）和记录（通过从 XML 获取组件值的规范构造函数）。</p>
+     *
      * @param <T>     the type parameter | 类型参数
      * @param element the XML element | XML 元素
      * @param clazz   the target type | 目标类型
@@ -186,9 +190,14 @@ public final class XmlBinder {
      */
     public <T> T unmarshal(XmlElement element, Class<T> clazz) {
         try {
+            if (clazz.isRecord()) {
+                return unmarshalRecord(element, clazz);
+            }
             T instance = createInstance(clazz);
             populateFields(instance, element, clazz);
             return instance;
+        } catch (XmlBindException e) {
+            throw e;
         } catch (Exception e) {
             throw new XmlBindException(clazz, e.getMessage(), e);
         }
@@ -196,18 +205,165 @@ public final class XmlBinder {
 
     @SuppressWarnings("unchecked")
     private <T> T createInstance(Class<T> clazz) throws Exception {
-        // Try no-arg constructor
-        try {
-            Constructor<T> constructor = clazz.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            return constructor.newInstance();
-        } catch (NoSuchMethodException e) {
-            // For records, we need to collect all component values first
-            if (clazz.isRecord()) {
-                throw new XmlBindException(clazz, "Records require special handling");
+        Constructor<T> constructor = clazz.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        return constructor.newInstance();
+    }
+
+    /**
+     * Unmarshals XML element to a record instance.
+     * 将 XML 元素解组为记录实例。
+     */
+    @SuppressWarnings("unchecked")
+    private <T> T unmarshalRecord(XmlElement element, Class<T> clazz) throws Exception {
+        RecordComponent[] components = clazz.getRecordComponents();
+        Class<?>[] paramTypes = new Class<?>[components.length];
+        Object[] paramValues = new Object[components.length];
+
+        for (int i = 0; i < components.length; i++) {
+            RecordComponent rc = components[i];
+            paramTypes[i] = rc.getType();
+
+            // Check if @XmlIgnore is present
+            if (rc.isAnnotationPresent(XmlIgnore.class)) {
+                paramValues[i] = getDefaultValue(rc.getType());
+                continue;
             }
-            throw e;
+
+            // Handle @XmlAttribute
+            if (rc.isAnnotationPresent(XmlAttribute.class)) {
+                XmlAttribute attr = rc.getAnnotation(XmlAttribute.class);
+                String name = attr.value().isEmpty() ? rc.getName() : attr.value();
+                String value = element.getAttribute(name);
+                paramValues[i] = value != null ? convertValue(value, rc.getType()) : getDefaultValue(rc.getType());
+                continue;
+            }
+
+            // Handle @XmlValue
+            if (rc.isAnnotationPresent(XmlValue.class)) {
+                String text = element.getText();
+                paramValues[i] = (text != null && !text.isBlank())
+                    ? convertValue(text, rc.getType()) : getDefaultValue(rc.getType());
+                continue;
+            }
+
+            // Handle @XmlElementList
+            if (rc.isAnnotationPresent(XmlElementList.class)) {
+                paramValues[i] = unmarshalRecordList(element, rc);
+                continue;
+            }
+
+            // Default to XmlElement behavior (annotation or component name)
+            cloud.opencode.base.xml.bind.annotation.XmlElement elemAnnotation =
+                rc.getAnnotation(cloud.opencode.base.xml.bind.annotation.XmlElement.class);
+            String name = (elemAnnotation != null && !elemAnnotation.value().isEmpty())
+                ? elemAnnotation.value() : rc.getName();
+
+            XmlElement child = element.getChild(name);
+            if (child != null) {
+                if (isSimpleType(rc.getType())) {
+                    paramValues[i] = convertValue(child.getText(), rc.getType());
+                } else if (List.class.isAssignableFrom(rc.getType())) {
+                    // List without @XmlElementList — treat children as list items
+                    paramValues[i] = unmarshalRecordDefaultList(child, rc);
+                } else {
+                    paramValues[i] = unmarshal(child, rc.getType());
+                }
+            } else {
+                paramValues[i] = getDefaultValue(rc.getType());
+            }
         }
+
+        Constructor<T> constructor = clazz.getDeclaredConstructor(paramTypes);
+        constructor.setAccessible(true);
+        return constructor.newInstance(paramValues);
+    }
+
+    /**
+     * Unmarshals a list field for a record component with @XmlElementList.
+     * 为带有 @XmlElementList 注解的记录组件解组列表字段。
+     */
+    private Object unmarshalRecordList(XmlElement element, RecordComponent rc) throws Exception {
+        XmlElementList annotation = rc.getAnnotation(XmlElementList.class);
+        String wrapperName = annotation.value();
+        String itemName = annotation.itemName();
+
+        if (itemName.isEmpty()) {
+            itemName = rc.getName();
+        }
+
+        List<XmlElement> items;
+        if (!wrapperName.isEmpty()) {
+            XmlElement wrapper = element.getChild(wrapperName);
+            items = wrapper != null ? wrapper.getChildren(itemName) : List.of();
+        } else {
+            items = element.getChildren(itemName);
+        }
+
+        Class<?> itemType = getListItemType(rc);
+
+        List<Object> list = new ArrayList<>();
+        for (XmlElement item : items) {
+            if (isSimpleType(itemType)) {
+                list.add(convertValue(item.getText(), itemType));
+            } else {
+                list.add(unmarshal(item, itemType));
+            }
+        }
+
+        return list;
+    }
+
+    /**
+     * Unmarshals a list field for a record component without @XmlElementList.
+     * 为不带 @XmlElementList 注解的记录组件解组列表字段。
+     */
+    private Object unmarshalRecordDefaultList(XmlElement wrapperElement, RecordComponent rc) throws Exception {
+        Class<?> itemType = getListItemType(rc);
+        List<XmlElement> children = wrapperElement.getChildren();
+
+        List<Object> list = new ArrayList<>();
+        for (XmlElement child : children) {
+            if (isSimpleType(itemType)) {
+                list.add(convertValue(child.getText(), itemType));
+            } else {
+                list.add(unmarshal(child, itemType));
+            }
+        }
+
+        return list;
+    }
+
+    /**
+     * Gets the generic item type of a List record component.
+     * 获取 List 记录组件的泛型项目类型。
+     */
+    private Class<?> getListItemType(RecordComponent rc) {
+        Type genericType = rc.getGenericType();
+        if (genericType instanceof ParameterizedType pt) {
+            Type arg = pt.getActualTypeArguments()[0];
+            if (arg instanceof Class<?> c) {
+                return c;
+            }
+        }
+        return String.class;
+    }
+
+    /**
+     * Returns the default value for a type (null for objects, 0 for primitives).
+     * 返回类型的默认值（对象为 null，基本类型为 0）。
+     */
+    private Object getDefaultValue(Class<?> type) {
+        if (!type.isPrimitive()) return null;
+        if (type == boolean.class) return false;
+        if (type == byte.class) return (byte) 0;
+        if (type == short.class) return (short) 0;
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == float.class) return 0.0f;
+        if (type == double.class) return 0.0;
+        if (type == char.class) return '\0';
+        return null;
     }
 
     private void populateFields(Object instance, XmlElement element, Class<?> clazz) throws Exception {

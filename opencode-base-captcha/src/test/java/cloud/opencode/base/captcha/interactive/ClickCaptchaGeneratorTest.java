@@ -30,8 +30,6 @@ import java.awt.*;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
@@ -197,48 +195,26 @@ class ClickCaptchaGeneratorTest {
         }
 
         @Test
-        @DisplayName("metadata contains targetPositions list")
-        void metadataContainsTargetPositions() {
+        @DisplayName("metadata does not contain targetPositions (security)")
+        void metadataDoesNotContainTargetPositions() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            assertThat(captcha.metadata()).containsKey("targetPositions");
-            @SuppressWarnings("unchecked")
-            List<Map<String, Integer>> positions =
-                    (List<Map<String, Integer>>) captcha.metadata().get("targetPositions");
-            assertThat(positions).hasSize(4);
+            assertThat(captcha.metadata()).doesNotContainKey("targetPositions");
         }
 
         @Test
-        @DisplayName("each target position has x and y coordinates")
-        void targetPositionsHaveXAndY() {
-            Captcha captcha = generator.generate(defaultConfig);
-
-            @SuppressWarnings("unchecked")
-            List<Map<String, Integer>> positions =
-                    (List<Map<String, Integer>>) captcha.metadata().get("targetPositions");
-
-            for (Map<String, Integer> pos : positions) {
-                assertThat(pos).containsKeys("x", "y");
-                assertThat(pos.get("x")).isNotNull();
-                assertThat(pos.get("y")).isNotNull();
-            }
-        }
-
-        @Test
-        @DisplayName("target positions are within image bounds")
-        void targetPositionsWithinBounds() {
+        @DisplayName("target positions can be parsed from answer and are within image bounds")
+        void targetPositionsFromAnswerWithinBounds() {
             Captcha captcha = generator.generate(defaultConfig);
 
             int width = (Integer) captcha.metadata().get("width");
             int height = (Integer) captcha.metadata().get("height");
 
-            @SuppressWarnings("unchecked")
-            List<Map<String, Integer>> positions =
-                    (List<Map<String, Integer>>) captcha.metadata().get("targetPositions");
-
-            for (Map<String, Integer> pos : positions) {
-                int x = pos.get("x");
-                int y = pos.get("y");
+            String[] parts = captcha.answer().split("\\|");
+            for (String part : parts) {
+                String[] coords = part.split(",");
+                int x = Integer.parseInt(coords[0]);
+                int y = Integer.parseInt(coords[1]);
                 assertThat(x).isBetween(0, width);
                 assertThat(y).isBetween(0, height);
             }
@@ -251,7 +227,7 @@ class ClickCaptchaGeneratorTest {
 
             assertThat(captcha.metadata()).containsKeys(
                     "width", "height", "targetChars", "targetCount",
-                    "targetSize", "targetPositions"
+                    "targetSize"
             );
         }
     }
@@ -300,22 +276,20 @@ class ClickCaptchaGeneratorTest {
         }
 
         @Test
-        @DisplayName("answer coordinates match target positions")
-        void answerCoordinatesMatchTargetPositions() {
+        @DisplayName("answer coordinates are valid integer pairs")
+        void answerCoordinatesAreValidIntegerPairs() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            @SuppressWarnings("unchecked")
-            List<Map<String, Integer>> positions =
-                    (List<Map<String, Integer>>) captcha.metadata().get("targetPositions");
-
             String[] parts = captcha.answer().split("\\|");
-            for (int i = 0; i < parts.length; i++) {
-                String[] coords = parts[i].split(",");
+            assertThat(parts).hasSize(4); // CLICK_TARGETS = 4
+
+            for (String part : parts) {
+                String[] coords = part.split(",");
+                assertThat(coords).hasSize(2);
                 int x = Integer.parseInt(coords[0]);
                 int y = Integer.parseInt(coords[1]);
-
-                assertThat(x).isEqualTo(positions.get(i).get("x"));
-                assertThat(y).isEqualTo(positions.get(i).get("y"));
+                assertThat(x).isGreaterThanOrEqualTo(0);
+                assertThat(y).isGreaterThanOrEqualTo(0);
             }
         }
 
@@ -511,14 +485,8 @@ class ClickCaptchaGeneratorTest {
             Captcha captcha1 = generator.generate(defaultConfig);
             Captcha captcha2 = generator.generate(defaultConfig);
 
-            @SuppressWarnings("unchecked")
-            List<Map<String, Integer>> positions1 =
-                    (List<Map<String, Integer>>) captcha1.metadata().get("targetPositions");
-            @SuppressWarnings("unchecked")
-            List<Map<String, Integer>> positions2 =
-                    (List<Map<String, Integer>>) captcha2.metadata().get("targetPositions");
-
-            assertThat(positions1).isNotEqualTo(positions2);
+            // Positions are encoded in the answer string
+            assertThat(captcha1.answer()).isNotEqualTo(captcha2.answer());
         }
 
         @Test

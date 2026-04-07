@@ -86,6 +86,9 @@ public final class OpenField {
         Objects.requireNonNull(clazz, "clazz must not be null");
         Objects.requireNonNull(fieldName, "fieldName must not be null");
 
+        if (forceAccess) {
+            checkNotPlatformType(clazz);
+        }
         Class<?> current = clazz;
         while (current != null) {
             try {
@@ -231,6 +234,7 @@ public final class OpenField {
      */
     public static Object readField(Field field, Object target) {
         try {
+            checkNotPlatformType(field.getDeclaringClass());
             field.setAccessible(true);
             return field.get(target);
         } catch (IllegalAccessException e) {
@@ -333,6 +337,7 @@ public final class OpenField {
      */
     public static void writeField(Field field, Object target, Object value) {
         try {
+            checkNotPlatformType(field.getDeclaringClass());
             field.setAccessible(true);
             field.set(target, value);
         } catch (IllegalAccessException e) {
@@ -511,6 +516,19 @@ public final class OpenField {
             if (hasField(target.getClass(), entry.getKey())) {
                 writeField(target, entry.getKey(), entry.getValue());
             }
+        }
+    }
+
+    /**
+     * Checks that the class is not a JDK platform type
+     * 检查类是否为JDK平台类型
+     */
+    private static void checkNotPlatformType(Class<?> clazz) {
+        String pkg = clazz.getPackageName();
+        if (pkg.startsWith("java.") || pkg.startsWith("javax.") || pkg.startsWith("sun.")
+                || pkg.startsWith("jdk.") || pkg.startsWith("com.sun.")) {
+            throw new OpenReflectException(clazz, "<field>", "setAccessible",
+                    "setAccessible denied for platform type: " + clazz.getName());
         }
     }
 }

@@ -7,9 +7,12 @@ import cloud.opencode.base.rules.engine.DefaultRuleEngine;
 import cloud.opencode.base.rules.listener.RuleListener;
 import cloud.opencode.base.rules.model.RuleGroup;
 
+import cloud.opencode.base.rules.RuleContext;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Rule Engine Builder - Fluent DSL for Rule Engine Configuration
@@ -57,6 +60,7 @@ public final class RuleEngineBuilder {
     private final List<RuleGroup> groups = new ArrayList<>();
     private final List<RuleListener> listeners = new ArrayList<>();
     private ConflictResolver conflictResolver;
+    private Predicate<RuleContext> haltCondition;
 
     /**
      * Registers one or more rules
@@ -107,13 +111,25 @@ public final class RuleEngineBuilder {
     }
 
     /**
+     * Sets a halt condition that stops rule execution when satisfied
+     * 设置停止条件，当满足时停止规则执行
+     *
+     * @param haltCondition the halt condition predicate | 停止条件谓词
+     * @return this builder | 此构建器
+     */
+    public RuleEngineBuilder haltWhen(Predicate<RuleContext> haltCondition) {
+        this.haltCondition = haltCondition;
+        return this;
+    }
+
+    /**
      * Builds the rule engine
      * 构建规则引擎
      *
      * @return the configured rule engine | 配置的规则引擎
      */
     public RuleEngine build() {
-        RuleEngine engine = new DefaultRuleEngine();
+        DefaultRuleEngine engine = new DefaultRuleEngine();
 
         // Register rules
         if (!rules.isEmpty()) {
@@ -133,6 +149,11 @@ public final class RuleEngineBuilder {
         // Add listeners
         for (RuleListener listener : listeners) {
             engine.addListener(listener);
+        }
+
+        // Set halt condition
+        if (haltCondition != null) {
+            engine.setHaltCondition(haltCondition);
         }
 
         return engine;

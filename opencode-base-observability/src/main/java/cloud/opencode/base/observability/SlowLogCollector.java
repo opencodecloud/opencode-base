@@ -1,5 +1,7 @@
 package cloud.opencode.base.observability;
 
+import cloud.opencode.base.observability.exception.ObservabilityException;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -68,6 +70,22 @@ public final class SlowLogCollector {
     private static final Duration DEFAULT_THRESHOLD = Duration.ofMillis(10);
     private static final int DEFAULT_MAX_ENTRIES = 1024;
 
+    /**
+     * Strips CR/LF characters to prevent log injection.
+     * 去除 CR/LF 字符以防止日志注入。
+     */
+    private static String sanitizeForLog(String value) {
+        if (value == null) {
+            return "";
+        }
+        // Fast path: no CR/LF → return original string (zero allocation).
+        // 快速路径：无 CR/LF 时返回原字符串（零分配）。
+        if (value.indexOf('\r') < 0 && value.indexOf('\n') < 0) {
+            return value;
+        }
+        return value.replace('\r', '_').replace('\n', '_');
+    }
+
     // ==================== Entry | 条目 ====================
 
     /**
@@ -87,7 +105,10 @@ public final class SlowLogCollector {
             Instant timestamp,
             String threadName
     ) {
-        /** Compact canonical constructor with null validation. */
+        /**
+         * Compact canonical constructor with null validation.
+         * 带空值验证的紧凑规范构造器。
+         */
         public Entry {
             Objects.requireNonNull(operation, "operation must not be null");
             Objects.requireNonNull(key, "key must not be null");
@@ -114,7 +135,7 @@ public final class SlowLogCollector {
             Duration avgDuration,
             String slowestOperation
     ) {
-        /** Empty stats instance returned when no slow operations have been recorded. */
+        /** Empty stats instance returned when no slow operations have been recorded. 未记录慢操作时返回的空统计实例。 */
         public static final Stats EMPTY = new Stats(0, Duration.ZERO, Duration.ZERO, "");
     }
 
@@ -127,9 +148,13 @@ public final class SlowLogCollector {
     private final AtomicLong currentSize = new AtomicLong(0);
 
     private SlowLogCollector(Duration threshold, int maxEntries) {
-        this.threshold = Objects.requireNonNull(threshold, "threshold must not be null");
+        Objects.requireNonNull(threshold, "threshold must not be null");
+        if (threshold.isNegative() || threshold.isZero()) {
+            throw new ObservabilityException("INVALID_CONFIG", "threshold must be positive, got: " + threshold);
+        }
+        this.threshold = threshold;
         if (maxEntries <= 0) {
-            throw new IllegalArgumentException("maxEntries must be positive, got: " + maxEntries);
+            throw new ObservabilityException("INVALID_CONFIG", "maxEntries must be positive, got: " + maxEntries);
         }
         this.maxEntries = maxEntries;
         this.entries = new ConcurrentLinkedDeque<>();
@@ -210,8 +235,12 @@ public final class SlowLogCollector {
             }
         }
 
+        // Log only operation and elapsed — key is omitted to prevent accidental PII/token disclosure.
+        // Operation is sanitized to prevent CRLF log injection.
+        // 仅记录操作名和耗时，key 可能含敏感数据，不写入日志。operation 过滤 CRLF 防止日志注入。
         LOGGER.log(System.Logger.Level.DEBUG,
-                "Slow operation recorded: {0} {1} elapsed={2}ms", operation, key, elapsed.toMillis());
+                "Slow operation recorded: {0} elapsed={1}ms",
+                sanitizeForLog(operation), elapsed.toMillis());
     }
 
     /**
@@ -230,16 +259,19 @@ public final class SlowLogCollector {
      *
      * @param limit the maximum number of entries to return | 返回的最大条目数
      * @return an immutable list of the latest entries | 最新条目的不可变列表
-     * @throws IllegalArgumentException if limit is negative | 如果 limit 为负数
+     * @throws ObservabilityException if limit is negative | 如果 limit 为负数
      */
     public List<Entry> getEntries(int limit) {
         if (limit < 0) {
-            throw new IllegalArgumentException("limit must not be negative, got: " + limit);
+            throw new ObservabilityException("INVALID_CONFIG", "limit must not be negative, got: " + limit);
         }
         if (limit == 0) {
             return List.of();
         }
-        List<Entry> result = new ArrayList<>(Math.min(limit, (int) currentSize.get()));
+        // Clamp capacity to [0, limit] — currentSize can be temporarily negative under concurrent clear+record.
+        // 容量限制在 [0, limit]，currentSize 在并发 clear+record 时可能暂时为负。
+        int capacity = (int) Math.min(limit, Math.max(0, currentSize.get()));
+        List<Entry> result = new ArrayList<>(capacity);
         int count = 0;
         for (Entry entry : entries) {
             if (count >= limit) break;
@@ -286,7 +318,16 @@ public final class SlowLogCollector {
         Entry slowest = snapshot.stream()
                 .max(Comparator.comparing(Entry::elapsed))
                 .orElseThrow();
-        long totalNanos = snapshot.stream().mapToLong(e -> e.elapsed().toNanos()).sum();
+        long totalNanos;
+        try {
+            totalNanos = 0;
+            for (Entry e : snapshot) {
+                totalNanos = Math.addExact(totalNanos, e.elapsed().toNanos());
+            }
+        } catch (ArithmeticException _) {
+            // Overflow: cap at Long.MAX_VALUE rather than producing a negative average
+            totalNanos = Long.MAX_VALUE;
+        }
         return new Stats(
                 totalCount.get(),
                 slowest.elapsed(),

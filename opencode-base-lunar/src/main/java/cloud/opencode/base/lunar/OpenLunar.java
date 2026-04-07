@@ -2,7 +2,9 @@ package cloud.opencode.base.lunar;
 
 import cloud.opencode.base.lunar.calendar.Festival;
 import cloud.opencode.base.lunar.calendar.SolarTerm;
+import cloud.opencode.base.lunar.calendar.SolarTermInfo;
 import cloud.opencode.base.lunar.exception.DateOutOfRangeException;
+import cloud.opencode.base.lunar.ganzhi.BaZi;
 import cloud.opencode.base.lunar.ganzhi.GanZhi;
 import cloud.opencode.base.lunar.internal.LunarCalculator;
 import cloud.opencode.base.lunar.internal.LunarData;
@@ -10,9 +12,11 @@ import cloud.opencode.base.lunar.zodiac.Constellation;
 import cloud.opencode.base.lunar.zodiac.Zodiac;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * OpenLunar
@@ -122,24 +126,26 @@ public final class OpenLunar {
     // ============ Solar Terms | 节气 ============
 
     /**
-     * Get solar term for date (returns null if not a solar term day)
-     * 获取某日的节气（如果不是节气日返回null）
+     * Get solar term for date
+     * 获取某日的节气
      *
      * @param date the date | 日期
-     * @return the solar term or null | 节气或null
+     * @return Optional containing the solar term if it is a solar term day,
+     *         otherwise empty | 如果是节气日返回包含节气的Optional，否则返回空
      */
-    public static SolarTerm getSolarTerm(LocalDate date) {
+    public static Optional<SolarTerm> getSolarTerm(LocalDate date) {
+        Objects.requireNonNull(date, "Date must not be null");
         return SolarTerm.of(date);
     }
 
     /**
-     * Get all solar terms for year
-     * 获取某年所有节气
+     * Get all solar terms for year with dates
+     * 获取某年所有节气及日期
      *
      * @param year the year | 年份
-     * @return list of solar terms | 节气列表
+     * @return list of solar term information | 节气信息列表
      */
-    public static List<SolarTerm> getSolarTerms(int year) {
+    public static List<SolarTermInfo> getSolarTerms(int year) {
         validateYear(year);
         return SolarTerm.ofYear(year);
     }
@@ -152,27 +158,29 @@ public final class OpenLunar {
      * @return the next solar term | 下一个节气
      */
     public static SolarTerm getNextSolarTerm(LocalDate date) {
+        Objects.requireNonNull(date, "Date must not be null");
         return SolarTerm.next(date);
     }
 
     // ============ Festivals | 节日 ============
 
     /**
-     * Get festivals for date
-     * 获取某日的节日
+     * Get festivals for date (year-aware, handles dynamic 除夕)
+     * 获取某日的节日（年份感知，处理动态除夕）
      *
      * @param date the date | 日期
      * @return list of festivals | 节日列表
      */
     public static List<Festival> getFestivals(LocalDate date) {
+        Objects.requireNonNull(date, "Date must not be null");
         List<Festival> festivals = new ArrayList<>();
 
         // Solar festivals
         festivals.addAll(Festival.getSolarFestivals(date));
 
-        // Lunar festivals
+        // Lunar festivals (year-aware for dynamic 除夕)
         LunarDate lunar = solarToLunar(date);
-        festivals.addAll(Festival.getLunarFestivals(lunar.month(), lunar.day()));
+        festivals.addAll(Festival.getLunarFestivals(lunar.year(), lunar.month(), lunar.day()));
 
         return festivals;
     }
@@ -209,6 +217,7 @@ public final class OpenLunar {
      * @return the constellation | 星座
      */
     public static Constellation getConstellation(LocalDate date) {
+        Objects.requireNonNull(date, "Date must not be null");
         return Constellation.of(date);
     }
 
@@ -257,7 +266,87 @@ public final class OpenLunar {
      * @return the GanZhi | 干支
      */
     public static GanZhi getDayGanZhi(LocalDate date) {
+        Objects.requireNonNull(date, "Date must not be null");
         return GanZhi.ofDay(date);
+    }
+
+    // ============ BaZi | 八字 ============
+
+    /**
+     * Get BaZi (Four Pillars) for date and hour
+     * 获取八字四柱
+     *
+     * @param date the date | 日期
+     * @param hour the hour (0-23) | 小时（0-23）
+     * @return the BaZi | 八字
+     */
+    public static BaZi getBaZi(LocalDate date, int hour) {
+        Objects.requireNonNull(date, "Date must not be null");
+        return BaZi.of(date, hour);
+    }
+
+    /**
+     * Get BaZi (Four Pillars) for date and time
+     * 获取八字四柱
+     *
+     * @param dateTime the date and time | 日期时间
+     * @return the BaZi | 八字
+     */
+    public static BaZi getBaZi(LocalDateTime dateTime) {
+        Objects.requireNonNull(dateTime, "Date must not be null");
+        return BaZi.of(dateTime);
+    }
+
+    // ============ Month GanZhi | 月干支 ============
+
+    /**
+     * Get month GanZhi for a specific date (using solar term boundaries)
+     * 获取指定日期的月干支（以节气为分界）
+     *
+     * @param date the date | 日期
+     * @return the GanZhi | 干支
+     */
+    public static GanZhi getMonthGanZhi(LocalDate date) {
+        Objects.requireNonNull(date, "Date must not be null");
+        return GanZhi.ofMonth(date);
+    }
+
+    // ============ Year/Month Info | 年/月信息 ============
+
+    /**
+     * Get lunar year information
+     * 获取农历年信息
+     *
+     * @param year the year | 年份
+     * @return the lunar year | 农历年信息
+     */
+    public static LunarYear getLunarYear(int year) {
+        return LunarYear.of(year);
+    }
+
+    /**
+     * Get lunar month information
+     * 获取农历月信息
+     *
+     * @param year the year | 年份
+     * @param month the month | 月份
+     * @return the lunar month | 农历月信息
+     */
+    public static LunarMonth getLunarMonth(int year, int month) {
+        return LunarMonth.of(year, month);
+    }
+
+    /**
+     * Get lunar month information (with leap month option)
+     * 获取农历月信息（含闰月选项）
+     *
+     * @param year the year | 年份
+     * @param month the month | 月份
+     * @param isLeap whether leap month | 是否闰月
+     * @return the lunar month | 农历月信息
+     */
+    public static LunarMonth getLunarMonth(int year, int month, boolean isLeap) {
+        return LunarMonth.of(year, month, isLeap);
     }
 
     // ============ Utility Methods | 辅助方法 ============

@@ -115,6 +115,16 @@ public abstract class HashCode {
         return HEX.formatHex(asBytes());
     }
 
+    /**
+     * Converts to URL-safe Base64 string (no padding)
+     * 转换为URL安全的Base64字符串（无填充）
+     *
+     * @return Base64 string | Base64字符串
+     */
+    public String toBase64() {
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(asBytes());
+    }
+
     // ==================== Factory Methods | 工厂方法 ====================
 
     /**
@@ -169,6 +179,29 @@ public abstract class HashCode {
             return new BytesHashCode(bytes);
         } catch (IllegalArgumentException e) {
             throw OpenHashException.invalidInput("invalid hex character");
+        }
+    }
+
+    /**
+     * Creates a HashCode from a Base64 string
+     * 从Base64字符串创建HashCode
+     *
+     * @param base64 URL-safe Base64 string (no padding) | URL安全的Base64字符串（无填充）
+     * @return HashCode instance | HashCode实例
+     * @throws OpenHashException if base64 string is invalid | 如果Base64字符串无效
+     */
+    public static HashCode fromBase64(String base64) {
+        if (base64 == null || base64.isEmpty()) {
+            throw OpenHashException.invalidInput("base64 string cannot be null or empty");
+        }
+        try {
+            byte[] bytes = java.util.Base64.getUrlDecoder().decode(base64);
+            if (bytes.length == 0) {
+                throw OpenHashException.invalidInput("base64 decoded to empty bytes");
+            }
+            return new BytesHashCode(bytes);
+        } catch (IllegalArgumentException e) {
+            throw OpenHashException.invalidInput("invalid base64 string");
         }
     }
 

@@ -2,6 +2,7 @@ package cloud.opencode.base.tree.serialization;
 
 import cloud.opencode.base.tree.Treeable;
 import cloud.opencode.base.tree.TreeNode;
+import cloud.opencode.base.tree.exception.TreeException;
 
 import java.util.*;
 import java.util.function.Function;
@@ -59,6 +60,9 @@ import java.util.function.Function;
  * @since JDK 25, opencode-base-tree V1.0.0
  */
 public final class TreeSerializer {
+
+    private static final int MAX_DEPTH = 1000;
+    private static final int MAX_VALUE_DEPTH = 32;
 
     private TreeSerializer() {
         // Utility class
@@ -165,6 +169,9 @@ public final class TreeSerializer {
 
     private static <T extends Treeable<T, ID>, ID> void nodeToJson(T node, StringBuilder sb,
                                                                     SerializerConfig config, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         String indent = config.prettyPrint() ? getIndent(depth, config.indentSize()) : "";
         String childIndent = config.prettyPrint() ? getIndent(depth + 1, config.indentSize()) : "";
         String newline = config.prettyPrint() ? "\n" : "";
@@ -217,6 +224,9 @@ public final class TreeSerializer {
 
     private static <T> void treeNodeToJsonRecursive(TreeNode<T> node, Function<T, Map<String, Object>> dataSerializer,
                                                      StringBuilder sb, SerializerConfig config, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         String indent = config.prettyPrint() ? getIndent(depth, config.indentSize()) : "";
         String childIndent = config.prettyPrint() ? getIndent(depth + 1, config.indentSize()) : "";
         String newline = config.prettyPrint() ? "\n" : "";
@@ -369,6 +379,9 @@ public final class TreeSerializer {
 
     private static <T extends Treeable<T, ID>, ID> void nodeToXml(T node, StringBuilder sb,
                                                                    SerializerConfig config, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         String indent = config.prettyPrint() ? getIndent(depth, config.indentSize()) : "";
         String childIndent = config.prettyPrint() ? getIndent(depth + 1, config.indentSize()) : "";
         String newline = config.prettyPrint() ? "\n" : "";
@@ -393,9 +406,10 @@ public final class TreeSerializer {
             Map<String, Object> extra = ((Function<Object, Map<String, Object>>) config.fieldExtractor()).apply(node);
             if (extra != null) {
                 for (Map.Entry<String, Object> entry : extra.entrySet()) {
-                    sb.append(childIndent).append("<").append(entry.getKey()).append(">");
+                    String xmlName = sanitizeXmlName(entry.getKey());
+                    sb.append(childIndent).append("<").append(xmlName).append(">");
                     sb.append(escapeXml(String.valueOf(entry.getValue())));
-                    sb.append("</").append(entry.getKey()).append(">").append(newline);
+                    sb.append("</").append(xmlName).append(">").append(newline);
                 }
             }
         }
@@ -417,6 +431,9 @@ public final class TreeSerializer {
 
     private static <T> void treeNodeToXmlRecursive(TreeNode<T> node, Function<T, Map<String, Object>> dataSerializer,
                                                     StringBuilder sb, SerializerConfig config, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         String indent = config.prettyPrint() ? getIndent(depth, config.indentSize()) : "";
         String childIndent = config.prettyPrint() ? getIndent(depth + 1, config.indentSize()) : "";
         String newline = config.prettyPrint() ? "\n" : "";
@@ -427,9 +444,10 @@ public final class TreeSerializer {
         Map<String, Object> dataMap = dataSerializer.apply(node.getData());
         if (dataMap != null) {
             for (Map.Entry<String, Object> entry : dataMap.entrySet()) {
-                sb.append(childIndent).append("<").append(entry.getKey()).append(">");
+                String xmlName = sanitizeXmlName(entry.getKey());
+                sb.append(childIndent).append("<").append(xmlName).append(">");
                 sb.append(escapeXml(String.valueOf(entry.getValue())));
-                sb.append("</").append(entry.getKey()).append(">").append(newline);
+                sb.append("</").append(xmlName).append(">").append(newline);
             }
         }
 
@@ -589,6 +607,14 @@ public final class TreeSerializer {
     }
 
     private static void appendValue(StringBuilder sb, Object value) {
+        appendValue(sb, value, 0);
+    }
+
+    private static void appendValue(StringBuilder sb, Object value, int depth) {
+        if (depth > MAX_VALUE_DEPTH) {
+            sb.append("\"[max depth exceeded]\"");
+            return;
+        }
         if (value == null) {
             sb.append("null");
         } else if (value instanceof String) {
@@ -601,7 +627,7 @@ public final class TreeSerializer {
             for (Object item : collection) {
                 if (!first) sb.append(",");
                 first = false;
-                appendValue(sb, item);
+                appendValue(sb, item, depth + 1);
             }
             sb.append("]");
         } else if (value instanceof Map<?, ?> map) {
@@ -611,7 +637,7 @@ public final class TreeSerializer {
                 if (!first) sb.append(",");
                 first = false;
                 sb.append("\"").append(escapeJson(String.valueOf(entry.getKey()))).append("\":");
-                appendValue(sb, entry.getValue());
+                appendValue(sb, entry.getValue(), depth + 1);
             }
             sb.append("}");
         } else {
@@ -621,8 +647,22 @@ public final class TreeSerializer {
 
     private static String escapeJson(String s) {
         if (s == null) return "";
-        StringBuilder sb = new StringBuilder();
-        for (char c : s.toCharArray()) {
+        // Fast path: scan for chars that need escaping; return original if clean
+        boolean needsEscape = false;
+        for (int i = 0, len = s.length(); i < len; i++) {
+            char c = s.charAt(i);
+            if (c < 0x20 || c == '"' || c == '\\') {
+                needsEscape = true;
+                break;
+            }
+        }
+        if (!needsEscape) {
+            return s;
+        }
+        // Slow path: build escaped string
+        StringBuilder sb = new StringBuilder(s.length() + 16);
+        for (int i = 0, len = s.length(); i < len; i++) {
+            char c = s.charAt(i);
             switch (c) {
                 case '"' -> sb.append("\\\"");
                 case '\\' -> sb.append("\\\\");
@@ -652,6 +692,40 @@ public final class TreeSerializer {
                 .replace("'", "&apos;");
     }
 
+    /**
+     * XML element name pattern: must start with letter or underscore, followed by letters, digits, hyphens, dots, or underscores
+     * XML 元素名称模式：必须以字母或下划线开头，后跟字母、数字、连字符、点或下划线
+     */
+    private static final java.util.regex.Pattern XML_NAME_PATTERN =
+            java.util.regex.Pattern.compile("[a-zA-Z_][a-zA-Z0-9_.\\-]*");
+
+    /**
+     * Sanitize a string for use as an XML element name
+     * 清理字符串以用作 XML 元素名称
+     *
+     * @param name the proposed element name | 建议的元素名称
+     * @return the sanitized name | 清理后的名称
+     */
+    private static String sanitizeXmlName(String name) {
+        if (name == null || name.isEmpty()) {
+            return "field";
+        }
+        if (XML_NAME_PATTERN.matcher(name).matches()) {
+            return name;
+        }
+        // Replace invalid chars with underscore
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (i == 0) {
+                sb.append(Character.isLetter(c) || c == '_' ? c : '_');
+            } else {
+                sb.append(Character.isLetterOrDigit(c) || c == '_' || c == '-' || c == '.' ? c : '_');
+            }
+        }
+        return sb.toString();
+    }
+
     // ==================== Serializer Configuration | 序列化配置 ====================
 
     /**
@@ -671,6 +745,17 @@ public final class TreeSerializer {
             boolean includeXmlDeclaration,
             Function<?, Map<String, Object>> fieldExtractor
     ) {
+        /**
+         * Compact constructor - sanitize XML element names to prevent injection
+         * 紧凑构造器 - 清理 XML 元素名称以防注入
+         */
+        public SerializerConfig {
+            idField = sanitizeXmlName(idField);
+            parentIdField = sanitizeXmlName(parentIdField);
+            childrenField = sanitizeXmlName(childrenField);
+            nodeElement = sanitizeXmlName(nodeElement);
+            rootElement = sanitizeXmlName(rootElement);
+        }
         /**
          * Create default configuration
          * 创建默认配置

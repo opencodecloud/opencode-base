@@ -4,11 +4,30 @@ import cloud.opencode.base.core.exception.OpenIllegalArgumentException;
 import cloud.opencode.base.core.exception.OpenIllegalStateException;
 
 /**
- * Preconditions Class - Parameter validation and state checking (Guava-style)
- * 前置条件校验类 - 参数校验和状态检查 (Guava 风格)
+ * Preconditions Class - Guava-style precondition checks for library/framework developers
+ * 前置条件校验类 - 面向库/框架开发者的 Guava 风格前置条件检查
  *
- * <p>Provides parameter validation, state checking and index validation with fluent API support.</p>
- * <p>用于参数校验和状态检查。所有方法返回校验后的值，支持链式调用。</p>
+ * <p>Provides Guava-style precondition checks (checkNotNull, checkArgument, checkState,
+ * checkElementIndex, checkPositionIndex) designed for library and framework development.
+ * Methods return the validated value to support fluent chaining, and use lightweight
+ * {@code %s} placeholder formatting.</p>
+ * <p>提供 Guava 风格的前置条件检查方法（checkNotNull、checkArgument、checkState、
+ * checkElementIndex、checkPositionIndex），专为库和框架开发设计。
+ * 方法返回校验后的值以支持链式调用，使用轻量的 {@code %s} 占位符格式化。</p>
+ *
+ * <p><strong>When to use this class vs {@link cloud.opencode.base.core.assertion.OpenAssert} |
+ * 本类与 {@link cloud.opencode.base.core.assertion.OpenAssert} 的选择:</strong></p>
+ * <ul>
+ *   <li><strong>Preconditions</strong> — Guava-style, for library/framework internals:
+ *       compact API ({@code checkNotNull}, {@code checkArgument}, {@code checkState}),
+ *       index boundary checks, {@code %s} template formatting.
+ *       适用于库/框架内部：紧凑的 API，索引边界检查，{@code %s} 模板格式化。</li>
+ *   <li><strong>{@link cloud.opencode.base.core.assertion.OpenAssert}</strong> — Spring Assert-style,
+ *       for business application code: rich validation API ({@code notNull}, {@code notEmpty},
+ *       {@code notBlank}, {@code inclusiveBetween}, {@code isInstanceOf}, {@code matchesPattern}),
+ *       collection/map/array emptiness checks, type checks.
+ *       适用于业务应用代码：丰富的验证 API，集合/Map/数组空值检查，类型检查。</li>
+ * </ul>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
@@ -43,6 +62,7 @@ import cloud.opencode.base.core.exception.OpenIllegalStateException;
  *
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
+ * @see cloud.opencode.base.core.assertion.OpenAssert
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-core V1.0.0
  */
@@ -202,7 +222,7 @@ public final class Preconditions {
      * @param index the index value | 索引值
      * @param size the collection size | 集合大小
      * @return the validated index | 校验后的索引
-     * @throws OpenIllegalArgumentException if the index is invalid | 如果索引无效
+     * @throws IndexOutOfBoundsException if the index is invalid | 如果索引无效
      */
     public static int checkElementIndex(int index, int size) {
         return checkElementIndex(index, size, "index");
@@ -216,14 +236,14 @@ public final class Preconditions {
      * @param size the collection size | 集合大小
      * @param desc the index description | 索引描述
      * @return the validated index | 校验后的索引
-     * @throws OpenIllegalArgumentException if the index is invalid | 如果索引无效
+     * @throws IndexOutOfBoundsException if the index is invalid | 如果索引无效
      */
     public static int checkElementIndex(int index, int size, String desc) {
         if (size < 0) {
-            throw new OpenIllegalArgumentException("negative size: " + size);
+            throw new IllegalArgumentException("negative size: " + size);
         }
         if (index < 0 || index >= size) {
-            throw new OpenIllegalArgumentException(badElementIndex(index, size, desc));
+            throw new IndexOutOfBoundsException(badElementIndex(index, size, desc));
         }
         return index;
     }
@@ -235,7 +255,7 @@ public final class Preconditions {
      * @param index the index value | 索引值
      * @param size the collection size | 集合大小
      * @return the validated index | 校验后的索引
-     * @throws OpenIllegalArgumentException if the index is invalid | 如果索引无效
+     * @throws IndexOutOfBoundsException if the index is invalid | 如果索引无效
      */
     public static int checkPositionIndex(int index, int size) {
         return checkPositionIndex(index, size, "index");
@@ -249,14 +269,14 @@ public final class Preconditions {
      * @param size the collection size | 集合大小
      * @param desc the index description | 索引描述
      * @return the validated index | 校验后的索引
-     * @throws OpenIllegalArgumentException if the index is invalid | 如果索引无效
+     * @throws IndexOutOfBoundsException if the index is invalid | 如果索引无效
      */
     public static int checkPositionIndex(int index, int size, String desc) {
         if (size < 0) {
-            throw new OpenIllegalArgumentException("negative size: " + size);
+            throw new IllegalArgumentException("negative size: " + size);
         }
         if (index < 0 || index > size) {
-            throw new OpenIllegalArgumentException(badPositionIndex(index, size, desc));
+            throw new IndexOutOfBoundsException(badPositionIndex(index, size, desc));
         }
         return index;
     }
@@ -268,12 +288,170 @@ public final class Preconditions {
      * @param start the start index | 起始索引
      * @param end the end index | 结束索引
      * @param size the collection size | 集合大小
-     * @throws OpenIllegalArgumentException if the range is invalid | 如果范围无效
+     * @throws IndexOutOfBoundsException if the range is invalid | 如果范围无效
      */
     public static void checkPositionIndexes(int start, int end, int size) {
         if (start < 0 || end < start || end > size) {
-            throw new OpenIllegalArgumentException(badPositionIndexes(start, end, size));
+            throw new IndexOutOfBoundsException(badPositionIndexes(start, end, size));
         }
+    }
+
+    // ==================== 数值校验 | Numeric Checks ====================
+
+    /**
+     * Checks that the value is positive (> 0), returns the value for chaining.
+     * 检查值为正数（> 0），返回值以支持链式调用。
+     *
+     * @param value the value to check | 待检查的值
+     * @param name  the parameter name for error message | 参数名，用于错误消息
+     * @return the validated value | 校验后的值
+     * @throws OpenIllegalArgumentException if the value is not positive | 如果值不为正数
+     */
+    public static int checkPositive(int value, String name) {
+        if (value <= 0) {
+            throw new OpenIllegalArgumentException(name + " must be positive, got: " + value);
+        }
+        return value;
+    }
+
+    /**
+     * Checks that the value is positive (> 0), returns the value for chaining.
+     * 检查值为正数（> 0），返回值以支持链式调用。
+     *
+     * @param value the value to check | 待检查的值
+     * @param name  the parameter name for error message | 参数名，用于错误消息
+     * @return the validated value | 校验后的值
+     * @throws OpenIllegalArgumentException if the value is not positive | 如果值不为正数
+     */
+    public static long checkPositive(long value, String name) {
+        if (value <= 0) {
+            throw new OpenIllegalArgumentException(name + " must be positive, got: " + value);
+        }
+        return value;
+    }
+
+    /**
+     * Checks that the value is non-negative (>= 0), returns the value for chaining.
+     * 检查值为非负数（>= 0），返回值以支持链式调用。
+     *
+     * @param value the value to check | 待检查的值
+     * @param name  the parameter name for error message | 参数名，用于错误消息
+     * @return the validated value | 校验后的值
+     * @throws OpenIllegalArgumentException if the value is negative | 如果值为负数
+     */
+    public static int checkNonNegative(int value, String name) {
+        if (value < 0) {
+            throw new OpenIllegalArgumentException(name + " must be non-negative, got: " + value);
+        }
+        return value;
+    }
+
+    /**
+     * Checks that the value is non-negative (>= 0), returns the value for chaining.
+     * 检查值为非负数（>= 0），返回值以支持链式调用。
+     *
+     * @param value the value to check | 待检查的值
+     * @param name  the parameter name for error message | 参数名，用于错误消息
+     * @return the validated value | 校验后的值
+     * @throws OpenIllegalArgumentException if the value is negative | 如果值为负数
+     */
+    public static long checkNonNegative(long value, String name) {
+        if (value < 0) {
+            throw new OpenIllegalArgumentException(name + " must be non-negative, got: " + value);
+        }
+        return value;
+    }
+
+    /**
+     * Checks that the value is between min and max (inclusive), returns the value for chaining.
+     * 检查值在 min 和 max 之间（包含边界），返回值以支持链式调用。
+     *
+     * @param value the value to check | 待检查的值
+     * @param min   the minimum (inclusive) | 最小值（包含）
+     * @param max   the maximum (inclusive) | 最大值（包含）
+     * @param name  the parameter name for error message | 参数名，用于错误消息
+     * @return the validated value | 校验后的值
+     * @throws OpenIllegalArgumentException if the value is out of range | 如果值超出范围
+     */
+    public static int checkBetween(int value, int min, int max, String name) {
+        if (value < min || value > max) {
+            throw new OpenIllegalArgumentException(
+                    name + " must be between " + min + " and " + max + ", got: " + value);
+        }
+        return value;
+    }
+
+    /**
+     * Checks that the value is between min and max (inclusive), returns the value for chaining.
+     * 检查值在 min 和 max 之间（包含边界），返回值以支持链式调用。
+     *
+     * @param value the value to check | 待检查的值
+     * @param min   the minimum (inclusive) | 最小值（包含）
+     * @param max   the maximum (inclusive) | 最大值（包含）
+     * @param name  the parameter name for error message | 参数名，用于错误消息
+     * @return the validated value | 校验后的值
+     * @throws OpenIllegalArgumentException if the value is out of range | 如果值超出范围
+     */
+    public static long checkBetween(long value, long min, long max, String name) {
+        if (value < min || value > max) {
+            throw new OpenIllegalArgumentException(
+                    name + " must be between " + min + " and " + max + ", got: " + value);
+        }
+        return value;
+    }
+
+    // ==================== 字符串校验 | String Checks ====================
+
+    /**
+     * Checks that the string is not null and not blank (after trimming), returns it for chaining.
+     * 检查字符串非 null 且非空白（去除空格后），返回以支持链式调用。
+     *
+     * @param value the string to check | 待检查的字符串
+     * @param name  the parameter name for error message | 参数名，用于错误消息
+     * @return the validated string | 校验后的字符串
+     * @throws OpenIllegalArgumentException if the string is null or blank | 如果字符串为 null 或空白
+     */
+    public static String checkNotBlank(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new OpenIllegalArgumentException(name + " must not be blank");
+        }
+        return value;
+    }
+
+    // ==================== 集合校验 | Collection Checks ====================
+
+    /**
+     * Checks that the collection is not null and not empty, returns it for chaining.
+     * 检查集合非 null 且非空，返回以支持链式调用。
+     *
+     * @param <T>        the collection type | 集合类型
+     * @param collection the collection to check | 待检查的集合
+     * @param name       the parameter name for error message | 参数名，用于错误消息
+     * @return the validated collection | 校验后的集合
+     * @throws OpenIllegalArgumentException if the collection is null or empty | 如果集合为 null 或为空
+     */
+    public static <T extends java.util.Collection<?>> T checkNotEmpty(T collection, String name) {
+        if (collection == null || collection.isEmpty()) {
+            throw new OpenIllegalArgumentException(name + " must not be empty");
+        }
+        return collection;
+    }
+
+    /**
+     * Checks that the map is not null and not empty, returns it for chaining.
+     * 检查映射非 null 且非空，返回以支持链式调用。
+     *
+     * @param <T>  the map type | 映射类型
+     * @param map  the map to check | 待检查的映射
+     * @param name the parameter name for error message | 参数名，用于错误消息
+     * @return the validated map | 校验后的映射
+     * @throws OpenIllegalArgumentException if the map is null or empty | 如果映射为 null 或为空
+     */
+    public static <T extends java.util.Map<?, ?>> T checkNotEmpty(T map, String name) {
+        if (map == null || map.isEmpty()) {
+            throw new OpenIllegalArgumentException(name + " must not be empty");
+        }
+        return map;
     }
 
     // ==================== 私有辅助方法 ====================

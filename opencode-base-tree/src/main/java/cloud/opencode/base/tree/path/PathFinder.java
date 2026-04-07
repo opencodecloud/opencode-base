@@ -1,6 +1,7 @@
 package cloud.opencode.base.tree.path;
 
 import cloud.opencode.base.tree.Treeable;
+import cloud.opencode.base.tree.exception.TreeException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +21,7 @@ import java.util.function.Predicate;
  *   <li>Find all paths to matching nodes - 查找到所有匹配节点的路径</li>
  *   <li>Find paths to leaf nodes - 查找到叶子节点的路径</li>
  *   <li>Get ancestor IDs and node depth - 获取祖先ID和节点深度</li>
+ *   <li>Find lowest common ancestor of two nodes - 查找两个节点的最近公共祖先</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -27,6 +29,7 @@ import java.util.function.Predicate;
  * Optional<TreePath<MyNode>> path = PathFinder.findPathById(roots, targetId);
  * List<ID> ancestors = PathFinder.getAncestorIds(roots, targetId);
  * int depth = PathFinder.getDepth(roots, targetId);
+ * Optional<MyNode> lca = PathFinder.findLowestCommonAncestor(roots, id1, id2);
  * }</pre>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -40,6 +43,8 @@ import java.util.function.Predicate;
  * @since JDK 25, opencode-base-tree V1.0.0
  */
 public final class PathFinder {
+
+    private static final int MAX_DEPTH = 1000;
 
     private PathFinder() {
         // Utility class
@@ -74,7 +79,7 @@ public final class PathFinder {
             List<T> roots, Predicate<T> predicate) {
         for (T root : roots) {
             List<T> path = new ArrayList<>();
-            if (findPathInNode(root, predicate, path)) {
+            if (findPathInNode(root, predicate, path, 0)) {
                 return Optional.of(TreePath.of(path));
             }
         }
@@ -82,7 +87,10 @@ public final class PathFinder {
     }
 
     private static <T extends Treeable<T, ID>, ID> boolean findPathInNode(
-            T node, Predicate<T> predicate, List<T> path) {
+            T node, Predicate<T> predicate, List<T> path, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         path.add(node);
 
         if (predicate.test(node)) {
@@ -92,7 +100,7 @@ public final class PathFinder {
         List<T> children = node.getChildren();
         if (children != null) {
             for (T child : children) {
-                if (findPathInNode(child, predicate, path)) {
+                if (findPathInNode(child, predicate, path, depth + 1)) {
                     return true;
                 }
             }
@@ -116,13 +124,16 @@ public final class PathFinder {
             List<T> roots, Predicate<T> predicate) {
         List<TreePath<T>> results = new ArrayList<>();
         for (T root : roots) {
-            findAllPathsInNode(root, predicate, new ArrayList<>(), results);
+            findAllPathsInNode(root, predicate, new ArrayList<>(), results, 0);
         }
         return results;
     }
 
     private static <T extends Treeable<T, ID>, ID> void findAllPathsInNode(
-            T node, Predicate<T> predicate, List<T> currentPath, List<TreePath<T>> results) {
+            T node, Predicate<T> predicate, List<T> currentPath, List<TreePath<T>> results, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw TreeException.maxDepthExceeded(MAX_DEPTH);
+        }
         currentPath.add(node);
 
         if (predicate.test(node)) {
@@ -132,7 +143,7 @@ public final class PathFinder {
         List<T> children = node.getChildren();
         if (children != null) {
             for (T child : children) {
-                findAllPathsInNode(child, predicate, currentPath, results);
+                findAllPathsInNode(child, predicate, currentPath, results, depth + 1);
             }
         }
 
@@ -190,5 +201,85 @@ public final class PathFinder {
         return findPathById(roots, targetId)
             .map(path -> path.length() - 1)
             .orElse(-1);
+    }
+
+    /**
+     * Find lowest common ancestor of two nodes by ID
+     * 通过ID查找两个节点的最近公共祖先
+     *
+     * <p>Finds the deepest node that is an ancestor of both target nodes.
+     * The algorithm finds paths to both nodes, then walks the paths in parallel
+     * to find the last common node.</p>
+     * <p>查找同时是两个目标节点祖先的最深节点。
+     * 算法先分别查找到两个节点的路径，然后并行遍历路径以找到最后一个公共节点。</p>
+     *
+     * <p><strong>Performance | 性能特性:</strong></p>
+     * <ul>
+     *   <li>Time complexity: O(n) where n is total node count - 时间复杂度: O(n)，n 为总节点数</li>
+     *   <li>Space complexity: O(h) where h is tree height - 空间复杂度: O(h)，h 为树高</li>
+     * </ul>
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param id1 the first node ID | 第一个节点ID
+     * @param id2 the second node ID | 第二个节点ID
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the lowest common ancestor if both nodes exist | 如果两个节点都存在返回最近公共祖先
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> Optional<T> findLowestCommonAncestor(
+            List<T> roots, ID id1, ID id2) {
+        Predicate<T> pred1 = node -> id1.equals(node.getId());
+        Predicate<T> pred2 = node -> id2.equals(node.getId());
+        return findLowestCommonAncestor(roots, pred1, pred2);
+    }
+
+    /**
+     * Find lowest common ancestor of two nodes by predicates
+     * 通过谓词查找两个节点的最近公共祖先
+     *
+     * <p>Finds the deepest node that is an ancestor of both target nodes.
+     * The algorithm finds paths to both nodes, then walks the paths in parallel
+     * to find the last common node.</p>
+     * <p>查找同时是两个目标节点祖先的最深节点。
+     * 算法先分别查找到两个节点的路径，然后并行遍历路径以找到最后一个公共节点。</p>
+     *
+     * <p><strong>Performance | 性能特性:</strong></p>
+     * <ul>
+     *   <li>Time complexity: O(n) where n is total node count - 时间复杂度: O(n)，n 为总节点数</li>
+     *   <li>Space complexity: O(h) where h is tree height - 空间复杂度: O(h)，h 为树高</li>
+     * </ul>
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param predicate1 the predicate for first node | 第一个节点的谓词
+     * @param predicate2 the predicate for second node | 第二个节点的谓词
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the lowest common ancestor if both nodes exist | 如果两个节点都存在返回最近公共祖先
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> Optional<T> findLowestCommonAncestor(
+            List<T> roots, Predicate<T> predicate1, Predicate<T> predicate2) {
+        Optional<TreePath<T>> path1 = findPath(roots, predicate1);
+        Optional<TreePath<T>> path2 = findPath(roots, predicate2);
+
+        if (path1.isEmpty() || path2.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<T> nodes1 = path1.get().nodes();
+        List<T> nodes2 = path2.get().nodes();
+        int minLength = Math.min(nodes1.size(), nodes2.size());
+
+        T lca = null;
+        for (int i = 0; i < minLength; i++) {
+            if (nodes1.get(i) == nodes2.get(i)) {
+                lca = nodes1.get(i);
+            } else {
+                break;
+            }
+        }
+
+        return Optional.ofNullable(lca);
     }
 }

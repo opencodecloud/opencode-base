@@ -11,6 +11,9 @@ module cloud.opencode.base.core {
 
     // Required modules
     requires static java.sql;
+    requires java.management;
+    requires jdk.management;
+    requires static org.jspecify;
 
     // Export all public packages
     exports cloud.opencode.base.core;
@@ -32,6 +35,15 @@ module cloud.opencode.base.core {
     exports cloud.opencode.base.core.tuple;
     exports cloud.opencode.base.core.annotation;
     exports cloud.opencode.base.core.page;
+
+    // v1.0.3 new packages
+    exports cloud.opencode.base.core.result;
+    exports cloud.opencode.base.core.concurrent;
+    exports cloud.opencode.base.core.collect;
+    exports cloud.opencode.base.core.retry;
+    exports cloud.opencode.base.core.codec;
+    exports cloud.opencode.base.core.system;
+    exports cloud.opencode.base.core.process;
 
     // Internal packages - not exported
     // cloud.opencode.base.core.internal

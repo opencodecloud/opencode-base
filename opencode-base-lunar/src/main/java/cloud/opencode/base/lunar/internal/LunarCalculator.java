@@ -53,6 +53,9 @@ public final class LunarCalculator {
      */
     private static final LocalDate BASE_SOLAR_DATE = LocalDate.of(1900, 1, 31);
 
+    /** Precomputed epoch day of base date to avoid repeated calculation */
+    private static final long BASE_EPOCH_DAY = BASE_SOLAR_DATE.toEpochDay();
+
     private LunarCalculator() {
         // Utility class
     }
@@ -71,23 +74,26 @@ public final class LunarCalculator {
         }
 
         // Calculate days from base date
-        long daysDiff = solarDate.toEpochDay() - BASE_SOLAR_DATE.toEpochDay();
+        long daysDiff = solarDate.toEpochDay() - BASE_EPOCH_DAY;
         if (daysDiff < 0) {
             throw new DateOutOfRangeException(year);
         }
 
         int offset = (int) daysDiff;
 
-        // Find lunar year
-        int lunarYear = LunarData.MIN_YEAR;
-        while (lunarYear <= LunarData.MAX_YEAR) {
-            int yearDays = LunarData.getYearDays(lunarYear);
-            if (offset < yearDays) {
-                break;
+        // Find lunar year using precomputed cumulative day table (O(1) binary search)
+        int lo = 0;
+        int hi = LunarData.MAX_YEAR - LunarData.MIN_YEAR;
+        while (lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            if (LunarData.getDaysToYearStart(LunarData.MIN_YEAR + mid) <= offset) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
             }
-            offset -= yearDays;
-            lunarYear++;
         }
+        int lunarYear = LunarData.MIN_YEAR + lo;
+        offset -= LunarData.getDaysToYearStart(lunarYear);
 
         if (lunarYear > LunarData.MAX_YEAR) {
             throw new DateOutOfRangeException(year);

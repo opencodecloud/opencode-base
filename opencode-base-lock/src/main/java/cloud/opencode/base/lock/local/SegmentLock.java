@@ -63,6 +63,7 @@ import java.util.function.Supplier;
 public class SegmentLock<K> {
 
     private final int segments;
+    private final int mask;
     private final Lock<Long>[] locks;
     private final LockConfig config;
 
@@ -97,10 +98,14 @@ public class SegmentLock<K> {
         if (segments <= 0) {
             throw new IllegalArgumentException("Segments must be positive");
         }
-        this.segments = segments;
+        // Round up to power of two for fast bitwise indexing
+        int actualSegments = Integer.highestOneBit(segments - 1) << 1;
+        if (actualSegments <= 0) actualSegments = 1;
+        this.segments = actualSegments;
+        this.mask = actualSegments - 1;
         this.config = config;
-        this.locks = new Lock[segments];
-        for (int i = 0; i < segments; i++) {
+        this.locks = new Lock[actualSegments];
+        for (int i = 0; i < actualSegments; i++) {
             this.locks[i] = new LocalLock(config);
         }
     }
@@ -113,8 +118,7 @@ public class SegmentLock<K> {
      * @return the lock for this key | 此键对应的锁
      */
     public Lock<Long> getLock(K key) {
-        int index = (key.hashCode() & 0x7FFFFFFF) % segments;
-        return locks[index];
+        return locks[key.hashCode() & mask];
     }
 
     /**
@@ -159,6 +163,6 @@ public class SegmentLock<K> {
      * @return the segment index (0 to segments-1) | 分段索引（0到segments-1）
      */
     public int getSegmentIndex(K key) {
-        return (key.hashCode() & 0x7FFFFFFF) % segments;
+        return key.hashCode() & mask;
     }
 }

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.*;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.entry;
 
 /**
  * OpenStringTest Tests
@@ -698,6 +699,439 @@ class OpenStringTest {
             constructor.setAccessible(true);
             assertThatThrownBy(constructor::newInstance)
                 .hasCauseInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    // ==================== V1.0.3 New Method Tests ====================
+
+    @Nested
+    @DisplayName("Null-safe Checks")
+    class NullSafeChecks {
+
+        @Test
+        @DisplayName("isBlank should return true for null, empty, whitespace")
+        void isBlankShouldReturnTrueForNullEmptyWhitespace() {
+            assertThat(OpenString.isBlank(null)).isTrue();
+            assertThat(OpenString.isBlank("")).isTrue();
+            assertThat(OpenString.isBlank("  ")).isTrue();
+            assertThat(OpenString.isBlank("\t\n")).isTrue();
+            assertThat(OpenString.isBlank("abc")).isFalse();
+            assertThat(OpenString.isBlank(" a ")).isFalse();
+        }
+
+        @Test
+        @DisplayName("isNotBlank should negate isBlank")
+        void isNotBlankShouldNegateIsBlank() {
+            assertThat(OpenString.isNotBlank(null)).isFalse();
+            assertThat(OpenString.isNotBlank("")).isFalse();
+            assertThat(OpenString.isNotBlank("  ")).isFalse();
+            assertThat(OpenString.isNotBlank("abc")).isTrue();
+        }
+
+        @Test
+        @DisplayName("isEmpty should return true for null and empty only")
+        void isEmptyShouldReturnTrueForNullAndEmpty() {
+            assertThat(OpenString.isEmpty(null)).isTrue();
+            assertThat(OpenString.isEmpty("")).isTrue();
+            assertThat(OpenString.isEmpty("  ")).isFalse();
+            assertThat(OpenString.isEmpty("abc")).isFalse();
+        }
+
+        @Test
+        @DisplayName("isNotEmpty should negate isEmpty")
+        void isNotEmptyShouldNegateIsEmpty() {
+            assertThat(OpenString.isNotEmpty(null)).isFalse();
+            assertThat(OpenString.isNotEmpty("")).isFalse();
+            assertThat(OpenString.isNotEmpty("  ")).isTrue();
+            assertThat(OpenString.isNotEmpty("abc")).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("Contains Matching")
+    class ContainsMatching {
+
+        @Test
+        @DisplayName("containsAny should match any search string")
+        void containsAnyShouldMatchAny() {
+            assertThat(OpenString.containsAny("hello world", "world", "foo")).isTrue();
+            assertThat(OpenString.containsAny("hello", "foo", "bar")).isFalse();
+            assertThat(OpenString.containsAny(null, "foo")).isFalse();
+            assertThat(OpenString.containsAny("hello", (CharSequence[]) null)).isFalse();
+            assertThat(OpenString.containsAny("hello", "ell")).isTrue();
+        }
+
+        @Test
+        @DisplayName("containsNone should return true when no invalid chars present")
+        void containsNoneShouldReturnTrueWhenNoInvalidChars() {
+            assertThat(OpenString.containsNone("hello", "xyz")).isTrue();
+            assertThat(OpenString.containsNone("hello", "hxyz")).isFalse();
+            assertThat(OpenString.containsNone(null, "xyz")).isTrue();
+            assertThat(OpenString.containsNone("hello", null)).isTrue();
+            assertThat(OpenString.containsNone("", "xyz")).isTrue();
+        }
+
+        @Test
+        @DisplayName("containsOnly should return true when only valid chars present")
+        void containsOnlyShouldReturnTrueForValidChars() {
+            assertThat(OpenString.containsOnly("aab", "abc")).isTrue();
+            assertThat(OpenString.containsOnly("abd", "abc")).isFalse();
+            assertThat(OpenString.containsOnly(null, "abc")).isFalse();
+            assertThat(OpenString.containsOnly("abc", null)).isFalse();
+            assertThat(OpenString.containsOnly("", "abc")).isTrue();
+        }
+
+        @Test
+        @DisplayName("containsIgnoreCase should match ignoring case")
+        void containsIgnoreCaseShouldMatchIgnoringCase() {
+            assertThat(OpenString.containsIgnoreCase("Hello World", "hello")).isTrue();
+            assertThat(OpenString.containsIgnoreCase("Hello World", "WORLD")).isTrue();
+            assertThat(OpenString.containsIgnoreCase("Hello World", "foo")).isFalse();
+            assertThat(OpenString.containsIgnoreCase(null, "hello")).isFalse();
+            assertThat(OpenString.containsIgnoreCase("hello", null)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("StartsWith/EndsWith Matching")
+    class StartsEndsMatching {
+
+        @Test
+        @DisplayName("startsWithAny should match any prefix")
+        void startsWithAnyShouldMatchAnyPrefix() {
+            assertThat(OpenString.startsWithAny("hello", "he", "ho")).isTrue();
+            assertThat(OpenString.startsWithAny("hello", "foo", "bar")).isFalse();
+            assertThat(OpenString.startsWithAny(null, "he")).isFalse();
+            assertThat(OpenString.startsWithAny("hello", (String[]) null)).isFalse();
+        }
+
+        @Test
+        @DisplayName("endsWithAny should match any suffix")
+        void endsWithAnyShouldMatchAnySuffix() {
+            assertThat(OpenString.endsWithAny("hello", "lo", "la")).isTrue();
+            assertThat(OpenString.endsWithAny("hello", "foo", "bar")).isFalse();
+            assertThat(OpenString.endsWithAny(null, "lo")).isFalse();
+            assertThat(OpenString.endsWithAny("hello", (String[]) null)).isFalse();
+        }
+
+        @Test
+        @DisplayName("startsWithIgnoreCase should ignore case")
+        void startsWithIgnoreCaseShouldIgnoreCase() {
+            assertThat(OpenString.startsWithIgnoreCase("Hello", "he")).isTrue();
+            assertThat(OpenString.startsWithIgnoreCase("Hello", "HE")).isTrue();
+            assertThat(OpenString.startsWithIgnoreCase("Hello", "foo")).isFalse();
+            assertThat(OpenString.startsWithIgnoreCase(null, "he")).isFalse();
+            assertThat(OpenString.startsWithIgnoreCase("Hi", "Hello")).isFalse();
+        }
+
+        @Test
+        @DisplayName("endsWithIgnoreCase should ignore case")
+        void endsWithIgnoreCaseShouldIgnoreCase() {
+            assertThat(OpenString.endsWithIgnoreCase("Hello", "LO")).isTrue();
+            assertThat(OpenString.endsWithIgnoreCase("Hello", "lo")).isTrue();
+            assertThat(OpenString.endsWithIgnoreCase("Hello", "foo")).isFalse();
+            assertThat(OpenString.endsWithIgnoreCase(null, "lo")).isFalse();
+            assertThat(OpenString.endsWithIgnoreCase("Hi", "Hello")).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("ReplaceEach Tests")
+    class ReplaceEach {
+
+        @Test
+        @DisplayName("replaceEach should replace all in single pass")
+        void replaceEachShouldReplaceSinglePass() {
+            assertThat(OpenString.replaceEach("aabbcc",
+                    new String[]{"aa", "bb"}, new String[]{"11", "22"}))
+                    .isEqualTo("1122cc");
+            assertThat(OpenString.replaceEach("abcde",
+                    new String[]{"ab", "d"}, new String[]{"w", "t"}))
+                    .isEqualTo("wcte");
+        }
+
+        @Test
+        @DisplayName("replaceEach should not recurse")
+        void replaceEachShouldNotRecurse() {
+            // "a" -> "b" and "b" -> "c" should not chain
+            assertThat(OpenString.replaceEach("ab",
+                    new String[]{"a", "b"}, new String[]{"b", "c"}))
+                    .isEqualTo("bc");
+        }
+
+        @Test
+        @DisplayName("replaceEach should handle null and empty inputs")
+        void replaceEachShouldHandleNullAndEmpty() {
+            assertThat(OpenString.replaceEach(null, new String[]{"a"}, new String[]{"b"})).isNull();
+            assertThat(OpenString.replaceEach("abc", null, new String[]{"b"})).isEqualTo("abc");
+            assertThat(OpenString.replaceEach("abc", new String[]{"a"}, null)).isEqualTo("abc");
+            assertThat(OpenString.replaceEach("", new String[]{"a"}, new String[]{"b"})).isEmpty();
+        }
+
+        @Test
+        @DisplayName("replaceEach should throw on mismatched lengths")
+        void replaceEachShouldThrowOnMismatchedLengths() {
+            assertThatIllegalArgumentException().isThrownBy(() ->
+                    OpenString.replaceEach("abc", new String[]{"a"}, new String[]{"b", "c"}));
+        }
+
+        @Test
+        @DisplayName("replaceEach should prefer longer match at same position")
+        void replaceEachShouldPreferLongerMatch() {
+            assertThat(OpenString.replaceEach("abcd",
+                    new String[]{"a", "ab"}, new String[]{"X", "Y"}))
+                    .isEqualTo("Ycd");
+        }
+    }
+
+    @Nested
+    @DisplayName("Format Tests")
+    class Format {
+
+        @Test
+        @DisplayName("format should replace placeholders with args")
+        void formatShouldReplacePlaceholders() {
+            assertThat(OpenString.format("{} has {} items", "Alice", 3))
+                    .isEqualTo("Alice has 3 items");
+            assertThat(OpenString.format("Hello {}", "World"))
+                    .isEqualTo("Hello World");
+        }
+
+        @Test
+        @DisplayName("format should keep unreplaced placeholders when args insufficient")
+        void formatShouldKeepUnreplacedPlaceholders() {
+            assertThat(OpenString.format("{} and {}", "A"))
+                    .isEqualTo("A and {}");
+            assertThat(OpenString.format("{} {} {}", "only"))
+                    .isEqualTo("only {} {}");
+        }
+
+        @Test
+        @DisplayName("format should handle escaped placeholders")
+        void formatShouldHandleEscapedPlaceholders() {
+            assertThat(OpenString.format("literal \\{} end"))
+                    .isEqualTo("literal {} end");
+            assertThat(OpenString.format("\\{} and {}", "val"))
+                    .isEqualTo("{} and val");
+        }
+
+        @Test
+        @DisplayName("format should return null for null pattern")
+        void formatShouldReturnNullForNullPattern() {
+            assertThat(OpenString.format(null, "a")).isNull();
+        }
+
+        @Test
+        @DisplayName("format should return pattern when no args")
+        void formatShouldReturnPatternWhenNoArgs() {
+            assertThat(OpenString.format("no placeholders")).isEqualTo("no placeholders");
+            assertThat(OpenString.format("has {}", (Object[]) null)).isEqualTo("has {}");
+        }
+    }
+
+    @Nested
+    @DisplayName("Null/Empty/Blank Conversion")
+    class NullEmptyConversion {
+
+        @Test
+        @DisplayName("nullToEmpty should convert null to empty string")
+        void nullToEmptyShouldConvertNullToEmpty() {
+            assertThat(OpenString.nullToEmpty(null)).isEmpty();
+            assertThat(OpenString.nullToEmpty("")).isEmpty();
+            assertThat(OpenString.nullToEmpty("hello")).isEqualTo("hello");
+        }
+
+        @Test
+        @DisplayName("emptyToNull should convert empty string to null")
+        void emptyToNullShouldConvertEmptyToNull() {
+            assertThat(OpenString.emptyToNull("")).isNull();
+            assertThat(OpenString.emptyToNull(null)).isNull();
+            assertThat(OpenString.emptyToNull("hello")).isEqualTo("hello");
+            assertThat(OpenString.emptyToNull("  ")).isEqualTo("  ");
+        }
+
+        @Test
+        @DisplayName("blankToNull should convert blank string to null")
+        void blankToNullShouldConvertBlankToNull() {
+            assertThat(OpenString.blankToNull("")).isNull();
+            assertThat(OpenString.blankToNull("  ")).isNull();
+            assertThat(OpenString.blankToNull(null)).isNull();
+            assertThat(OpenString.blankToNull("hello")).isEqualTo("hello");
+            assertThat(OpenString.blankToNull("\t\n")).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("Repeat with Separator")
+    class RepeatWithSeparator {
+
+        @Test
+        @DisplayName("repeat should repeat string with separator")
+        void repeatShouldRepeatWithSeparator() {
+            assertThat(OpenString.repeat("abc", ", ", 3)).isEqualTo("abc, abc, abc");
+            assertThat(OpenString.repeat("x", "-", 1)).isEqualTo("x");
+            assertThat(OpenString.repeat("ab", "|", 2)).isEqualTo("ab|ab");
+        }
+
+        @Test
+        @DisplayName("repeat should return empty for count <= 0")
+        void repeatShouldReturnEmptyForZeroOrNegativeCount() {
+            assertThat(OpenString.repeat("abc", ", ", 0)).isEmpty();
+            assertThat(OpenString.repeat("abc", ", ", -1)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("repeat should return null for null str")
+        void repeatShouldReturnNullForNullStr() {
+            assertThat(OpenString.repeat(null, ", ", 3)).isNull();
+        }
+
+        @Test
+        @DisplayName("repeat should handle null separator")
+        void repeatShouldHandleNullSeparator() {
+            assertThat(OpenString.repeat("ab", null, 3)).isEqualTo("ababab");
+        }
+    }
+
+    @Nested
+    @DisplayName("Ignore-case Prefix/Suffix")
+    class IgnoreCasePrefixSuffix {
+
+        @Test
+        @DisplayName("removePrefixIgnoreCase should remove prefix ignoring case")
+        void removePrefixIgnoreCaseShouldWork() {
+            assertThat(OpenString.removePrefixIgnoreCase("HelloWorld", "hello")).isEqualTo("World");
+            assertThat(OpenString.removePrefixIgnoreCase("HelloWorld", "HELLO")).isEqualTo("World");
+            assertThat(OpenString.removePrefixIgnoreCase("HelloWorld", "foo")).isEqualTo("HelloWorld");
+            assertThat(OpenString.removePrefixIgnoreCase(null, "hello")).isNull();
+            assertThat(OpenString.removePrefixIgnoreCase("Hello", null)).isEqualTo("Hello");
+        }
+
+        @Test
+        @DisplayName("removeSuffixIgnoreCase should remove suffix ignoring case")
+        void removeSuffixIgnoreCaseShouldWork() {
+            assertThat(OpenString.removeSuffixIgnoreCase("HelloWorld", "world")).isEqualTo("Hello");
+            assertThat(OpenString.removeSuffixIgnoreCase("HelloWorld", "WORLD")).isEqualTo("Hello");
+            assertThat(OpenString.removeSuffixIgnoreCase("HelloWorld", "foo")).isEqualTo("HelloWorld");
+            assertThat(OpenString.removeSuffixIgnoreCase(null, "world")).isNull();
+            assertThat(OpenString.removeSuffixIgnoreCase("Hello", null)).isEqualTo("Hello");
+        }
+
+        @Test
+        @DisplayName("ignore-case removal should handle edge cases")
+        void ignoreCaseRemovalEdgeCases() {
+            assertThat(OpenString.removePrefixIgnoreCase("", "hello")).isEmpty();
+            assertThat(OpenString.removeSuffixIgnoreCase("", "hello")).isEmpty();
+            assertThat(OpenString.removePrefixIgnoreCase("Hi", "Hello")).isEqualTo("Hi");
+            assertThat(OpenString.removeSuffixIgnoreCase("Hi", "Hello")).isEqualTo("Hi");
+        }
+    }
+
+    @Nested
+    @DisplayName("Split/Join Tests")
+    class SplitJoin {
+
+        @Test
+        @DisplayName("split should split string into list")
+        void splitShouldSplitIntoList() {
+            assertThat(OpenString.split("a,b,c", ",")).containsExactly("a", "b", "c");
+            assertThat(OpenString.split("a::b::c", "::")).containsExactly("a", "b", "c");
+            assertThat(OpenString.split("abc", ",")).containsExactly("abc");
+            assertThat(OpenString.split(null, ",")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("splitToMap should split into key-value map")
+        void splitToMapShouldSplitIntoMap() {
+            Map<String, String> map = OpenString.splitToMap("a=1&b=2", "&", "=");
+            assertThat(map).containsExactly(entry("a", "1"), entry("b", "2"));
+            assertThat(OpenString.splitToMap(null, "&", "=")).isEmpty();
+            assertThat(OpenString.splitToMap("", "&", "=")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("join should join elements")
+        void joinShouldJoinElements() {
+            assertThat(OpenString.join(", ", "a", "b", "c")).isEqualTo("a, b, c");
+            assertThat(OpenString.join(", ", "a", null, "c")).isEqualTo("a, null, c");
+            assertThat(OpenString.join(", ", (Object[]) null)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("joinSkipNulls should skip null elements")
+        void joinSkipNullsShouldSkipNulls() {
+            assertThat(OpenString.joinSkipNulls(", ", "a", null, "c")).isEqualTo("a, c");
+            assertThat(OpenString.joinSkipNulls(", ", (Object[]) null)).isEmpty();
+            assertThat(OpenString.joinSkipNulls(", ", null, null)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("joinSkipBlanks should skip blank elements")
+        void joinSkipBlanksShouldSkipBlanks() {
+            assertThat(OpenString.joinSkipBlanks(", ", "a", "", "  ", "c")).isEqualTo("a, c");
+            assertThat(OpenString.joinSkipBlanks(", ", (CharSequence[]) null)).isEmpty();
+            assertThat(OpenString.joinSkipBlanks(", ", null, "  ", "")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("splitToMap should handle null separators safely (regression #3)")
+        void splitToMapShouldHandleNullSeparators() {
+            assertThat(OpenString.splitToMap("a=1&b=2", null, "=")).isEmpty();
+            assertThat(OpenString.splitToMap("a=1&b=2", "&", null)).isEmpty();
+            assertThat(OpenString.splitToMap("a=1&b=2", null, null)).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("Abbreviate Tests")
+    class Abbreviate {
+
+        @Test
+        @DisplayName("abbreviate should truncate with ellipsis")
+        void abbreviateShouldTruncateWithEllipsis() {
+            assertThat(OpenString.abbreviate("Hello World", 8)).isEqualTo("Hello...");
+            assertThat(OpenString.abbreviate("Hi", 8)).isEqualTo("Hi");
+            assertThat(OpenString.abbreviate("abcdefgh", 7)).isEqualTo("abcd...");
+        }
+
+        @Test
+        @DisplayName("abbreviate should return null for null input")
+        void abbreviateShouldReturnNullForNull() {
+            assertThat(OpenString.abbreviate(null, 8)).isNull();
+        }
+
+        @Test
+        @DisplayName("abbreviate should throw for maxWidth < 4")
+        void abbreviateShouldThrowForSmallMaxWidth() {
+            assertThatIllegalArgumentException().isThrownBy(() ->
+                    OpenString.abbreviate("hello", 3));
+            assertThatIllegalArgumentException().isThrownBy(() ->
+                    OpenString.abbreviate("hello", 0, 3));
+        }
+
+        @Test
+        @DisplayName("abbreviate with offset should work")
+        void abbreviateWithOffsetShouldWork() {
+            String longStr = "Hello World Test String";
+            String result = OpenString.abbreviate(longStr, 6, 11);
+            assertThat(result).hasSize(11);
+            assertThat(result).startsWith("...");
+        }
+
+        @Test
+        @DisplayName("abbreviate should handle exact maxWidth")
+        void abbreviateShouldHandleExactMaxWidth() {
+            assertThat(OpenString.abbreviate("abcd", 4)).isEqualTo("abcd");
+            assertThat(OpenString.abbreviate("abcde", 4)).isEqualTo("a...");
+        }
+
+        @Test
+        @DisplayName("abbreviate with offset should not throw when maxWidth < 7 (regression #2)")
+        void abbreviateWithOffsetSmallMaxWidth() {
+            // maxWidth=5, offset=3 previously caused StringIndexOutOfBoundsException
+            String result = OpenString.abbreviate("Hello World Test", 3, 5);
+            assertThat(result).hasSize(5);
+            assertThat(result).endsWith("...");
         }
     }
 }

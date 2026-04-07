@@ -5,6 +5,8 @@ import cloud.opencode.base.rules.RuleContext;
 import cloud.opencode.base.rules.model.Action;
 import cloud.opencode.base.rules.model.Condition;
 
+import java.util.Objects;
+
 /**
  * Default Rule Implementation
  * 默认规则实现
@@ -46,6 +48,7 @@ public class DefaultRule implements Rule {
     private final boolean enabled;
     private final Condition condition;
     private final Action action;
+    private final boolean terminal;
 
     /**
      * Creates a default rule
@@ -61,13 +64,33 @@ public class DefaultRule implements Rule {
      */
     public DefaultRule(String name, String description, int priority, String group,
                        boolean enabled, Condition condition, Action action) {
-        this.name = name;
+        this(name, description, priority, group, enabled, condition, action, false);
+    }
+
+    /**
+     * Creates a default rule with terminal flag
+     * 创建带终止标志的默认规则
+     *
+     * @param name        the rule name | 规则名称
+     * @param description the description | 描述
+     * @param priority    the priority | 优先级
+     * @param group       the group | 分组
+     * @param enabled     whether enabled | 是否启用
+     * @param condition   the condition | 条件
+     * @param action      the action | 动作
+     * @param terminal    whether the rule is terminal | 是否为终止规则
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    public DefaultRule(String name, String description, int priority, String group,
+                       boolean enabled, Condition condition, Action action, boolean terminal) {
+        this.name = Objects.requireNonNull(name, "name must not be null");
         this.description = description;
         this.priority = priority;
         this.group = group;
         this.enabled = enabled;
-        this.condition = condition;
-        this.action = action;
+        this.condition = Objects.requireNonNull(condition, "condition must not be null");
+        this.action = Objects.requireNonNull(action, "action must not be null");
+        this.terminal = terminal;
     }
 
     @Override
@@ -126,7 +149,15 @@ public class DefaultRule implements Rule {
     }
 
     @Override
+    public boolean isTerminal() {
+        return terminal;
+    }
+
+    @Override
     public String toString() {
+        if (terminal) {
+            return "Rule{name='" + name + "', priority=" + priority + ", group='" + group + "', terminal=true}";
+        }
         return "Rule{name='" + name + "', priority=" + priority + ", group='" + group + "'}";
     }
 }

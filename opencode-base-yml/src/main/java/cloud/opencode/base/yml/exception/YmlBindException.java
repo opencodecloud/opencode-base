@@ -1,5 +1,7 @@
 package cloud.opencode.base.yml.exception;
 
+import java.io.Serial;
+
 /**
  * YAML Bind Exception - Thrown when configuration binding fails
  * YAML 绑定异常 - 当配置绑定失败时抛出
@@ -11,6 +13,7 @@ package cloud.opencode.base.yml.exception;
  * <ul>
  *   <li>Tracks property path and target type for diagnostic info - 跟踪属性路径和目标类型以提供诊断信息</li>
  *   <li>Supports required field validation errors - 支持必填字段验证错误</li>
+ *   <li>Error code YML_BIND_001 - 错误码 YML_BIND_001</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -32,9 +35,18 @@ package cloud.opencode.base.yml.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-yml V1.0.0
+ * @since JDK 25, opencode-base-yml V1.0.3
  */
 public class YmlBindException extends OpenYmlException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Default error code for bind exceptions.
+     * 绑定异常的默认错误码。
+     */
+    private static final String ERROR_CODE = "YML_BIND_001";
 
     private final String path;
     private final Class<?> targetType;
@@ -46,7 +58,7 @@ public class YmlBindException extends OpenYmlException {
      * @param message the detail message | 详细消息
      */
     public YmlBindException(String message) {
-        super(message);
+        super(ERROR_CODE, message);
         this.path = null;
         this.targetType = null;
     }
@@ -60,7 +72,7 @@ public class YmlBindException extends OpenYmlException {
      * @param cause      the cause | 原因
      */
     public YmlBindException(String path, Class<?> targetType, Throwable cause) {
-        super(String.format("Failed to bind '%s' to %s", path, targetType.getName()), cause);
+        super(ERROR_CODE, String.format("Failed to bind '%s' to %s", path, targetType.getName()), cause);
         this.path = path;
         this.targetType = targetType;
     }
@@ -73,7 +85,7 @@ public class YmlBindException extends OpenYmlException {
      * @param cause   the cause | 原因
      */
     public YmlBindException(String message, Throwable cause) {
-        super(message, cause);
+        super(ERROR_CODE, message, cause);
         this.path = null;
         this.targetType = null;
     }
@@ -86,7 +98,7 @@ public class YmlBindException extends OpenYmlException {
      * @param targetType the target type | 目标类型
      */
     public YmlBindException(String path, Class<?> targetType) {
-        super(String.format("Required property '%s' is missing for type %s", path, targetType.getName()));
+        super(ERROR_CODE, String.format("Required property '%s' is missing for type %s", path, targetType.getName()));
         this.path = path;
         this.targetType = targetType;
     }

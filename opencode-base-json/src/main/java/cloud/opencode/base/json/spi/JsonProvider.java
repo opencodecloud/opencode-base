@@ -198,6 +198,17 @@ public interface JsonProvider {
     <T> T fromJson(byte[] json, Class<T> clazz);
 
     /**
+     * Deserializes JSON bytes using a TypeReference.
+     * 使用 TypeReference 反序列化 JSON 字节数组。
+     *
+     * @param json          the JSON bytes - JSON 字节数组
+     * @param typeReference the type reference - 类型引用
+     * @param <T>           the target type - 目标类型
+     * @return the deserialized object - 反序列化的对象
+     */
+    <T> T fromJson(byte[] json, TypeReference<T> typeReference);
+
+    /**
      * Deserializes from an InputStream to an object of the specified class.
      * 从输入流反序列化为指定类的对象。
      *

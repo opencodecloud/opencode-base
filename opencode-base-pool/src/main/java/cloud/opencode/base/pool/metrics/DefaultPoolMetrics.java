@@ -141,6 +141,16 @@ public class DefaultPoolMetrics implements PoolMetrics {
         totalWaitNanos.add(duration.toNanos());
     }
 
+    /**
+     * Records a wait duration in nanoseconds (zero-allocation fast path).
+     * 以纳秒记录等待时长（零分配快速路径）。
+     *
+     * @param nanos the wait duration in nanoseconds - 等待时长（纳秒）
+     */
+    public void recordWaitNanos(long nanos) {
+        totalWaitNanos.add(nanos);
+    }
+
     @Override
     public long getBorrowCount() {
         return borrowCount.sum();

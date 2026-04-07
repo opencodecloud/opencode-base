@@ -1,11 +1,13 @@
 package cloud.opencode.base.feature;
 
+import cloud.opencode.base.feature.lifecycle.FeatureLifecycle;
 import cloud.opencode.base.feature.strategy.AlwaysOffStrategy;
 import cloud.opencode.base.feature.strategy.AlwaysOnStrategy;
 import cloud.opencode.base.feature.strategy.EnableStrategy;
 import cloud.opencode.base.feature.strategy.PercentageStrategy;
 import cloud.opencode.base.feature.strategy.UserListStrategy;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +25,9 @@ import java.util.Set;
  *   <li>Feature key and metadata - 功能键和元数据</li>
  *   <li>Enable strategy - 启用策略</li>
  *   <li>Default value - 默认值</li>
+ *   <li>Group support - 分组支持</li>
+ *   <li>Expiration support - 过期支持</li>
+ *   <li>Lifecycle management - 生命周期管理</li>
  *   <li>Timestamps - 时间戳</li>
  * </ul>
  *
@@ -44,6 +49,13 @@ import java.util.Set;
  * Feature feature = Feature.builder("beta-feature")
  *     .forUsers("user1", "user2")
  *     .build();
+ *
+ * // Feature with group and expiration
+ * Feature feature = Feature.builder("promo-banner")
+ *     .group("marketing")
+ *     .expiresAfter(Duration.ofDays(30))
+ *     .lifecycle(FeatureLifecycle.ACTIVE)
+ *     .build();
  * }</pre>
  *
  * @param key            the unique feature key | 唯一功能键
@@ -52,6 +64,9 @@ import java.util.Set;
  * @param defaultEnabled default enabled state | 默认启用状态
  * @param strategy       the enable strategy | 启用策略
  * @param metadata       custom metadata | 自定义元数据
+ * @param group          the feature group name (nullable) | 功能组名称（可为null）
+ * @param expiresAt      expiration time (nullable, null = never expires) | 过期时间（可为null，null = 永不过期）
+ * @param lifecycle      the lifecycle state | 生命周期状态
  * @param createdAt      creation timestamp | 创建时间戳
  * @param updatedAt      update timestamp | 更新时间戳
  *
@@ -60,10 +75,10 @@ import java.util.Set;
  *   <li>Thread-safe: Yes (immutable record) - 线程安全: 是（不可变记录）</li>
  *   <li>Null-safe: Partial (validates inputs) - 空值安全: 部分（验证输入）</li>
  * </ul>
-  * @author Leon Soo
+ * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 public record Feature(
     String key,
@@ -72,9 +87,23 @@ public record Feature(
     boolean defaultEnabled,
     EnableStrategy strategy,
     Map<String, Object> metadata,
+    String group,
+    Instant expiresAt,
+    FeatureLifecycle lifecycle,
     Instant createdAt,
     Instant updatedAt
 ) {
+
+    /**
+     * Compact constructor with validation and defensive copy
+     * 带验证和防御性复制的紧凑构造函数
+     */
+    public Feature {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("Feature key cannot be null or blank");
+        }
+        metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+    }
 
     /**
      * Create a builder for feature
@@ -105,10 +134,33 @@ public record Feature(
      * @return true if enabled | 如果启用返回true
      */
     public boolean isEnabled(FeatureContext context) {
+        if (isExpired() || !isUsable()) {
+            return false;
+        }
         if (strategy == null) {
             return defaultEnabled;
         }
         return strategy.isEnabled(this, context);
+    }
+
+    /**
+     * Check if this feature has expired
+     * 检查此功能是否已过期
+     *
+     * @return true if expired | 如果已过期返回true
+     */
+    public boolean isExpired() {
+        return expiresAt != null && Instant.now().isAfter(expiresAt);
+    }
+
+    /**
+     * Check if this feature is usable based on its lifecycle state
+     * 根据生命周期状态检查此功能是否可用
+     *
+     * @return true if usable | 如果可用返回true
+     */
+    public boolean isUsable() {
+        return lifecycle == null || lifecycle.isUsable();
     }
 
     /**
@@ -151,7 +203,47 @@ public record Feature(
      */
     public Feature withStrategy(EnableStrategy newStrategy) {
         return new Feature(key, name, description, defaultEnabled,
-            newStrategy, metadata, createdAt, Instant.now());
+            newStrategy, metadata, group, expiresAt, lifecycle,
+            createdAt, Instant.now());
+    }
+
+    /**
+     * Create a copy with updated group
+     * 创建具有更新分组的副本
+     *
+     * @param newGroup the new group name | 新组名称
+     * @return new Feature with updated group | 具有更新分组的新Feature
+     */
+    public Feature withGroup(String newGroup) {
+        return new Feature(key, name, description, defaultEnabled,
+            strategy, metadata, newGroup, expiresAt, lifecycle,
+            createdAt, Instant.now());
+    }
+
+    /**
+     * Create a copy with updated lifecycle
+     * 创建具有更新生命周期的副本
+     *
+     * @param newLifecycle the new lifecycle state | 新生命周期状态
+     * @return new Feature with updated lifecycle | 具有更新生命周期的新Feature
+     */
+    public Feature withLifecycle(FeatureLifecycle newLifecycle) {
+        return new Feature(key, name, description, defaultEnabled,
+            strategy, metadata, group, expiresAt, newLifecycle,
+            createdAt, Instant.now());
+    }
+
+    /**
+     * Create a copy with updated expiration time
+     * 创建具有更新过期时间的副本
+     *
+     * @param newExpiresAt the new expiration time | 新过期时间
+     * @return new Feature with updated expiration | 具有更新过期时间的新Feature
+     */
+    public Feature withExpiresAt(Instant newExpiresAt) {
+        return new Feature(key, name, description, defaultEnabled,
+            strategy, metadata, group, newExpiresAt, lifecycle,
+            createdAt, Instant.now());
     }
 
     /**
@@ -165,6 +257,9 @@ public record Feature(
         private boolean defaultEnabled = false;
         private EnableStrategy strategy = null;  // null means use defaultEnabled
         private final Map<String, Object> metadata = new HashMap<>();
+        private String group;
+        private Instant expiresAt;
+        private FeatureLifecycle lifecycle = FeatureLifecycle.ACTIVE;
 
         /**
          * Create builder with key
@@ -309,6 +404,60 @@ public record Feature(
         }
 
         /**
+         * Set feature group
+         * 设置功能组
+         *
+         * @param group the group name | 组名称
+         * @return this builder | 此构建器
+         */
+        public Builder group(String group) {
+            this.group = group;
+            return this;
+        }
+
+        /**
+         * Set expiration time
+         * 设置过期时间
+         *
+         * @param expiresAt the expiration instant | 过期时间点
+         * @return this builder | 此构建器
+         */
+        public Builder expiresAt(Instant expiresAt) {
+            this.expiresAt = expiresAt;
+            return this;
+        }
+
+        /**
+         * Set expiration as a duration from now
+         * 设置从现在开始的过期持续时间
+         *
+         * @param duration the duration until expiration | 到过期的持续时间
+         * @return this builder | 此构建器
+         */
+        public Builder expiresAfter(Duration duration) {
+            if (duration == null) {
+                throw new IllegalArgumentException("Duration cannot be null");
+            }
+            if (duration.isNegative() || duration.isZero()) {
+                throw new IllegalArgumentException("Duration must be positive");
+            }
+            this.expiresAt = Instant.now().plus(duration);
+            return this;
+        }
+
+        /**
+         * Set lifecycle state
+         * 设置生命周期状态
+         *
+         * @param lifecycle the lifecycle state | 生命周期状态
+         * @return this builder | 此构建器
+         */
+        public Builder lifecycle(FeatureLifecycle lifecycle) {
+            this.lifecycle = lifecycle;
+            return this;
+        }
+
+        /**
          * Build the feature
          * 构建功能
          *
@@ -317,7 +466,8 @@ public record Feature(
         public Feature build() {
             Instant now = Instant.now();
             return new Feature(key, name, description, defaultEnabled,
-                strategy, Map.copyOf(metadata), now, now);
+                strategy, metadata, group, expiresAt, lifecycle,
+                now, now);
         }
     }
 }

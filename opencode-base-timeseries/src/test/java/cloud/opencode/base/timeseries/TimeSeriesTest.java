@@ -456,6 +456,282 @@ class TimeSeriesTest {
     }
 
     @Nested
+    @DisplayName("Lag Tests")
+    class LagTests {
+
+        @BeforeEach
+        void setUpData() {
+            for (int i = 0; i < 5; i++) {
+                series.add(baseTime.plusSeconds(i), (i + 1) * 10.0);
+            }
+        }
+
+        @Test
+        @DisplayName("should create lagged series")
+        void shouldCreateLaggedSeries() {
+            // values: 10, 20, 30, 40, 50
+            // lag(2): at timestamps[2]=value[0]=10, timestamps[3]=value[1]=20, timestamps[4]=value[2]=30
+            TimeSeries lagged = series.lag(2);
+
+            assertThat(lagged.size()).isEqualTo(3);
+            double[] values = lagged.getValues();
+            assertThat(values).containsExactly(10.0, 20.0, 30.0);
+            // Verify timestamps come from the original positions 2, 3, 4
+            Instant[] timestamps = lagged.getTimestamps();
+            assertThat(timestamps[0]).isEqualTo(baseTime.plusSeconds(2));
+            assertThat(timestamps[1]).isEqualTo(baseTime.plusSeconds(3));
+            assertThat(timestamps[2]).isEqualTo(baseTime.plusSeconds(4));
+        }
+
+        @Test
+        @DisplayName("lag(1) should shift values back by one period")
+        void lagOneShouldShiftByOnePeriod() {
+            TimeSeries lagged = series.lag(1);
+
+            assertThat(lagged.size()).isEqualTo(4);
+            assertThat(lagged.getValues()).containsExactly(10.0, 20.0, 30.0, 40.0);
+        }
+
+        @Test
+        @DisplayName("should return empty for lag greater than or equal to size")
+        void shouldReturnEmptyForLagGreaterThanOrEqualToSize() {
+            TimeSeries laggedEqual = series.lag(5);
+            assertThat(laggedEqual.isEmpty()).isTrue();
+
+            TimeSeries laggedGreater = series.lag(10);
+            assertThat(laggedGreater.isEmpty()).isTrue();
+        }
+
+        @Test
+        @DisplayName("lag(0) should return copy of original series")
+        void lagZeroShouldReturnCopy() {
+            TimeSeries lagged = series.lag(0);
+            assertThat(lagged.size()).isEqualTo(series.size());
+            assertThat(lagged.getValues()).containsExactly(series.getValues());
+        }
+
+        @Test
+        @DisplayName("should throw for negative lag")
+        void shouldThrowForNegativeLag() {
+            assertThatThrownBy(() -> series.lag(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("periods must be >= 0");
+        }
+    }
+
+    @Nested
+    @DisplayName("Lead Tests")
+    class LeadTests {
+
+        @BeforeEach
+        void setUpData() {
+            for (int i = 0; i < 5; i++) {
+                series.add(baseTime.plusSeconds(i), (i + 1) * 10.0);
+            }
+        }
+
+        @Test
+        @DisplayName("should create lead series")
+        void shouldCreateLeadSeries() {
+            // values: 10, 20, 30, 40, 50
+            // lead(2): at timestamps[0]=value[2]=30, timestamps[1]=value[3]=40, timestamps[2]=value[4]=50
+            TimeSeries led = series.lead(2);
+
+            assertThat(led.size()).isEqualTo(3);
+            double[] values = led.getValues();
+            assertThat(values).containsExactly(30.0, 40.0, 50.0);
+            Instant[] timestamps = led.getTimestamps();
+            assertThat(timestamps[0]).isEqualTo(baseTime);
+            assertThat(timestamps[1]).isEqualTo(baseTime.plusSeconds(1));
+            assertThat(timestamps[2]).isEqualTo(baseTime.plusSeconds(2));
+        }
+
+        @Test
+        @DisplayName("lead(1) should shift values forward by one period")
+        void leadOneShouldShiftByOnePeriod() {
+            TimeSeries led = series.lead(1);
+
+            assertThat(led.size()).isEqualTo(4);
+            assertThat(led.getValues()).containsExactly(20.0, 30.0, 40.0, 50.0);
+        }
+
+        @Test
+        @DisplayName("should return empty for lead greater than or equal to size")
+        void shouldReturnEmptyForLeadGreaterThanOrEqualToSize() {
+            TimeSeries ledEqual = series.lead(5);
+            assertThat(ledEqual.isEmpty()).isTrue();
+
+            TimeSeries ledGreater = series.lead(10);
+            assertThat(ledGreater.isEmpty()).isTrue();
+        }
+
+        @Test
+        @DisplayName("lead(0) should return copy of original series")
+        void leadZeroShouldReturnCopy() {
+            TimeSeries led = series.lead(0);
+            assertThat(led.size()).isEqualTo(series.size());
+            assertThat(led.getValues()).containsExactly(series.getValues());
+        }
+
+        @Test
+        @DisplayName("should throw for negative lead")
+        void shouldThrowForNegativeLead() {
+            assertThatThrownBy(() -> series.lead(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("periods must be >= 0");
+        }
+    }
+
+    @Nested
+    @DisplayName("Shift Tests")
+    class ShiftTests {
+
+        @BeforeEach
+        void setUpData() {
+            for (int i = 0; i < 3; i++) {
+                series.add(baseTime.plusSeconds(i), (i + 1) * 10.0);
+            }
+        }
+
+        @Test
+        @DisplayName("should shift timestamps forward by duration")
+        void shouldShiftTimestampsForward() {
+            Duration oneHour = Duration.ofHours(1);
+            TimeSeries shifted = series.shift(oneHour);
+
+            assertThat(shifted.size()).isEqualTo(3);
+            Instant[] timestamps = shifted.getTimestamps();
+            assertThat(timestamps[0]).isEqualTo(baseTime.plus(oneHour));
+            assertThat(timestamps[1]).isEqualTo(baseTime.plusSeconds(1).plus(oneHour));
+            assertThat(timestamps[2]).isEqualTo(baseTime.plusSeconds(2).plus(oneHour));
+            // Values should remain unchanged
+            assertThat(shifted.getValues()).containsExactly(10.0, 20.0, 30.0);
+        }
+
+        @Test
+        @DisplayName("should shift timestamps backward with negative duration")
+        void shouldShiftNegative() {
+            Duration negativeShift = Duration.ofMinutes(-30);
+            TimeSeries shifted = series.shift(negativeShift);
+
+            assertThat(shifted.size()).isEqualTo(3);
+            Instant[] timestamps = shifted.getTimestamps();
+            assertThat(timestamps[0]).isEqualTo(baseTime.plus(negativeShift));
+            assertThat(timestamps[1]).isEqualTo(baseTime.plusSeconds(1).plus(negativeShift));
+            assertThat(timestamps[2]).isEqualTo(baseTime.plusSeconds(2).plus(negativeShift));
+        }
+
+        @Test
+        @DisplayName("shift by zero should preserve timestamps")
+        void shiftByZeroShouldPreserveTimestamps() {
+            TimeSeries shifted = series.shift(Duration.ZERO);
+
+            assertThat(shifted.size()).isEqualTo(3);
+            assertThat(shifted.getTimestamps()).containsExactly(series.getTimestamps());
+            assertThat(shifted.getValues()).containsExactly(series.getValues());
+        }
+
+        @Test
+        @DisplayName("should throw for null offset")
+        void shouldThrowForNullOffset() {
+            assertThatThrownBy(() -> series.shift(null))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("shift on empty series should return empty")
+        void shiftOnEmptySeriesShouldReturnEmpty() {
+            TimeSeries empty = new TimeSeries("empty");
+            TimeSeries shifted = empty.shift(Duration.ofHours(1));
+            assertThat(shifted.isEmpty()).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("Percentage Change Tests")
+    class PctChangeTests {
+
+        @Test
+        @DisplayName("should calculate percentage change")
+        void shouldCalculatePercentageChange() {
+            series.add(baseTime, 100.0);
+            series.add(baseTime.plusSeconds(1), 110.0);
+            series.add(baseTime.plusSeconds(2), 99.0);
+
+            TimeSeries pct = series.pctChange(1);
+
+            assertThat(pct.size()).isEqualTo(2);
+            double[] values = pct.getValues();
+            // (110 - 100) / 100 = 0.1
+            assertThat(values[0]).isCloseTo(0.1, within(1e-10));
+            // (99 - 110) / 110 = -0.1
+            assertThat(values[1]).isCloseTo(-0.1, within(1e-10));
+        }
+
+        @Test
+        @DisplayName("should calculate percentage change with periods > 1")
+        void shouldCalculatePctChangeWithMultiplePeriods() {
+            series.add(baseTime, 100.0);
+            series.add(baseTime.plusSeconds(1), 110.0);
+            series.add(baseTime.plusSeconds(2), 130.0);
+            series.add(baseTime.plusSeconds(3), 120.0);
+
+            TimeSeries pct = series.pctChange(2);
+
+            assertThat(pct.size()).isEqualTo(2);
+            // (130 - 100) / 100 = 0.3
+            assertThat(pct.getValues()[0]).isCloseTo(0.3, within(1e-10));
+            // (120 - 110) / 110 = 0.0909...
+            assertThat(pct.getValues()[1]).isCloseTo(10.0 / 110.0, within(1e-10));
+        }
+
+        @Test
+        @DisplayName("should return NaN when previous value is zero")
+        void shouldHandleZeroPreviousValue() {
+            series.add(baseTime, 0.0);
+            series.add(baseTime.plusSeconds(1), 50.0);
+
+            TimeSeries pct = series.pctChange(1);
+
+            assertThat(pct.size()).isEqualTo(1);
+            assertThat(pct.getValues()[0]).isNaN();
+        }
+
+        @Test
+        @DisplayName("should return empty when periods >= size")
+        void shouldReturnEmptyWhenPeriodsGreaterThanOrEqualToSize() {
+            series.add(baseTime, 100.0);
+            series.add(baseTime.plusSeconds(1), 200.0);
+
+            TimeSeries pct = series.pctChange(2);
+            assertThat(pct.isEmpty()).isTrue();
+
+            TimeSeries pctLarger = series.pctChange(10);
+            assertThat(pctLarger.isEmpty()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should throw for zero periods")
+        void shouldThrowForZeroPeriods() {
+            series.add(baseTime, 100.0);
+
+            assertThatThrownBy(() -> series.pctChange(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("periods must be > 0");
+        }
+
+        @Test
+        @DisplayName("should throw for negative periods")
+        void shouldThrowForNegativePeriods() {
+            series.add(baseTime, 100.0);
+
+            assertThatThrownBy(() -> series.pctChange(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("periods must be > 0");
+        }
+    }
+
+    @Nested
     @DisplayName("Empty Series Tests")
     class EmptySeriesTests {
 

@@ -11,6 +11,7 @@ import cloud.opencode.base.json.path.JsonPath;
 import cloud.opencode.base.json.path.JsonPointer;
 import cloud.opencode.base.json.schema.JsonSchemaValidator;
 import cloud.opencode.base.json.security.JsonSecurity;
+import cloud.opencode.base.json.spi.JsonModule;
 import cloud.opencode.base.json.spi.JsonProvider;
 import cloud.opencode.base.json.spi.JsonProviderFactory;
 import cloud.opencode.base.json.stream.JsonReader;
@@ -19,6 +20,7 @@ import cloud.opencode.base.json.stream.JsonWriter;
 import java.io.*;
 import java.lang.reflect.Type;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * OpenJson - Unified JSON Processing Facade
@@ -103,6 +105,24 @@ public final class OpenJson {
      * JSON 提供者
      */
     private final JsonProvider provider;
+
+    /**
+     * Registered modules
+     * 注册的模块
+     */
+    private final List<JsonModule> modules = new ArrayList<>();
+
+    /**
+     * Mixin source for annotation mixing
+     * 注解混入的混入源
+     */
+    private final MixinSource mixinSource = new MixinSource();
+
+    /**
+     * Named property filters
+     * 命名属性过滤器
+     */
+    private final Map<String, PropertyFilter> propertyFilters = new ConcurrentHashMap<>();
 
     private OpenJson(JsonConfig config) {
         this.config = config;
@@ -246,6 +266,19 @@ public final class OpenJson {
      */
     public static <T> T fromJson(byte[] json, Class<T> clazz) {
         return DEFAULT.deserialize(json, clazz);
+    }
+
+    /**
+     * Deserializes JSON bytes using TypeReference.
+     * 使用 TypeReference 反序列化 JSON 字节数组。
+     *
+     * @param json          the JSON bytes - JSON 字节数组
+     * @param typeReference the type reference - 类型引用
+     * @param <T>           the target type - 目标类型
+     * @return the deserialized object - 反序列化的对象
+     */
+    public static <T> T fromJson(byte[] json, TypeReference<T> typeReference) {
+        return DEFAULT.deserialize(json, typeReference);
     }
 
     /**
@@ -451,6 +484,98 @@ public final class OpenJson {
         JsonSchemaValidator.validateOrThrow(data, schema);
     }
 
+    // ==================== Static Utility Methods ====================
+
+    /**
+     * Checks whether the given string is valid JSON.
+     * 检查给定字符串是否为合法 JSON。
+     *
+     * @param json the string to check - 要检查的字符串
+     * @return true if valid JSON - 如果是合法 JSON 则返回 true
+     */
+    public static boolean isValid(String json) {
+        return cloud.opencode.base.json.util.JsonStrings.isValid(json);
+    }
+
+    /**
+     * Minifies a JSON string by removing unnecessary whitespace.
+     * 通过移除不必要的空白来压缩 JSON 字符串。
+     *
+     * @param json the JSON string - JSON 字符串
+     * @return the minified JSON - 压缩后的 JSON
+     */
+    public static String minify(String json) {
+        return cloud.opencode.base.json.util.JsonStrings.minify(json);
+    }
+
+    /**
+     * Pretty-prints a JSON string with standard 2-space indentation.
+     * 使用标准 2 空格缩进美化 JSON 字符串。
+     *
+     * @param json the JSON string - JSON 字符串
+     * @return the formatted JSON - 格式化后的 JSON
+     */
+    public static String prettyPrint(String json) {
+        return cloud.opencode.base.json.util.JsonStrings.prettyPrint(json);
+    }
+
+    /**
+     * Compares two JSON nodes for structural equality (ignoring object key order).
+     * 比较两个 JSON 节点的结构相等性（忽略对象键顺序）。
+     *
+     * @param a the first node - 第一个节点
+     * @param b the second node - 第二个节点
+     * @return true if structurally equal - 如果结构相等则返回 true
+     */
+    public static boolean structuralEquals(JsonNode a, JsonNode b) {
+        return cloud.opencode.base.json.util.JsonEquals.equals(a, b);
+    }
+
+    /**
+     * Flattens a nested JSON node into a flat key-value map using dot notation.
+     * 使用点号分隔将嵌套 JSON 节点扁平化为键值对 Map。
+     *
+     * @param node the JSON node to flatten - 要扁平化的 JSON 节点
+     * @return the flattened map - 扁平化后的 Map
+     */
+    public static java.util.Map<String, JsonNode> flatten(JsonNode node) {
+        return cloud.opencode.base.json.util.JsonFlattener.flatten(node);
+    }
+
+    /**
+     * Restores a flattened map back to a nested JSON node.
+     * 将扁平化的 Map 还原为嵌套 JSON 节点。
+     *
+     * @param map the flattened map - 扁平化的 Map
+     * @return the nested JSON node - 嵌套的 JSON 节点
+     */
+    public static JsonNode unflatten(java.util.Map<String, JsonNode> map) {
+        return cloud.opencode.base.json.util.JsonFlattener.unflatten(map);
+    }
+
+    /**
+     * Produces RFC 8785 canonical JSON output for the given node.
+     * 为给定节点生成 RFC 8785 规范化 JSON 输出。
+     *
+     * @param node the JSON node - JSON 节点
+     * @return the canonical JSON string - 规范化 JSON 字符串
+     */
+    public static String canonicalize(JsonNode node) {
+        return cloud.opencode.base.json.util.JsonCanonicalizer.canonicalize(node);
+    }
+
+    /**
+     * Truncates a JSON string to the specified maximum length for logging.
+     * 将 JSON 字符串截断到指定最大长度，用于日志记录。
+     *
+     * @param json      the JSON string - JSON 字符串
+     * @param maxLength the maximum length - 最大长度
+     * @return the truncated JSON - 截断后的 JSON
+     */
+    public static String truncate(String json, int maxLength) {
+        return cloud.opencode.base.json.util.JsonTruncator.truncate(json, maxLength);
+    }
+
     // ==================== Static Streaming ====================
 
     /**
@@ -583,6 +708,19 @@ public final class OpenJson {
     }
 
     /**
+     * Deserializes JSON bytes using TypeReference.
+     * 使用 TypeReference 反序列化 JSON 字节数组。
+     *
+     * @param json          the JSON bytes - JSON 字节数组
+     * @param typeReference the type reference - 类型引用
+     * @param <T>           the target type - 目标类型
+     * @return the object - 对象
+     */
+    public <T> T deserialize(byte[] json, TypeReference<T> typeReference) {
+        return provider.fromJson(json, typeReference);
+    }
+
+    /**
      * Deserializes from InputStream.
      * 从输入流反序列化。
      *
@@ -680,6 +818,121 @@ public final class OpenJson {
      */
     public <T> T treeToObject(JsonNode node, Class<T> clazz) {
         return provider.treeToValue(node, clazz);
+    }
+
+    // ==================== Module & Mixin & Filter ====================
+
+    /**
+     * Registers a JSON module with this instance.
+     * 向此实例注册 JSON 模块。
+     *
+     * <p>The module's {@link JsonModule#setupModule(JsonModule.SetupContext)}
+     * method is called immediately to register all components.</p>
+     * <p>模块的 {@link JsonModule#setupModule(JsonModule.SetupContext)}
+     * 方法会被立即调用以注册所有组件。</p>
+     *
+     * @param module the module to register - 要注册的模块
+     * @return this instance for chaining - 此实例，用于链式调用
+     */
+    public OpenJson registerModule(JsonModule module) {
+        Objects.requireNonNull(module, "Module must not be null");
+        modules.add(module);
+        module.setupModule(new JsonModule.SetupContext() {
+            @Override
+            public void addTypeAdapter(cloud.opencode.base.json.adapter.JsonTypeAdapter<?> adapter) {
+                JsonAdapterRegistry.register(adapter);
+            }
+
+            @Override
+            public void addTypeAdapterFactory(cloud.opencode.base.json.adapter.JsonTypeAdapterFactory factory) {
+                JsonAdapterRegistry.registerFactory(type -> {
+                    if (type instanceof Class<?> clazz) {
+                        return factory.create(clazz);
+                    }
+                    return null;
+                });
+            }
+
+            @Override
+            public void addMixin(Class<?> target, Class<?> mixin) {
+                mixinSource.addMixin(target, mixin);
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public void addKeyAdapter(Class<?> type, cloud.opencode.base.json.adapter.JsonTypeAdapter<?> adapter) {
+                registerKeyAdapter((Class<Object>) type, (cloud.opencode.base.json.adapter.JsonTypeAdapter<Object>) adapter);
+            }
+
+            private <T> void registerKeyAdapter(Class<T> type, cloud.opencode.base.json.adapter.JsonTypeAdapter<T> adapter) {
+                JsonAdapterRegistry.register(type, adapter);
+            }
+
+            @Override
+            public JsonConfig getConfig() {
+                return config;
+            }
+        });
+        return this;
+    }
+
+    /**
+     * Adds a mixin annotation class for a target type.
+     * 为目标类型添加混入注解类。
+     *
+     * @param target the target class - 目标类
+     * @param mixin  the mixin class containing annotations - 包含注解的混入类
+     * @return this instance for chaining - 此实例，用于链式调用
+     */
+    public OpenJson addMixin(Class<?> target, Class<?> mixin) {
+        mixinSource.addMixin(target, mixin);
+        return this;
+    }
+
+    /**
+     * Registers a named property filter.
+     * 注册命名属性过滤器。
+     *
+     * @param filterId the filter identifier - 过滤器标识符
+     * @param filter   the property filter - 属性过滤器
+     * @return this instance for chaining - 此实例，用于链式调用
+     */
+    public OpenJson setPropertyFilter(String filterId, PropertyFilter filter) {
+        Objects.requireNonNull(filterId, "Filter ID must not be null");
+        Objects.requireNonNull(filter, "Filter must not be null");
+        propertyFilters.put(filterId, filter);
+        return this;
+    }
+
+    /**
+     * Returns the mixin source.
+     * 返回混入源。
+     *
+     * @return the mixin source - 混入源
+     */
+    public MixinSource getMixinSource() {
+        return mixinSource;
+    }
+
+    /**
+     * Returns the property filter for the given ID.
+     * 返回给定 ID 的属性过滤器。
+     *
+     * @param filterId the filter identifier - 过滤器标识符
+     * @return the filter, or null if not found - 过滤器，如果未找到则返回 null
+     */
+    public PropertyFilter getPropertyFilter(String filterId) {
+        return propertyFilters.get(filterId);
+    }
+
+    /**
+     * Returns the registered modules.
+     * 返回注册的模块。
+     *
+     * @return unmodifiable list of modules - 不可修改的模块列表
+     */
+    public List<JsonModule> getModules() {
+        return Collections.unmodifiableList(modules);
     }
 
     /**

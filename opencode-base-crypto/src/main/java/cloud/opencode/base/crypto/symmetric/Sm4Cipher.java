@@ -5,6 +5,7 @@ import cloud.opencode.base.crypto.codec.HexCodec;
 import cloud.opencode.base.crypto.exception.OpenCryptoException;
 import cloud.opencode.base.crypto.exception.OpenKeyException;
 import cloud.opencode.base.crypto.random.NonceGenerator;
+import cloud.opencode.base.crypto.util.SecureEraser;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -154,7 +155,7 @@ public final class Sm4Cipher implements SymmetricCipher, AeadCipher {
         if (iv != null && iv.length != expectedLength) {
             throw new OpenCryptoException("SM4-" + mode + " IV must be " + expectedLength + " bytes");
         }
-        this.iv = iv;
+        this.iv = iv != null ? iv.clone() : null;
         return this;
     }
 
@@ -168,7 +169,7 @@ public final class Sm4Cipher implements SymmetricCipher, AeadCipher {
         if (mode != CipherMode.GCM) {
             throw new OpenCryptoException("AAD only supported in GCM mode");
         }
-        this.aad = aad;
+        this.aad = aad != null ? aad.clone() : null;
         return this;
     }
 
@@ -544,7 +545,12 @@ public final class Sm4Cipher implements SymmetricCipher, AeadCipher {
      */
     public SecretKey getKey() {
         if (key == null) return null;
-        return new SecretKeySpec(key.getEncoded().clone(), key.getAlgorithm());
+        byte[] keyBytes = key.getEncoded();
+        try {
+            return new SecretKeySpec(keyBytes.clone(), key.getAlgorithm());
+        } finally {
+            SecureEraser.erase(keyBytes);
+        }
     }
 
     private String getTransformation() {

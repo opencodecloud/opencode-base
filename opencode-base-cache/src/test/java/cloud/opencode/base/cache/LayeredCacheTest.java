@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @since JDK 25, opencode-base-cache V1.0.0
  */
 @DisplayName("LayeredCache Tests")
+@SuppressWarnings("removal")
 class LayeredCacheTest {
 
     private Cache<String, String> l1Cache;

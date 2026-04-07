@@ -1,5 +1,6 @@
 package cloud.opencode.base.captcha.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -24,7 +25,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException("captcha-123");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-123");
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA has expired: captcha-123");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA has expired: captcha-123");
         }
 
         @Test
@@ -32,8 +33,8 @@ class CaptchaExpiredExceptionTest {
         void shouldIncludePrefixInMessage() {
             CaptchaExpiredException ex = new CaptchaExpiredException("abc");
 
-            assertThat(ex.getMessage()).startsWith("CAPTCHA has expired: ");
-            assertThat(ex.getMessage()).endsWith("abc");
+            assertThat(ex.getRawMessage()).startsWith("CAPTCHA has expired: ");
+            assertThat(ex.getRawMessage()).endsWith("abc");
         }
 
         @Test
@@ -43,7 +44,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException(uuid);
 
             assertThat(ex.getCaptchaId()).isEqualTo(uuid);
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA has expired: " + uuid);
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA has expired: " + uuid);
         }
 
         @Test
@@ -52,7 +53,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException((String) null);
 
             assertThat(ex.getCaptchaId()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA has expired: null");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA has expired: null");
         }
 
         @Test
@@ -61,7 +62,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException("");
 
             assertThat(ex.getCaptchaId()).isEmpty();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA has expired: ");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA has expired: ");
         }
 
         @Test
@@ -70,7 +71,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException("   ");
 
             assertThat(ex.getCaptchaId()).isEqualTo("   ");
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA has expired:    ");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA has expired:    ");
         }
 
         @Test
@@ -93,7 +94,7 @@ class CaptchaExpiredExceptionTest {
                 "Captcha expired after 5 minutes", "captcha-456");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-456");
-            assertThat(ex.getMessage()).isEqualTo("Captcha expired after 5 minutes");
+            assertThat(ex.getRawMessage()).isEqualTo("Captcha expired after 5 minutes");
         }
 
         @Test
@@ -103,8 +104,8 @@ class CaptchaExpiredExceptionTest {
                 "Session timeout", "session-789");
 
             assertThat(ex.getCaptchaId()).isEqualTo("session-789");
-            assertThat(ex.getMessage()).isEqualTo("Session timeout");
-            assertThat(ex.getMessage()).doesNotContain("session-789");
+            assertThat(ex.getRawMessage()).isEqualTo("Session timeout");
+            assertThat(ex.getRawMessage()).doesNotContain("session-789");
         }
 
         @Test
@@ -113,7 +114,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException(null, "captcha-111");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-111");
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
         }
 
         @Test
@@ -122,7 +123,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException("", "captcha-222");
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-222");
-            assertThat(ex.getMessage()).isEmpty();
+            assertThat(ex.getRawMessage()).isEmpty();
         }
 
         @Test
@@ -131,7 +132,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException(null, null);
 
             assertThat(ex.getCaptchaId()).isNull();
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
         }
 
         @Test
@@ -208,6 +209,14 @@ class CaptchaExpiredExceptionTest {
     @Nested
     @DisplayName("Inheritance Tests")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            CaptchaExpiredException ex = new CaptchaExpiredException("id");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("should extend CaptchaException")
@@ -299,7 +308,7 @@ class CaptchaExpiredExceptionTest {
         void shouldFormatDefaultMessage() {
             CaptchaExpiredException ex = new CaptchaExpiredException("my-id");
 
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA has expired: my-id");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA has expired: my-id");
         }
 
         @Test
@@ -308,7 +317,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException ex = new CaptchaExpiredException(
                 "Custom expired message", "id-99");
 
-            assertThat(ex.getMessage()).isEqualTo("Custom expired message");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom expired message");
         }
 
         @Test
@@ -318,7 +327,7 @@ class CaptchaExpiredExceptionTest {
             CaptchaExpiredException customEx = new CaptchaExpiredException(
                 "Different message", "captcha-1");
 
-            assertThat(defaultEx.getMessage()).isNotEqualTo(customEx.getMessage());
+            assertThat(defaultEx.getRawMessage()).isNotEqualTo(customEx.getRawMessage());
             assertThat(defaultEx.getCaptchaId()).isEqualTo(customEx.getCaptchaId());
         }
     }

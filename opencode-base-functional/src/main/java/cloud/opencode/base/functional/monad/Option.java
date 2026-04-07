@@ -5,10 +5,12 @@ import cloud.opencode.base.functional.exception.OpenFunctionalException;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  * Option Monad - Enhanced Optional with more functional operations
@@ -295,6 +297,114 @@ public sealed interface Option<T> permits Option.Some, Option.None {
      */
     Option<T> onNone(Runnable action);
 
+    // ==================== Enhanced Operations | 增强操作 ====================
+
+    /**
+     * Check if this is a Some containing a value equal to the given value.
+     * 检查是否为包含与给定值相等的值的 Some。
+     *
+     * @param value the value to compare - 要比较的值
+     * @return true if Some and value equals contained value | 如果是 Some 且值相等返回 true
+     */
+    default boolean contains(T value) {
+        if (this instanceof Some<T> s) {
+            return Objects.equals(s.value(), value);
+        }
+        return false;
+    }
+
+    /**
+     * Check if this is a Some and the predicate matches the contained value.
+     * 检查是否为 Some 且谓词匹配包含的值。
+     *
+     * @param predicate the predicate to test - 要测试的谓词
+     * @return true if Some and predicate matches | 如果是 Some 且谓词匹配返回 true
+     */
+    default boolean exists(Predicate<? super T> predicate) {
+        if (this instanceof Some<T> s) {
+            return predicate.test(s.value());
+        }
+        return false;
+    }
+
+    /**
+     * Check if the predicate holds for all values. Returns true for None (vacuously true).
+     * 检查谓词是否对所有值成立。对于 None 返回 true（空集满足）。
+     *
+     * @param predicate the predicate to test - 要测试的谓词
+     * @return true if None or predicate matches | 如果是 None 或谓词匹配返回 true
+     */
+    default boolean forAll(Predicate<? super T> predicate) {
+        if (this instanceof Some<T> s) {
+            return predicate.test(s.value());
+        }
+        return true;
+    }
+
+    /**
+     * Convert to Try. Some maps to Try.success(value), None maps to Try.failure with the supplied exception.
+     * 转换为 Try。Some 映射为 Try.success(value)，None 映射为带有提供异常的 Try.failure。
+     *
+     * @param exceptionSupplier supplier for the exception when None - None 时异常的供应商
+     * @return Try containing the value or failure | 包含值的 Try 或失败
+     */
+    default Try<T> toTry(Supplier<? extends Throwable> exceptionSupplier) {
+        Objects.requireNonNull(exceptionSupplier, "exceptionSupplier must not be null");
+        if (this instanceof Some<T> s) {
+            return Try.success(s.value());
+        }
+        return Try.failure(exceptionSupplier.get());
+    }
+
+    /**
+     * Convert to Stream. Some maps to Stream.of(value), None maps to Stream.empty().
+     * 转换为 Stream。Some 映射为 Stream.of(value)，None 映射为 Stream.empty()。
+     *
+     * @return Stream containing the value or empty | 包含值的 Stream 或空 Stream
+     */
+    default Stream<T> stream() {
+        if (this instanceof Some<T> s) {
+            return Stream.of(s.value());
+        }
+        return Stream.empty();
+    }
+
+    /**
+     * Zip this Option with another using a combining function.
+     * Both must be Some for the result to be Some.
+     * 使用组合函数将此 Option 与另一个 Option 进行组合。
+     * 两者都必须是 Some 才能得到 Some 结果。
+     *
+     * @param other  the other Option - 另一个 Option
+     * @param zipper the combining function - 组合函数
+     * @param <U>    the other value type - 另一个值类型
+     * @param <R>    the result type - 结果类型
+     * @return Some with combined value if both are Some, None otherwise | 如果两者都是 Some 返回组合值的 Some，否则返回 None
+     */
+    default <U, R> Option<R> zip(Option<U> other, BiFunction<? super T, ? super U, ? extends R> zipper) {
+        Objects.requireNonNull(other, "other must not be null");
+        Objects.requireNonNull(zipper, "zipper must not be null");
+        if (this instanceof Some<T> s && other instanceof Some<U> o) {
+            return Option.of(zipper.apply(s.value(), o.value()));
+        }
+        return Option.none();
+    }
+
+    /**
+     * Convert to Validation. Some maps to Validation.valid(value), None maps to Validation.invalid(error).
+     * 转换为 Validation。Some 映射为 Validation.valid(value)，None 映射为 Validation.invalid(error)。
+     *
+     * @param error the error value for None case - None 情况下的错误值
+     * @param <E>   error type - 错误类型
+     * @return Validation containing the value or error | 包含值或错误的 Validation
+     */
+    default <E> Validation<E, T> toValidation(E error) {
+        if (this instanceof Some<T> s) {
+            return Validation.valid(s.value());
+        }
+        return Validation.invalid(error);
+    }
+
     // ==================== Some Implementation | Some 实现 ====================
 
     /**
@@ -304,6 +414,9 @@ public sealed interface Option<T> permits Option.Some, Option.None {
      * @param <T> value type - 值类型
      */
     record Some<T>(T value) implements Option<T> {
+        public Some {
+            Objects.requireNonNull(value, "Some value cannot be null");
+        }
 
         @Override
         public boolean isSome() {

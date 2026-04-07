@@ -89,6 +89,11 @@ public final class Crc32HashFunction extends AbstractHashFunction {
 
     @Override
     public HashCode hashBytes(byte[] input, int offset, int length) {
+        java.util.Objects.requireNonNull(input, "input");
+        if (offset < 0 || length < 0 || length > input.length - offset) {
+            throw cloud.opencode.base.hash.exception.OpenHashException.invalidInput(
+                    "offset=" + offset + ", length=" + length + ", array.length=" + input.length);
+        }
         Checksum checksum = useCastagnoli ? new CRC32C() : new CRC32();
         checksum.update(input, offset, length);
         return HashCode.fromInt((int) checksum.getValue());

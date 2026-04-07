@@ -9,6 +9,7 @@ import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
 import java.util.function.Predicate;
 
 /**
@@ -50,8 +51,22 @@ import java.util.function.Predicate;
  */
 public final class FieldUtil {
 
-    private static final Map<Class<?>, List<Field>> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, List<Field>> FIELD_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
     private static final Map<FieldKey, Field> SINGLE_FIELD_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * Checks that the class is not a JDK platform type
+     * 检查类是否为JDK平台类型
+     */
+    private static void checkNotPlatformType(Class<?> clazz) {
+        String pkg = clazz.getPackageName();
+        if (pkg.startsWith("java.") || pkg.startsWith("javax.") || pkg.startsWith("sun.")
+                || pkg.startsWith("jdk.") || pkg.startsWith("com.sun.")) {
+            throw new OpenReflectException(clazz, "<field>", "setAccessible",
+                    "setAccessible denied for platform type: " + clazz.getName());
+        }
+    }
 
     private FieldUtil() {
     }
@@ -245,6 +260,7 @@ public final class FieldUtil {
      */
     public static Object getValue(Field field, Object target) {
         try {
+            checkNotPlatformType(field.getDeclaringClass());
             ReflectUtil.setAccessible(field, target);
             return field.get(target);
         } catch (IllegalAccessException e) {
@@ -284,6 +300,7 @@ public final class FieldUtil {
      */
     public static void setValue(Field field, Object target, Object value) {
         try {
+            checkNotPlatformType(field.getDeclaringClass());
             ReflectUtil.setAccessible(field, target);
             field.set(target, value);
         } catch (IllegalAccessException e) {

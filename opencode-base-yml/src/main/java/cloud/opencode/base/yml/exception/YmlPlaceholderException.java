@@ -1,5 +1,7 @@
 package cloud.opencode.base.yml.exception;
 
+import java.io.Serial;
+
 /**
  * YAML Placeholder Exception - Thrown when placeholder resolution fails
  * YAML 占位符异常 - 当占位符解析失败时抛出
@@ -11,6 +13,7 @@ package cloud.opencode.base.yml.exception;
  * <ul>
  *   <li>Tracks the unresolved placeholder expression - 跟踪未解析的占位符表达式</li>
  *   <li>Circular reference detection - 循环引用检测</li>
+ *   <li>Error code YML_PLACEHOLDER_001 - 错误码 YML_PLACEHOLDER_001</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -31,9 +34,18 @@ package cloud.opencode.base.yml.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-yml V1.0.0
+ * @since JDK 25, opencode-base-yml V1.0.3
  */
 public class YmlPlaceholderException extends OpenYmlException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Default error code for placeholder exceptions.
+     * 占位符异常的默认错误码。
+     */
+    private static final String ERROR_CODE = "YML_PLACEHOLDER_001";
 
     private final String placeholder;
 
@@ -44,7 +56,7 @@ public class YmlPlaceholderException extends OpenYmlException {
      * @param placeholder the unresolved placeholder | 未解析的占位符
      */
     public YmlPlaceholderException(String placeholder) {
-        super("Cannot resolve placeholder: " + placeholder);
+        super(ERROR_CODE, "Cannot resolve placeholder: " + placeholder);
         this.placeholder = placeholder;
     }
 
@@ -56,7 +68,7 @@ public class YmlPlaceholderException extends OpenYmlException {
      * @param message     the detail message | 详细消息
      */
     public YmlPlaceholderException(String placeholder, String message) {
-        super(message);
+        super(ERROR_CODE, message);
         this.placeholder = placeholder;
     }
 
@@ -69,7 +81,7 @@ public class YmlPlaceholderException extends OpenYmlException {
      * @param cause       the cause | 原因
      */
     public YmlPlaceholderException(String placeholder, String message, Throwable cause) {
-        super(message, cause);
+        super(ERROR_CODE, message, cause);
         this.placeholder = placeholder;
     }
 

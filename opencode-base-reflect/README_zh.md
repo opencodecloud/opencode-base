@@ -38,10 +38,12 @@
 - **RecordUtil**：Java Record 工具（组件、构造、转换）
 - **RecordBuilder**：动态构建 Record 实例
 - **RecordComponent**：描述 Record 组件
+- **RecordMapper**：高级 Record/Bean 映射，支持字段重命名、排除和类型转换
 
 ### 密封类支持
 - **SealedUtil**：密封类和接口的工具
 - **PermittedSubclasses**：枚举和检查许可的子类
+- **SealedDispatcher**：类型安全的密封类穷举分发器
 
 ### 类型系统
 - **TypeToken**：在运行时捕获完整的泛型类型信息
@@ -61,13 +63,24 @@
 ### 访问器层
 - **FieldAccessor**：直接字段访问（基于反射）
 - **MethodHandleAccessor**：基于 MethodHandle 的高性能访问
-- **VarHandleAccessor**：基于 VarHandle 的最高性能访问
+- **VarHandleAccessor**：基于 VarHandle 的原子操作访问
+- **LambdaAccessor**：基于 LambdaMetafactory 的近零开销访问（预热后最快）
 - **PropertyAccessor**：统一属性访问接口
-- **PropertyAccessors**：创建最优访问器实例的工厂
+- **PropertyAccessors**：创建最优访问器实例的工厂（支持 LAMBDA 策略）
 - **BeanAccessor**：高级 Bean 属性访问器
 
-### 性能
-- **ReflectCache**：反射元数据的线程安全缓存（字段、方法、构造器）
+### 模块系统
+- **ModuleUtil**：模块系统感知反射工具，支持可达性检查、诊断和优雅降级
+
+### 注解合并
+- **AnnotationMerger**：组合注解属性解析（类似 Spring 的 AnnotatedElementUtils）
+
+### 方法签名
+- **MethodSignature**：方法签名表示、匹配、覆盖检测和 JVM 描述符生成
+
+### 性能与安全
+- **ReflectCache**：GC 感知的反射元数据缓存（WeakHashMap 防止 ClassLoader 泄漏）
+- **平台类型保护**：所有 `setAccessible` 调用均对 JDK 内部类型（`java.*`、`javax.*`、`sun.*`、`jdk.*`）进行拦截
 
 ## 快速开始
 
@@ -76,7 +89,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-reflect</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -145,6 +158,70 @@ Person person = RecordBuilder.of(Person.class)
 List<RecordComponent> components = RecordUtil.getComponents(Person.class);
 ```
 
+### LambdaAccessor（高性能访问器）
+```java
+import cloud.opencode.base.reflect.accessor.*;
+
+// 通过 LambdaMetafactory 实现近零开销属性访问
+PropertyAccessor<User> accessor = PropertyAccessors.create(User.class, "name", PropertyAccessors.Strategy.LAMBDA);
+String name = accessor.get(user, String.class);
+accessor.set(user, "Alice");
+```
+
+### 密封类分发
+```java
+import cloud.opencode.base.reflect.sealed.*;
+
+// 类型安全的密封类穷举分发
+SealedDispatcher<Shape, Double> areaCalc = SealedDispatcher.builder(Shape.class, Double.class)
+    .on(Circle.class, c -> Math.PI * c.radius() * c.radius())
+    .on(Rectangle.class, r -> r.width() * r.height())
+    .on(Triangle.class, t -> 0.5 * t.base() * t.height())
+    .build(); // 验证所有分支都已覆盖
+
+double area = areaCalc.dispatch(someShape);
+```
+
+### Record 映射
+```java
+import cloud.opencode.base.reflect.record.*;
+
+// Record ↔ Record / Bean 映射，支持重命名和转换
+RecordMapper<UserDTO, User> mapper = RecordMapper.builder(UserDTO.class, User.class)
+    .map("userName", "name")
+    .exclude("password")
+    .convert("age", val -> Integer.parseInt(val.toString()))
+    .build();
+
+User user = mapper.map(dto);
+```
+
+### 注解合并
+```java
+import cloud.opencode.base.reflect.AnnotationMerger;
+
+// 解析组合注解属性（类似 Spring 的 @GetMapping → @RequestMapping）
+RequestMapping merged = AnnotationMerger.getMergedAnnotation(method, RequestMapping.class);
+```
+
+### 模块系统工具
+```java
+import cloud.opencode.base.reflect.module.ModuleUtil;
+
+// 检查是否可以进行深度反射
+boolean canReflect = ModuleUtil.canDeepReflect(targetClass, callerClass);
+String diagnostic = ModuleUtil.getAccessDiagnostic(targetClass, callerClass);
+```
+
+### 方法签名
+```java
+import cloud.opencode.base.reflect.invokable.MethodSignature;
+
+MethodSignature sig = MethodSignature.of(method);
+boolean isOverride = sig.isOverrideOf(superMethod);
+String descriptor = sig.toDescriptor(); // "(Ljava/lang/String;I)V"
+```
+
 ### 类型令牌
 ```java
 import cloud.opencode.base.reflect.type.*;
@@ -173,6 +250,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `ModifierUtil` | 额外的修饰符工具方法 |
 | `ReflectUtil` | 通用反射辅助方法 |
 | `ReflectCache` | 反射元数据的线程安全缓存 |
+| `AnnotationMerger` | 组合注解属性合并和合成 |
 
 ### 访问器 (`cloud.opencode.base.reflect.accessor`)
 | 类 | 说明 |
@@ -183,6 +261,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `MethodHandleAccessor` | 基于 MethodHandle 的高性能访问 |
 | `VarHandleAccessor` | 基于 VarHandle 的最高性能访问 |
 | `BeanAccessor` | 高级 Bean 属性访问器 |
+| `LambdaAccessor` | 基于 LambdaMetafactory 的近零开销访问 |
 
 ### Bean (`cloud.opencode.base.reflect.bean`)
 | 类 | 说明 |
@@ -203,6 +282,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `MethodInvokable<T,R>` | 方法的 Invokable 包装器 |
 | `ConstructorInvokable<T>` | 构造器的 Invokable 包装器 |
 | `Parameter` | 描述方法/构造器参数 |
+| `MethodSignature` | 方法签名表示、匹配和覆盖检测 |
 
 ### Lambda (`cloud.opencode.base.reflect.lambda`)
 | 类 | 说明 |
@@ -235,6 +315,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `RecordBuilder<T>` | Record 实例的动态构建器 |
 | `RecordComponent` | 描述一个 Record 组件 |
 | `RecordUtil` | Record 工具方法 |
+| `RecordMapper<S,T>` | 高级 Record/Bean 映射，支持重命名、排除和转换 |
 
 ### 密封类 (`cloud.opencode.base.reflect.sealed`)
 | 类 | 说明 |
@@ -242,6 +323,13 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `OpenSealed` | 密封类操作门面 |
 | `SealedUtil` | 密封类工具方法 |
 | `PermittedSubclasses` | 枚举密封类型的许可子类 |
+| `SealedDispatcher<T,R>` | 类型安全的密封类穷举分发器 |
+
+### 模块 (`cloud.opencode.base.reflect.module`)
+| 类 | 说明 |
+|----|------|
+| `ModuleUtil` | 模块系统感知的反射工具，支持可访问性检查和诊断 |
+| `ModuleUtil.ModuleInfo` | 包含模块元数据的记录 |
 
 ### 扫描 (`cloud.opencode.base.reflect.scan`)
 | 类 | 说明 |

@@ -1,14 +1,15 @@
 package cloud.opencode.base.lock.manager;
 
 import cloud.opencode.base.lock.Lock;
-import cloud.opencode.base.lock.OpenLock;
 import cloud.opencode.base.lock.exception.OpenLockAcquireException;
 import cloud.opencode.base.lock.exception.OpenLockTimeoutException;
 
 import java.time.Duration;
 import java.util.*;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Lock Group for Atomic Multi-Lock Acquisition with Deadlock Prevention
@@ -74,6 +75,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class LockGroup implements AutoCloseable {
 
+    /**
+     * Global per-lock sequence counter. Each Lock instance gets a stable sequence
+     * number the first time it enters any LockGroup. This ensures deterministic
+     * total ordering across all LockGroup instances even on identityHashCode collision.
+     * 全局锁序号计数器。每个 Lock 实例在首次进入任何 LockGroup 时获得稳定序号。
+     * 确保所有 LockGroup 实例之间的确定性全序排列，即使 identityHashCode 碰撞。
+     */
+    private static final System.Logger LOG = System.getLogger(LockGroup.class.getName());
+    private static final AtomicLong SEQUENCE = new AtomicLong(0);
+    private static final ConcurrentHashMap<Lock<?>, Long> LOCK_ORDER = new ConcurrentHashMap<>();
+
     private final List<Lock<?>> locks;
     private final List<Lock<?>> acquiredLocks = new CopyOnWriteArrayList<>();
     private final Duration timeout;
@@ -87,9 +99,16 @@ public class LockGroup implements AutoCloseable {
         if (locks.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("locks cannot contain null elements");
         }
-        // Sort locks to prevent deadlock (using identity hash code)
+        // Assign stable global sequence to each lock (once per lock instance).
+        for (Lock<?> lock : locks) {
+            LOCK_ORDER.computeIfAbsent(lock, k -> SEQUENCE.incrementAndGet());
+        }
+        // Sort locks to prevent deadlock.
+        // Primary: identityHashCode. Tie-breaker: stable per-lock sequence number.
+        // Any two threads using the same lock instances will sort identically.
         this.locks = locks.stream()
-                .sorted(Comparator.comparingInt(System::identityHashCode))
+                .sorted(Comparator.<Lock<?>>comparingInt(System::identityHashCode)
+                        .thenComparingLong(l -> LOCK_ORDER.getOrDefault(l, 0L)))
                 .toList();
         this.timeout = timeout;
     }
@@ -113,25 +132,27 @@ public class LockGroup implements AutoCloseable {
      * @throws OpenLockAcquireException if lock acquisition fails | 如果锁获取失败则抛出异常
      */
     public LockGroupGuard lockAll() {
-        // Clear any leftover state from a previous acquisition attempt
-        acquiredLocks.clear();
+        List<Lock<?>> localAcquired = new ArrayList<>();
         for (Lock<?> lock : locks) {
             try {
                 if (lock.tryLock(timeout)) {
-                    acquiredLocks.add(lock);
+                    localAcquired.add(lock);
                 } else {
                     // Rollback acquired locks
-                    releaseAll();
+                    releaseInReverse(localAcquired);
                     throw new OpenLockTimeoutException(
                             "Failed to acquire all locks within " + timeout, timeout);
                 }
             } catch (OpenLockTimeoutException e) {
                 throw e;
             } catch (Exception e) {
-                releaseAll();
+                releaseInReverse(localAcquired);
                 throw new OpenLockAcquireException("Failed to acquire lock", e);
             }
         }
+        // Publish to field for acquiredCount()/releaseAll() compatibility
+        acquiredLocks.clear();
+        acquiredLocks.addAll(localAcquired);
         return new LockGroupGuard(this);
     }
 
@@ -142,16 +163,18 @@ public class LockGroup implements AutoCloseable {
      * @return true if all locks acquired | true表示成功获取所有锁
      */
     public boolean tryLockAll() {
-        // Clear any leftover state from a previous acquisition attempt
-        acquiredLocks.clear();
+        List<Lock<?>> localAcquired = new ArrayList<>();
         for (Lock<?> lock : locks) {
             if (lock.tryLock()) {
-                acquiredLocks.add(lock);
+                localAcquired.add(lock);
             } else {
-                releaseAll();
+                releaseInReverse(localAcquired);
                 return false;
             }
         }
+        // Publish to field for acquiredCount()/releaseAll() compatibility
+        acquiredLocks.clear();
+        acquiredLocks.addAll(localAcquired);
         return true;
     }
 
@@ -163,8 +186,7 @@ public class LockGroup implements AutoCloseable {
      * @return true if all locks acquired within timeout | true表示在超时内成功获取所有锁
      */
     public boolean tryLockAll(Duration timeout) {
-        // Clear any leftover state from a previous acquisition attempt
-        acquiredLocks.clear();
+        List<Lock<?>> localAcquired = new ArrayList<>();
         long now = System.nanoTime();
         long timeoutNanos = timeout.toNanos();
         // Guard against deadline overflow: clamp to Long.MAX_VALUE
@@ -177,12 +199,31 @@ public class LockGroup implements AutoCloseable {
         for (Lock<?> lock : locks) {
             long remaining = deadline - System.nanoTime();
             if (remaining <= 0 || !lock.tryLock(Duration.ofNanos(remaining))) {
-                releaseAll();
+                releaseInReverse(localAcquired);
                 return false;
             }
-            acquiredLocks.add(lock);
+            localAcquired.add(lock);
         }
+        // Publish to field for acquiredCount()/releaseAll() compatibility
+        acquiredLocks.clear();
+        acquiredLocks.addAll(localAcquired);
         return true;
+    }
+
+    /**
+     * Releases locks in reverse order from a list
+     * 从列表中按相反顺序释放锁
+     */
+    private static void releaseInReverse(List<Lock<?>> locks) {
+        for (int i = locks.size() - 1; i >= 0; i--) {
+            try {
+                locks.get(i).unlock();
+            } catch (Exception e) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Failed to release lock during rollback", e);
+            }
+        }
+        locks.clear();
     }
 
     /**
@@ -190,14 +231,7 @@ public class LockGroup implements AutoCloseable {
      * 按相反顺序释放所有已获取的锁
      */
     public void releaseAll() {
-        // Release in reverse order
-        for (int i = acquiredLocks.size() - 1; i >= 0; i--) {
-            try {
-                acquiredLocks.get(i).unlock();
-            } catch (Exception e) {
-                // Log and continue
-            }
-        }
+        releaseInReverse(new ArrayList<>(acquiredLocks));
         acquiredLocks.clear();
     }
 

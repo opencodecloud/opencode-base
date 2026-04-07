@@ -72,6 +72,16 @@ public record PkceChallenge(String verifier, String challenge, String method) {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
+    // Per-call MessageDigest to avoid ThreadLocal leaks with virtual threads (JEP 444)
+    private static MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new OAuth2Exception(OAuth2ErrorCode.PKCE_ERROR,
+                    "SHA-256 not available", e);
+        }
+    }
+
     /**
      * Generate a new PKCE challenge with S256 method
      * 使用 S256 方法生成新的 PKCE 挑战
@@ -116,6 +126,14 @@ public record PkceChallenge(String verifier, String challenge, String method) {
      * @return the PKCE challenge | PKCE 挑战
      */
     public static PkceChallenge plain(String verifier) {
+        if (verifier == null || verifier.length() < 43) {
+            throw new IllegalArgumentException(
+                    "PKCE verifier must be at least 43 characters per RFC 7636 §4.1");
+        }
+        if (verifier.length() > 128) {
+            throw new IllegalArgumentException(
+                    "PKCE verifier must be at most 128 characters per RFC 7636 §4.1");
+        }
         return new PkceChallenge(verifier, verifier, METHOD_PLAIN);
     }
 
@@ -128,13 +146,9 @@ public record PkceChallenge(String verifier, String challenge, String method) {
      * @throws OAuth2Exception if SHA-256 is not available | 如果 SHA-256 不可用
      */
     public static String calculateS256Challenge(String verifier) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(verifier.getBytes(StandardCharsets.US_ASCII));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new OAuth2Exception(OAuth2ErrorCode.PKCE_ERROR, "SHA-256 not available", e);
-        }
+        MessageDigest digest = sha256();
+        byte[] hash = digest.digest(verifier.getBytes(StandardCharsets.US_ASCII));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
     }
 
     /**

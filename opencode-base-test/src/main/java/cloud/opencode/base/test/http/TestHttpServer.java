@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +14,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 
@@ -51,7 +54,7 @@ public final class TestHttpServer implements AutoCloseable {
 
     private final HttpServer server;
     private final int port;
-    private final List<RecordedRequest> recordedRequests = new CopyOnWriteArrayList<>();
+    private final List<RecordedRequest> recordedRequests = Collections.synchronizedList(new ArrayList<>());
     private final List<RouteEntry> routes = new CopyOnWriteArrayList<>();
 
     private TestHttpServer(int port) {
@@ -84,11 +87,29 @@ public final class TestHttpServer implements AutoCloseable {
     }
 
     public String url(String path) {
+        Objects.requireNonNull(path, "path must not be null");
         String p = path.startsWith("/") ? path : "/" + path;
         return "http://localhost:" + port + p;
     }
 
     public int port() { return port; }
+
+    /**
+     * Creates a request verification builder for asserting recorded requests.
+     * 创建请求验证构建器，用于断言已录制的请求。
+     *
+     * <p><strong>Usage Examples | 使用示例:</strong></p>
+     * <pre>{@code
+     * server.verify().that(RequestMatcher.get("/api")).wasCalled(2);
+     * server.verify().that(RequestMatcher.post("/api")).wasNeverCalled();
+     * }</pre>
+     *
+     * @return a new request verification builder | 新的请求验证构建器
+     * @since V1.0.3
+     */
+    public RequestVerification verify() {
+        return new RequestVerification(recordedRequests);
+    }
 
     public List<RecordedRequest> recordedRequests() {
         return Collections.unmodifiableList(new ArrayList<>(recordedRequests));
@@ -122,7 +143,10 @@ public final class TestHttpServer implements AutoCloseable {
             exchange.getRequestHeaders().forEach((name, values) -> {
                 if (!values.isEmpty()) headers.put(name.toLowerCase(), values.get(0));
             });
-            byte[] body = exchange.getRequestBody().readAllBytes();
+            byte[] body;
+            try (InputStream is = exchange.getRequestBody()) {
+                body = is.readAllBytes();
+            }
             RecordedRequest recorded = new RecordedRequest(method, path, Map.copyOf(headers), body);
             recordedRequests.add(recorded);
 
@@ -131,8 +155,11 @@ public final class TestHttpServer implements AutoCloseable {
             response.headers().forEach((name, value) ->
                     exchange.getResponseHeaders().set(name, value));
             exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
-            exchange.getResponseBody().write(responseBody);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(responseBody);
+            }
         } catch (IOException e) {
+            System.err.println("TestHttpServer: error handling request: " + e.getMessage());
             try { exchange.sendResponseHeaders(500, 0); } catch (IOException ignored) {}
         } finally {
             exchange.close();

@@ -175,7 +175,54 @@ public enum ImageErrorCode {
     /**
      * Resource unavailable | 资源不可用
      */
-    RESOURCE_UNAVAILABLE(5004, "Resource unavailable", "资源不可用");
+    RESOURCE_UNAVAILABLE(5004, "Resource unavailable", "资源不可用"),
+
+    // ==================== Processing Engine Errors (6xxx) | 处理引擎错误 ====================
+
+    /**
+     * Kernel operation failed | 像素内核操作失败
+     */
+    KERNEL_ERROR(6001, "Kernel operation failed", "像素内核操作失败"),
+
+    /**
+     * Filter operation failed | 滤波操作失败
+     */
+    FILTER_ERROR(6002, "Filter operation failed", "滤波操作失败"),
+
+    /**
+     * Edge detection failed | 边缘检测失败
+     */
+    EDGE_DETECTION_ERROR(6003, "Edge detection failed", "边缘检测失败"),
+
+    /**
+     * Morphology operation failed | 形态学操作失败
+     */
+    MORPHOLOGY_ERROR(6004, "Morphology operation failed", "形态学操作失败"),
+
+    /**
+     * Threshold operation failed | 二值化操作失败
+     */
+    THRESHOLD_ERROR(6005, "Threshold operation failed", "二值化操作失败"),
+
+    /**
+     * Histogram operation failed | 直方图操作失败
+     */
+    HISTOGRAM_ERROR(6006, "Histogram operation failed", "直方图操作失败"),
+
+    /**
+     * Color space conversion failed | 颜色空间转换失败
+     */
+    COLOR_SPACE_ERROR(6007, "Color space conversion failed", "颜色空间转换失败"),
+
+    /**
+     * EXIF parsing failed | EXIF 解析失败
+     */
+    EXIF_PARSE_ERROR(6008, "EXIF parsing failed", "EXIF解析失败"),
+
+    /**
+     * Image comparison failed | 图像比较失败
+     */
+    COMPARE_ERROR(6009, "Image comparison failed", "图像比较失败");
 
     private final int code;
     private final String message;

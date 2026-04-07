@@ -138,4 +138,17 @@ public enum LunarErrorCode {
     public String getDescription() {
         return description;
     }
+
+    /**
+     * Get string code for OpenException integration
+     * 获取字符串形式的错误码（用于 OpenException 集成）
+     *
+     * <p>Returns format: "LUNAR_{numeric_code}", e.g. "LUNAR_1001".</p>
+     * <p>返回格式："LUNAR_{数字码}"，例如 "LUNAR_1001"。</p>
+     *
+     * @return the string error code | 字符串错误码
+     */
+    public String toStringCode() {
+        return "LUNAR_" + code;
+    }
 }

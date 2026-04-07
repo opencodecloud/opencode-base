@@ -28,4 +28,10 @@ module cloud.opencode.base.rules {
     exports cloud.opencode.base.rules.decision;
     exports cloud.opencode.base.rules.exception;
     exports cloud.opencode.base.rules.spi;
+    exports cloud.opencode.base.rules.trace;
+    exports cloud.opencode.base.rules.explain;
+    exports cloud.opencode.base.rules.key;
+    exports cloud.opencode.base.rules.validation;
+    exports cloud.opencode.base.rules.metric;
+    exports cloud.opencode.base.rules.score;
 }

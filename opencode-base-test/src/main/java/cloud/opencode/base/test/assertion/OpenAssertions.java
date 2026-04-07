@@ -73,10 +73,10 @@ public final class OpenAssertions {
     public static ThrowableAssertion assertThatThrownBy(Runnable runnable) {
         try {
             runnable.run();
-            throw new AssertionError("Expected exception but none was thrown");
         } catch (Throwable t) {
             return new ThrowableAssertion(t);
         }
+        throw new AssertionError("Expected exception but none was thrown");
     }
 
     public static void assertThatCode(Runnable runnable) {

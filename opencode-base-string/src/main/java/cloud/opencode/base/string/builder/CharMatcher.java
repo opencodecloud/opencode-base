@@ -187,10 +187,16 @@ public abstract class CharMatcher {
 
     public String replaceFrom(CharSequence sequence, CharSequence replacement) {
         String replacementStr = replacement.toString();
-        StringBuilder result = new StringBuilder();
+        // append(c) instead of String.valueOf(c) avoids one String allocation per char.
+        // append(c) 替代 String.valueOf(c)，每字符少一次 String 分配。
+        StringBuilder result = new StringBuilder(sequence.length());
         for (int i = 0; i < sequence.length(); i++) {
             char c = sequence.charAt(i);
-            result.append(matches(c) ? replacementStr : String.valueOf(c));
+            if (matches(c)) {
+                result.append(replacementStr);
+            } else {
+                result.append(c);
+            }
         }
         return result.toString();
     }

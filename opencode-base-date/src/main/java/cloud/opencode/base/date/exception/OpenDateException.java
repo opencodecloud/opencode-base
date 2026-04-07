@@ -1,5 +1,9 @@
 package cloud.opencode.base.date.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.io.Serial;
+
 /**
  * Date Exception Class for OpenCode Date Module
  * OpenCode日期模块异常类
@@ -40,7 +44,12 @@ package cloud.opencode.base.date.exception;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-date V1.0.0
  */
-public class OpenDateException extends RuntimeException {
+public class OpenDateException extends OpenException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private static final String COMPONENT = "date";
 
     /**
      * The input value that caused the exception
@@ -61,7 +70,7 @@ public class OpenDateException extends RuntimeException {
      * @param message the detail message | 详细消息
      */
     public OpenDateException(String message) {
-        super(message);
+        super(COMPONENT, null, message);
         this.inputValue = null;
         this.expectedFormat = null;
     }
@@ -74,7 +83,7 @@ public class OpenDateException extends RuntimeException {
      * @param cause   the cause | 原因
      */
     public OpenDateException(String message, Throwable cause) {
-        super(message, cause);
+        super(COMPONENT, null, message, cause);
         this.inputValue = null;
         this.expectedFormat = null;
     }
@@ -88,7 +97,7 @@ public class OpenDateException extends RuntimeException {
      * @param expectedFormat the expected format | 期望的格式
      */
     public OpenDateException(String message, String inputValue, String expectedFormat) {
-        super(message);
+        super(COMPONENT, null, message);
         this.inputValue = inputValue;
         this.expectedFormat = expectedFormat;
     }
@@ -103,7 +112,7 @@ public class OpenDateException extends RuntimeException {
      * @param cause          the cause | 原因
      */
     public OpenDateException(String message, String inputValue, String expectedFormat, Throwable cause) {
-        super(message, cause);
+        super(COMPONENT, null, message, cause);
         this.inputValue = inputValue;
         this.expectedFormat = expectedFormat;
     }
@@ -233,7 +242,7 @@ public class OpenDateException extends RuntimeException {
      */
     public static OpenDateException cronError(String expression, String reason, Throwable cause) {
         String message = String.format("Invalid cron expression '%s': %s", expression, reason);
-        return new OpenDateException(message, cause);
+        return new OpenDateException(message, expression, null, cause);
     }
 
     // ==================== Getters | 获取方法 ====================

@@ -13,6 +13,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Open Feature
@@ -28,6 +30,8 @@ import java.util.function.Supplier;
  *   <li>Strategy management - 策略管理</li>
  *   <li>Listener support - 监听器支持</li>
  *   <li>Pluggable storage - 可插拔存储</li>
+ *   <li>Group operations - 分组操作</li>
+ *   <li>Snapshot/restore - 快照/恢复</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -63,13 +67,14 @@ import java.util.function.Supplier;
  *   <li>Thread-safe: Yes - 线程安全: 是</li>
  *   <li>Null-safe: Partial (validates inputs) - 空值安全: 部分（验证输入）</li>
  * </ul>
-  * @author Leon Soo
+ * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 public class OpenFeature {
 
+    private static final Logger LOGGER = Logger.getLogger(OpenFeature.class.getName());
     private static volatile OpenFeature instance;
     private static final Object LOCK = new Object();
 
@@ -181,13 +186,7 @@ public class OpenFeature {
         }
 
         Feature feature = featureOpt.get();
-        EnableStrategy strategy = feature.strategy();
-
-        if (strategy != null) {
-            return strategy.isEnabled(feature, context);
-        }
-
-        return feature.defaultEnabled();
+        return feature.isEnabled(context);
     }
 
     /**
@@ -299,6 +298,9 @@ public class OpenFeature {
             true,
             feature.strategy(),
             feature.metadata(),
+            feature.group(),
+            feature.expiresAt(),
+            feature.lifecycle(),
             feature.createdAt(),
             Instant.now()
         );
@@ -324,6 +326,9 @@ public class OpenFeature {
             false,
             feature.strategy(),
             feature.metadata(),
+            feature.group(),
+            feature.expiresAt(),
+            feature.lifecycle(),
             feature.createdAt(),
             Instant.now()
         );
@@ -350,6 +355,9 @@ public class OpenFeature {
             feature.defaultEnabled(),
             strategy,
             feature.metadata(),
+            feature.group(),
+            feature.expiresAt(),
+            feature.lifecycle(),
             feature.createdAt(),
             Instant.now()
         );
@@ -482,6 +490,79 @@ public class OpenFeature {
         this.store = store;
     }
 
+    // ==================== Group Operations | 分组操作 ====================
+
+    /**
+     * Get all features in a group
+     * 获取组中的所有功能
+     *
+     * @param group the group name | 组名称
+     * @return list of features in the group | 组中的功能列表
+     */
+    public List<Feature> getByGroup(String group) {
+        if (group == null) {
+            return List.of();
+        }
+        return store.findAll().stream()
+            .filter(f -> group.equals(f.group()))
+            .toList();
+    }
+
+    /**
+     * Enable all features in a group
+     * 启用组中的所有功能
+     *
+     * @param group the group name | 组名称
+     */
+    public void enableGroup(String group) {
+        if (group == null) {
+            throw new NullPointerException("group must not be null");
+        }
+        getByGroup(group).forEach(f -> enable(f.key()));
+    }
+
+    /**
+     * Disable all features in a group
+     * 禁用组中的所有功能
+     *
+     * @param group the group name | 组名称
+     */
+    public void disableGroup(String group) {
+        if (group == null) {
+            throw new NullPointerException("group must not be null");
+        }
+        getByGroup(group).forEach(f -> disable(f.key()));
+    }
+
+    // ==================== Snapshot Operations | 快照操作 ====================
+
+    /**
+     * Create a snapshot of current feature state
+     * 创建当前功能状态的快照
+     *
+     * @return the snapshot | 快照
+     */
+    public FeatureSnapshot snapshot() {
+        Map<String, Feature> features = getAll();
+        return new FeatureSnapshot(features, Instant.now());
+    }
+
+    /**
+     * Restore feature state from a snapshot
+     * 从快照恢复功能状态
+     *
+     * @param snapshot the snapshot to restore | 要恢复的快照
+     */
+    public void restore(FeatureSnapshot snapshot) {
+        if (snapshot == null) {
+            throw new NullPointerException("snapshot must not be null");
+        }
+        // Atomic swap: build a new store, then assign it in one step
+        InMemoryFeatureStore newStore = new InMemoryFeatureStore();
+        snapshot.features().values().forEach(newStore::save);
+        this.store = newStore;
+    }
+
     /**
      * Notify listeners of feature change
      * 通知监听器功能变更
@@ -491,7 +572,9 @@ public class OpenFeature {
             try {
                 listener.onFeatureChanged(key, oldValue, newValue);
             } catch (Exception e) {
-                // Ignore listener exceptions to prevent cascading failures
+                LOGGER.log(Level.WARNING,
+                    "Feature listener {0} failed for key ''{1}'': {2}",
+                    new Object[]{listener.getClass().getName(), key, e.getMessage()});
             }
         }
     }

@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageResourceException 异常测试")
 class ImageResourceExceptionTest {
@@ -26,8 +27,8 @@ class ImageResourceExceptionTest {
         void testConstructorWithMessage() {
             ImageResourceException ex = new ImageResourceException("Resource unavailable");
 
-            assertThat(ex.getMessage()).isEqualTo("Resource unavailable");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.RESOURCE_UNAVAILABLE);
+            assertThat(ex.getRawMessage()).isEqualTo("Resource unavailable");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.RESOURCE_UNAVAILABLE);
         }
 
         @Test
@@ -36,7 +37,7 @@ class ImageResourceExceptionTest {
             Throwable cause = new RuntimeException("Out of memory");
             ImageResourceException ex = new ImageResourceException("Resource error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Resource error");
+            assertThat(ex.getRawMessage()).isEqualTo("Resource error");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
 
@@ -45,8 +46,8 @@ class ImageResourceExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             ImageResourceException ex = new ImageResourceException("Memory error", ImageErrorCode.OUT_OF_MEMORY);
 
-            assertThat(ex.getMessage()).isEqualTo("Memory error");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.OUT_OF_MEMORY);
+            assertThat(ex.getRawMessage()).isEqualTo("Memory error");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.OUT_OF_MEMORY);
         }
     }
 
@@ -59,8 +60,8 @@ class ImageResourceExceptionTest {
         void testTooManyRequestsFactory() {
             ImageResourceException ex = ImageResourceException.tooManyRequests();
 
-            assertThat(ex.getMessage()).contains("many");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.TOO_MANY_REQUESTS);
+            assertThat(ex.getRawMessage()).contains("many");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.TOO_MANY_REQUESTS);
         }
 
         @Test
@@ -68,8 +69,8 @@ class ImageResourceExceptionTest {
         void testOutOfMemoryFactory() {
             ImageResourceException ex = ImageResourceException.outOfMemory();
 
-            assertThat(ex.getMessage()).contains("memory");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.OUT_OF_MEMORY);
+            assertThat(ex.getRawMessage()).contains("memory");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.OUT_OF_MEMORY);
         }
     }
 
@@ -83,6 +84,22 @@ class ImageResourceExceptionTest {
             ImageResourceException ex = new ImageResourceException("Test");
 
             assertThat(ex).isInstanceOf(ImageException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageResourceException ex = new ImageResourceException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageResourceException ex = new ImageResourceException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

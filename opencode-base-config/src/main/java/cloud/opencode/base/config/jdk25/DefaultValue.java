@@ -34,7 +34,12 @@ import java.lang.annotation.*;
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-config V1.0.0
+ * @deprecated Use {@link cloud.opencode.base.config.bind.DefaultValue} instead,
+ *             which supports both record components and POJO fields.
+ *             使用 {@link cloud.opencode.base.config.bind.DefaultValue} 替代，
+ *             支持 record 组件和 POJO 字段。
  */
+@Deprecated(since = "1.0.3")
 @Target(ElementType.RECORD_COMPONENT)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface DefaultValue {

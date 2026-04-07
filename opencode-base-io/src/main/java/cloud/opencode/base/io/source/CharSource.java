@@ -20,6 +20,7 @@ import cloud.opencode.base.io.exception.OpenIOOperationException;
 
 import java.io.*;
 import java.net.URL;
+import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -285,9 +286,11 @@ public abstract class CharSource {
         try (Reader reader = openStream()) {
             long count = 0;
             char[] buf = new char[DEFAULT_BUFFER_SIZE];
+            CharBuffer charBuf = CharBuffer.wrap(buf);
             int read;
             while ((read = reader.read(buf)) != -1) {
-                appendable.append(new String(buf, 0, read));
+                charBuf.limit(read).position(0);
+                appendable.append(charBuf);
                 count += read;
             }
             return count;

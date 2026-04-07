@@ -61,7 +61,7 @@ public record PageRequest(long page, long size, Sort sort) {
     }
 
     public long getOffset() {
-        return (page - 1) * size;
+        return Math.multiplyExact(page - 1, size);
     }
 
     public boolean isFirst() {
@@ -69,7 +69,7 @@ public record PageRequest(long page, long size, Sort sort) {
     }
 
     public PageRequest next() {
-        return new PageRequest(page + 1, size, sort);
+        return new PageRequest(Math.addExact(page, 1), size, sort);
     }
 
     public PageRequest previous() {
@@ -88,8 +88,16 @@ public record PageRequest(long page, long size, Sort sort) {
         return new PageRequest(newPage, size, sort);
     }
 
+    /**
+     * Creates an empty {@link Page} matching this request's page number and size.
+     * 创建一个与此请求的页码和页大小匹配的空 {@link Page}。
+     *
+     * @param <T> the record type | 记录类型
+     * @return an empty Page | 空分页对象
+     * @since JDK 25, opencode-base-core V1.0.3
+     */
     public <T> Page<T> toPage() {
-        return Page.of(page, size);
+        return new Page<>(page, size, 0, java.util.List.of());
     }
 
     @Override

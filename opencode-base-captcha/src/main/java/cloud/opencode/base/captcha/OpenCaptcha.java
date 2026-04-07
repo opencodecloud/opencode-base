@@ -3,7 +3,10 @@ package cloud.opencode.base.captcha;
 import cloud.opencode.base.captcha.generator.CaptchaGenerator;
 import cloud.opencode.base.captcha.renderer.CaptchaRenderer;
 import cloud.opencode.base.captcha.store.CaptchaStore;
+import cloud.opencode.base.captcha.store.HashedCaptchaStore;
+import cloud.opencode.base.captcha.support.CaptchaMetrics;
 import cloud.opencode.base.captcha.validator.CaptchaValidator;
+import cloud.opencode.base.captcha.validator.HashedCaptchaValidator;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -44,6 +47,8 @@ import java.io.OutputStream;
  *   <li>Builder pattern for advanced configuration - 构建器模式用于高级配置</li>
  *   <li>Integrated store and validator lifecycle - 集成的存储和验证器生命周期</li>
  *   <li>Support for all CAPTCHA types (text, GIF, interactive) - 支持所有验证码类型（文本、GIF、交互式）</li>
+ *   <li>Optional metrics collection (CaptchaMetrics) - 可选的指标收集</li>
+ *   <li>Optional event listener (CaptchaEventListener) - 可选的事件监听器</li>
  * </ul>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -62,11 +67,19 @@ public final class OpenCaptcha {
     private final CaptchaStore store;
     private final CaptchaConfig config;
     private final CaptchaValidator validator;
+    private final CaptchaMetrics metrics;
+    private final CaptchaEventListener eventListener;
 
     private OpenCaptcha(Builder builder) {
         this.store = builder.store;
         this.config = builder.config;
-        this.validator = CaptchaValidator.simple(store);
+        this.validator = builder.validator != null
+            ? builder.validator
+            : (store instanceof HashedCaptchaStore hashed
+                ? new HashedCaptchaValidator(hashed)
+                : CaptchaValidator.simple(store));
+        this.metrics = builder.metrics;
+        this.eventListener = builder.eventListener;
     }
 
     // ==================== Static Factory Methods ====================
@@ -194,6 +207,36 @@ public final class OpenCaptcha {
         return create(CaptchaType.ROTATE);
     }
 
+    /**
+     * Creates an audio CAPTCHA.
+     * 创建音频验证码。
+     *
+     * @return the generated CAPTCHA | 生成的验证码
+     */
+    public static Captcha audio() {
+        return create(CaptchaType.AUDIO);
+    }
+
+    /**
+     * Creates a jigsaw CAPTCHA.
+     * 创建拼接验证码。
+     *
+     * @return the generated CAPTCHA | 生成的验证码
+     */
+    public static Captcha jigsaw() {
+        return create(CaptchaType.JIGSAW);
+    }
+
+    /**
+     * Creates a PoW CAPTCHA.
+     * 创建工作量证明验证码。
+     *
+     * @return the generated CAPTCHA | 生成的验证码
+     */
+    public static Captcha pow() {
+        return create(CaptchaType.POW);
+    }
+
     // ==================== Instance Methods ====================
 
     /**
@@ -216,6 +259,12 @@ public final class OpenCaptcha {
     public Captcha generate(CaptchaConfig config) {
         Captcha captcha = create(config);
         store.store(captcha.id(), captcha.answer(), config.getExpireTime());
+        if (metrics != null) {
+            metrics.recordGeneration(config.getType());
+        }
+        if (eventListener != null) {
+            try { eventListener.onGenerated(captcha); } catch (Exception ignored) { }
+        }
         return captcha;
     }
 
@@ -228,7 +277,20 @@ public final class OpenCaptcha {
      * @return the validation result | 验证结果
      */
     public ValidationResult validate(String id, String answer) {
-        return validator.validate(id, answer, config.isCaseSensitive());
+        ValidationResult result = validator.validate(id, answer, config.isCaseSensitive());
+        if (metrics != null) {
+            metrics.recordValidation(result.success());
+        }
+        if (eventListener != null) {
+            try {
+                if (result.success()) {
+                    eventListener.onValidationSuccess(id);
+                } else {
+                    eventListener.onValidationFailure(id, result.code());
+                }
+            } catch (Exception ignored) { }
+        }
+        return result;
     }
 
     /**
@@ -240,9 +302,14 @@ public final class OpenCaptcha {
      * @throws IOException if rendering fails | 如果渲染失败
      */
     public void render(Captcha captcha, OutputStream out) throws IOException {
-        CaptchaRenderer renderer = captcha.type() == CaptchaType.GIF
-            ? CaptchaRenderer.gif()
-            : CaptchaRenderer.image();
+        CaptchaRenderer renderer;
+        if (captcha.type() != null && captcha.type().isAudio()) {
+            renderer = CaptchaRenderer.audio();
+        } else if (captcha.type() == CaptchaType.GIF) {
+            renderer = CaptchaRenderer.gif();
+        } else {
+            renderer = CaptchaRenderer.image();
+        }
         renderer.render(captcha, out);
     }
 
@@ -266,6 +333,26 @@ public final class OpenCaptcha {
         return config;
     }
 
+    /**
+     * Gets the metrics collector, if configured.
+     * 获取指标收集器（如果已配置）。
+     *
+     * @return the metrics collector, or null | 指标收集器，或 null
+     */
+    public CaptchaMetrics getMetrics() {
+        return metrics;
+    }
+
+    /**
+     * Gets the event listener, if configured.
+     * 获取事件监听器（如果已配置）。
+     *
+     * @return the event listener, or null | 事件监听器，或 null
+     */
+    public CaptchaEventListener getEventListener() {
+        return eventListener;
+    }
+
     // ==================== Builder ====================
 
     /**
@@ -285,6 +372,9 @@ public final class OpenCaptcha {
     public static final class Builder {
         private CaptchaStore store = CaptchaStore.memory();
         private CaptchaConfig config = CaptchaConfig.defaults();
+        private CaptchaValidator validator;
+        private CaptchaMetrics metrics;
+        private CaptchaEventListener eventListener;
 
         private Builder() {}
 
@@ -325,12 +415,57 @@ public final class OpenCaptcha {
         }
 
         /**
+         * Sets a custom validator.
+         * 设置自定义验证器。
+         *
+         * @param validator the validator | 验证器
+         * @return this builder | 此构建器
+         */
+        public Builder validator(CaptchaValidator validator) {
+            this.validator = validator;
+            return this;
+        }
+
+        /**
+         * Sets the metrics collector.
+         * 设置指标收集器。
+         *
+         * @param metrics the metrics collector | 指标收集器
+         * @return this builder | 此构建器
+         */
+        public Builder metrics(CaptchaMetrics metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
+        /**
+         * Sets the event listener.
+         * 设置事件监听器。
+         *
+         * @param eventListener the event listener | 事件监听器
+         * @return this builder | 此构建器
+         */
+        public Builder eventListener(CaptchaEventListener eventListener) {
+            this.eventListener = eventListener;
+            return this;
+        }
+
+        /**
          * Builds the OpenCaptcha instance.
          * 构建 OpenCaptcha 实例。
          *
          * @return the OpenCaptcha instance | OpenCaptcha 实例
+         * @throws IllegalStateException if a HashedCaptchaStore is paired with a
+         *         non-HashedCaptchaValidator (use auto-detection or CaptchaValidator.hashed()) |
+         *         如果 HashedCaptchaStore 搭配了非 HashedCaptchaValidator（请使用自动检测或 CaptchaValidator.hashed()）
          */
         public OpenCaptcha build() {
+            if (store instanceof HashedCaptchaStore && validator != null
+                    && !(validator instanceof HashedCaptchaValidator)) {
+                throw new IllegalStateException(
+                    "HashedCaptchaStore requires HashedCaptchaValidator; " +
+                    "omit .validator() for auto-detection, or use CaptchaValidator.hashed(store)");
+            }
             return new OpenCaptcha(this);
         }
     }

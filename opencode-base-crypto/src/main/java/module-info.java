@@ -61,4 +61,8 @@ module cloud.opencode.base.crypto {
     exports cloud.opencode.base.crypto.symmetric;
     exports cloud.opencode.base.crypto.util;
     exports cloud.opencode.base.crypto.ssl;
+    exports cloud.opencode.base.crypto.otp;
+    exports cloud.opencode.base.crypto.streaming;
+    exports cloud.opencode.base.crypto.policy;
+    exports cloud.opencode.base.crypto.versioned;
 }

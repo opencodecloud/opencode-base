@@ -1,5 +1,9 @@
 package cloud.opencode.base.web.http;
 
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+
 /**
  * HTTP Method - HTTP Request Method Enumeration
  * HTTP 方法 - HTTP 请求方法枚举
@@ -157,15 +161,18 @@ public enum HttpMethod {
      * @param method the method name - 方法名称
      * @return true if valid - 如果有效返回 true
      */
+    private static final Set<String> VALID_NAMES;
+
+    static {
+        Set<String> names = new HashSet<>();
+        for (HttpMethod m : values()) {
+            names.add(m.name());
+        }
+        VALID_NAMES = Set.copyOf(names);
+    }
+
     public static boolean isValid(String method) {
-        if (method == null || method.isBlank()) {
-            return false;
-        }
-        try {
-            valueOf(method.toUpperCase());
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
+        return method != null && !method.isBlank()
+                && VALID_NAMES.contains(method.toUpperCase(Locale.ROOT));
     }
 }

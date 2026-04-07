@@ -60,15 +60,24 @@ public final class OpenTruncate {
         try {
             byte[] bytes = str.getBytes(charset);
             if (bytes.length <= maxBytes) return str;
-            
-            // Find the longest substring that fits
-            for (int i = str.length(); i > 0; i--) {
-                String sub = str.substring(0, i);
+
+            // Binary search for the longest char-prefix whose byte length <= maxBytes.
+            // O(n log n) vs the original O(n²) linear scan.
+            // 二分查找最长字符前缀使字节长度 <= maxBytes。O(n log n) 替代原始 O(n²) 线性扫描。
+            int lo = 0;
+            int hi = str.length();
+            String best = "";
+            while (lo <= hi) {
+                int mid = (lo + hi) >>> 1;
+                String sub = str.substring(0, mid);
                 if (sub.getBytes(charset).length <= maxBytes) {
-                    return sub;
+                    best = sub;
+                    lo = mid + 1;
+                } else {
+                    hi = mid - 1;
                 }
             }
-            return "";
+            return best;
         } catch (Exception e) {
             return str;
         }

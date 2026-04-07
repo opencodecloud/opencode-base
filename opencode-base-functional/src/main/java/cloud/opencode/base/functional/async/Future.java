@@ -83,8 +83,17 @@ public final class Future<T> {
     private static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     static {
-        Runtime.getRuntime().addShutdownHook(new Thread(
-                VIRTUAL_EXECUTOR::close, "future-executor-shutdown"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            VIRTUAL_EXECUTOR.shutdown();
+            try {
+                if (!VIRTUAL_EXECUTOR.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    VIRTUAL_EXECUTOR.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                VIRTUAL_EXECUTOR.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }, "future-executor-shutdown"));
     }
 
     private Future(CompletableFuture<T> delegate) {
@@ -256,7 +265,9 @@ public final class Future<T> {
      */
     public Future<T> onSuccess(Consumer<? super T> action) {
         Objects.requireNonNull(action, "action must not be null");
-        delegate.thenAccept(action);
+        delegate.whenComplete((v, ex) -> {
+            if (ex == null) action.accept(v);
+        });
         return this;
     }
 
@@ -269,9 +280,12 @@ public final class Future<T> {
      */
     public Future<T> onFailure(Consumer<? super Throwable> action) {
         Objects.requireNonNull(action, "action must not be null");
-        delegate.exceptionally(ex -> {
-            action.accept(ex);
-            return null;
+        delegate.whenComplete((_, ex) -> {
+            if (ex != null) {
+                Throwable cause = ex instanceof java.util.concurrent.CompletionException ce
+                        && ce.getCause() != null ? ce.getCause() : ex;
+                action.accept(cause);
+            }
         });
         return this;
     }

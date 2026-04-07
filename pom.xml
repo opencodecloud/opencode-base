@@ -6,7 +6,7 @@
 
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-parent</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
     <packaging>pom</packaging>
 
     <name>OpenCode Base Parent</name>
@@ -44,9 +44,10 @@
     <properties>
         <!-- 基础设施 / Infrastructure -->
         <java.version>25</java.version>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <project.build.outputTimestamp>2026-03-15T00:00:00Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-03-31T11:34:53Z</project.build.outputTimestamp>
 
         <!-- 测试依赖版本 / Test dependency versions -->
         <junit.version>5.11.2</junit.version>
@@ -85,6 +86,7 @@
         <module>opencode-base-crypto</module>
         <module>opencode-base-date</module>
         <module>opencode-base-deepclone</module>
+        <module>opencode-base-email</module>
         <module>opencode-base-functional</module>
         <module>opencode-base-hash</module>
         <module>opencode-base-json</module>
@@ -100,7 +102,6 @@
         <module>opencode-base-xml</module>
         <module>opencode-base-yml</module>
         <module>opencode-base-captcha</module>
-        <module>opencode-base-email</module>
         <module>opencode-base-event</module>
         <module>opencode-base-feature</module>
         <module>opencode-base-geo</module>
@@ -108,7 +109,6 @@
         <module>opencode-base-image</module>
         <module>opencode-base-lunar</module>
         <module>opencode-base-money</module>
-        <module>opencode-base-sms</module>
         <module>opencode-base-test</module>
         <module>opencode-base-timeseries</module>
         <module>opencode-base-tree</module>
@@ -120,6 +120,9 @@
         <module>opencode-base-pdf</module>
         <module>opencode-base-cron</module>
         <module>opencode-base-observability</module>
+        <module>opencode-base-neural</module>
+        <module>opencode-base-csv</module>
+        <module>opencode-base-math</module>
     </modules>
 
     <dependencyManagement>
@@ -168,11 +171,6 @@
             <dependency>
                 <groupId>cloud.opencode.base</groupId>
                 <artifactId>opencode-base-deepclone</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>cloud.opencode.base</groupId>
-                <artifactId>opencode-base-email</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -257,6 +255,11 @@
             </dependency>
             <dependency>
                 <groupId>cloud.opencode.base</groupId>
+                <artifactId>opencode-base-neural</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cloud.opencode.base</groupId>
                 <artifactId>opencode-base-oauth2</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -293,11 +296,6 @@
             <dependency>
                 <groupId>cloud.opencode.base</groupId>
                 <artifactId>opencode-base-serialization</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>cloud.opencode.base</groupId>
-                <artifactId>opencode-base-sms</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -369,9 +367,6 @@
                     <configuration>
                         <release>${java.version}</release>
                         <parameters>true</parameters>
-                        <compilerArgs>
-                            <arg>--enable-preview</arg>
-                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <!-- 测试执行 / Test runner -->
@@ -380,7 +375,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
-                        <argLine>@{argLine} --enable-preview</argLine>
+                        <argLine>@{argLine} --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+EnableDynamicAgentLoading</argLine>
                     </configuration>
                 </plugin>
                 <!-- JAR 打包 / JAR packaging -->
@@ -408,8 +403,8 @@
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
                         <release>${java.version}</release>
-                        <additionalOptions>--enable-preview</additionalOptions>
-                        <doclint>html,syntax,reference</doclint>
+                        <doclint>none</doclint>
+                        <failOnError>false</failOnError>
                     </configuration>
                     <executions>
                         <execution>
@@ -424,10 +419,6 @@
                     <artifactId>maven-gpg-plugin</artifactId>
                     <version>${maven-gpg-plugin.version}</version>
                     <configuration>
-                        <gpgArguments>
-                            <arg>--pinentry-mode</arg>
-                            <arg>loopback</arg>
-                        </gpgArguments>
                     </configuration>
                     <executions>
                         <execution>

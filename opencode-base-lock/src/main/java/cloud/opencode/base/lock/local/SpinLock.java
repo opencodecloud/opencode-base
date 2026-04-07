@@ -119,7 +119,7 @@ public class SpinLock implements Lock<Long> {
 
         int spinCount = 0;
         while (!owner.compareAndSet(null, currentThread)) {
-            if (System.nanoTime() > deadline) {
+            if (System.nanoTime() - deadline >= 0) {
                 throw new OpenLockTimeoutException(
                         "Failed to acquire spin lock within " + timeout, timeout);
             }
@@ -133,7 +133,7 @@ public class SpinLock implements Lock<Long> {
         }
 
         holdCount.set(1);
-        Long token = tokenGenerator.incrementAndGet();
+        long token = tokenGenerator.incrementAndGet();
         currentToken.set(token);
         return new LockGuard<>(this, token);
     }
@@ -149,7 +149,7 @@ public class SpinLock implements Lock<Long> {
 
         if (owner.compareAndSet(null, currentThread)) {
             holdCount.set(1);
-            Long token = tokenGenerator.incrementAndGet();
+            long token = tokenGenerator.incrementAndGet();
             currentToken.set(token);
             return true;
         }
@@ -183,7 +183,7 @@ public class SpinLock implements Lock<Long> {
         }
 
         holdCount.set(1);
-        Long token = tokenGenerator.incrementAndGet();
+        long token = tokenGenerator.incrementAndGet();
         currentToken.set(token);
         return new LockGuard<>(this, token);
     }

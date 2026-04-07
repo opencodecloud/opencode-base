@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * Try Monad - Encapsulates computations that may fail
@@ -259,6 +260,145 @@ public sealed interface Try<T> permits Try.Success, Try.Failure {
      */
     Try<T> onSuccess(Consumer<? super T> action);
 
+    // ==================== Enhanced Operations | 增强操作 ====================
+
+    /**
+     * Execute action regardless of success or failure, similar to try-finally semantics.
+     * 无论成功或失败都执行操作，类似 try-finally 语义。
+     *
+     * <p>If the action succeeds, returns this Try unchanged.
+     * If the action throws and this is a Success, returns a new Failure with the action's exception.
+     * If the action throws and this is already a Failure, the action's exception is added
+     * as a suppressed exception to the original cause, and the original Failure is returned.</p>
+     * <p>如果操作成功，原样返回此 Try。
+     * 如果操作抛出异常且当前为 Success，返回包含该异常的新 Failure。
+     * 如果操作抛出异常且当前已为 Failure，操作异常作为 suppressed 异常添加到原始异常中，
+     * 并返回原始 Failure。</p>
+     *
+     * @param action the action to execute - 要执行的操作
+     * @return this Try if action succeeds, or Failure if action throws | 如果操作成功返回此 Try，否则返回 Failure
+     */
+    default Try<T> andFinally(Runnable action) {
+        Objects.requireNonNull(action, "action must not be null");
+        try {
+            action.run();
+            return this;
+        } catch (Throwable t) {
+            if (this instanceof Failure<T> f) {
+                if (f.cause() != t) {
+                    f.cause().addSuppressed(t);
+                }
+                return this;
+            }
+            return new Failure<>(t);
+        }
+    }
+
+    /**
+     * Transform the exception if this is a Failure. If Success, return this unchanged.
+     * 如果是 Failure 则转换异常。如果是 Success 则原样返回。
+     *
+     * <p>If the mapper itself throws, returns a new {@link Failure} wrapping the mapper's exception,
+     * with the original cause added as a suppressed exception (mirroring try-with-resources semantics).</p>
+     * <p>如果 mapper 本身抛出异常，返回包装 mapper 异常的新 {@link Failure}，
+     * 原始 cause 作为 suppressed 异常附加（类似 try-with-resources 语义）。</p>
+     *
+     * @param mapper function to transform the exception - 转换异常的函数
+     * @return Try with mapped exception if Failure, or this if Success | 如果是 Failure 返回转换后的异常，否则返回此 Try
+     */
+    default Try<T> mapFailure(Function<Throwable, ? extends Throwable> mapper) {
+        Objects.requireNonNull(mapper, "mapper must not be null");
+        return this;
+    }
+
+    /**
+     * Fold this Try into a single value by applying one of two functions.
+     * 通过应用两个函数之一将此 Try 折叠为单个值。
+     *
+     * @param failureMapper function for Failure case - Failure 情况的函数
+     * @param successMapper function for Success case - Success 情况的函数
+     * @param <R>           result type - 结果类型
+     * @return result of applying the appropriate function | 应用相应函数的结果
+     */
+    default <R> R fold(Function<Throwable, ? extends R> failureMapper,
+                       Function<? super T, ? extends R> successMapper) {
+        Objects.requireNonNull(failureMapper, "failureMapper must not be null");
+        Objects.requireNonNull(successMapper, "successMapper must not be null");
+        if (this instanceof Success<T> s) {
+            return successMapper.apply(s.value());
+        } else {
+            return failureMapper.apply(((Failure<T>) this).cause());
+        }
+    }
+
+    /**
+     * Convert to Option. Success maps to Option.of(value), Failure maps to Option.none().
+     * 转换为 Option。Success 映射为 Option.of(value)，Failure 映射为 Option.none()。
+     *
+     * @return Option containing the value or none | 包含值的 Option 或 none
+     */
+    default Option<T> toOption() {
+        if (this instanceof Success<T> s) {
+            return Option.of(s.value());
+        }
+        return Option.none();
+    }
+
+    /**
+     * Convert to Validation. Success maps to Validation.valid(value), Failure maps to Validation.invalid(cause).
+     * 转换为 Validation。Success 映射为 Validation.valid(value)，Failure 映射为 Validation.invalid(cause)。
+     *
+     * @return Validation containing the value or the cause | 包含值或异常原因的 Validation
+     */
+    default Validation<Throwable, T> toValidation() {
+        if (this instanceof Success<T> s) {
+            return Validation.valid(s.value());
+        }
+        return Validation.invalid(((Failure<T>) this).cause());
+    }
+
+    /**
+     * Convert to Stream. Success maps to Stream.of(value), Failure maps to Stream.empty().
+     * 转换为 Stream。Success 映射为 Stream.of(value)，Failure 映射为 Stream.empty()。
+     *
+     * @return Stream containing the value or empty | 包含值的 Stream 或空 Stream
+     */
+    default Stream<T> stream() {
+        if (this instanceof Success<T> s) {
+            return s.value() != null ? Stream.of(s.value()) : Stream.empty();
+        }
+        return Stream.empty();
+    }
+
+    /**
+     * Check if this is a Success containing a value equal to the given value.
+     * 检查是否为包含与给定值相等的值的 Success。
+     *
+     * @param value the value to compare - 要比较的值
+     * @return true if Success and value equals contained value | 如果是 Success 且值相等返回 true
+     */
+    default boolean contains(T value) {
+        if (this instanceof Success<T> s) {
+            return Objects.equals(s.value(), value);
+        }
+        return false;
+    }
+
+    /**
+     * Check if this is a Success and the predicate matches the contained value.
+     * 检查是否为 Success 且谓词匹配包含的值。
+     *
+     * @param predicate the predicate to test - 要测试的谓词
+     * @return true if Success and predicate matches | 如果是 Success 且谓词匹配返回 true
+     */
+    default boolean exists(Predicate<? super T> predicate) {
+        Objects.requireNonNull(predicate, "predicate must not be null");
+        if (this instanceof Success<T> s) {
+            return predicate.test(s.value());
+        }
+        return false;
+    }
+
     // ==================== Success Implementation | Success 实现 ====================
 
     /**
@@ -451,6 +591,16 @@ public sealed interface Try<T> permits Try.Success, Try.Failure {
         @Override
         public Try<T> filter(Predicate<? super T> predicate) {
             return this;
+        }
+
+        @Override
+        public Try<T> mapFailure(Function<Throwable, ? extends Throwable> mapper) {
+            try {
+                return new Failure<>(mapper.apply(cause));
+            } catch (Throwable t) {
+                t.addSuppressed(cause);
+                return new Failure<>(t);
+            }
         }
 
         @Override

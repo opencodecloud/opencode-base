@@ -187,15 +187,24 @@ public final class CycleDetector {
             }
         }
 
+        // O(n) amortized: once a node is confirmed cycle-free, memoize it
+        Set<ID> confirmed = new HashSet<>();
         for (ID id : parentMap.keySet()) {
-            Set<ID> seen = new HashSet<>();
+            if (confirmed.contains(id)) {
+                continue;
+            }
+            Set<ID> path = new HashSet<>();
             ID current = id;
             while (current != null) {
-                if (!seen.add(current)) {
+                if (confirmed.contains(current)) {
+                    break; // rest of chain is safe
+                }
+                if (!path.add(current)) {
                     return true; // Cycle
                 }
                 current = parentMap.get(current);
             }
+            confirmed.addAll(path);
         }
         return false;
     }

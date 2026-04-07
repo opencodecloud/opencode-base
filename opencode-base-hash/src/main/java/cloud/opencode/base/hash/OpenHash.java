@@ -22,12 +22,14 @@ import java.nio.charset.Charset;
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
- *   <li>Non-cryptographic hashes: MurmurHash3, xxHash, FNV-1a, CRC32 - 非加密哈希</li>
- *   <li>Cryptographic hashes: MD5, SHA-1, SHA-256, SHA-512, SHA-3 - 加密哈希</li>
+ *   <li>Non-cryptographic hashes: MurmurHash3, xxHash, FNV-1a, CRC32, SipHash, Adler32 - 非加密哈希</li>
+ *   <li>Cryptographic hashes: MD5, SHA-1, SHA-256, SHA-384, SHA-512, SHA-3 - 加密哈希</li>
+ *   <li>HMAC: HMAC-MD5, HMAC-SHA1, HMAC-SHA256, HMAC-SHA384, HMAC-SHA512 - HMAC消息认证</li>
  *   <li>Consistent hash ring - 一致性哈希环</li>
  *   <li>Bloom filter - 布隆过滤器</li>
  *   <li>Counting bloom filter - 计数布隆过滤器</li>
  *   <li>SimHash for text similarity - SimHash用于文本相似度</li>
+ *   <li>HashCodes combiner for efficient hashCode() - HashCodes组合器用于高效hashCode()</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -177,6 +179,38 @@ public final class OpenHash {
         return Crc32HashFunction.crc32c();
     }
 
+    /**
+     * Adler-32 checksum
+     * Adler-32 校验和
+     *
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction adler32() {
+        return Adler32HashFunction.adler32();
+    }
+
+    /**
+     * SipHash-2-4 with default key
+     * 默认密钥的 SipHash-2-4
+     *
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction sipHash24() {
+        return SipHashFunction.sipHash24();
+    }
+
+    /**
+     * SipHash-2-4 with specified key
+     * 指定密钥的 SipHash-2-4
+     *
+     * @param k0 first key half | 密钥前半部分
+     * @param k1 second key half | 密钥后半部分
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction sipHash24(long k0, long k1) {
+        return SipHashFunction.sipHash24(k0, k1);
+    }
+
     // ==================== Cryptographic Hashes | 加密哈希 ====================
 
     /**
@@ -230,6 +264,16 @@ public final class OpenHash {
     }
 
     /**
+     * SHA-384
+     * SHA-384
+     *
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction sha384() {
+        return MessageDigestHashFunction.sha384();
+    }
+
+    /**
      * SHA3-512
      * SHA3-512
      *
@@ -237,6 +281,63 @@ public final class OpenHash {
      */
     public static HashFunction sha3_512() {
         return MessageDigestHashFunction.sha3_512();
+    }
+
+    // ==================== HMAC | HMAC消息认证码 ====================
+
+    /**
+     * HMAC-MD5
+     * HMAC-MD5
+     *
+     * @param key secret key bytes | 密钥字节
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction hmacMd5(byte[] key) {
+        return HmacHashFunction.hmacMd5(key);
+    }
+
+    /**
+     * HMAC-SHA1
+     * HMAC-SHA1
+     *
+     * @param key secret key bytes | 密钥字节
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction hmacSha1(byte[] key) {
+        return HmacHashFunction.hmacSha1(key);
+    }
+
+    /**
+     * HMAC-SHA256
+     * HMAC-SHA256
+     *
+     * @param key secret key bytes | 密钥字节
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction hmacSha256(byte[] key) {
+        return HmacHashFunction.hmacSha256(key);
+    }
+
+    /**
+     * HMAC-SHA384
+     * HMAC-SHA384
+     *
+     * @param key secret key bytes | 密钥字节
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction hmacSha384(byte[] key) {
+        return HmacHashFunction.hmacSha384(key);
+    }
+
+    /**
+     * HMAC-SHA512
+     * HMAC-SHA512
+     *
+     * @param key secret key bytes | 密钥字节
+     * @return hash function | 哈希函数
+     */
+    public static HashFunction hmacSha512(byte[] key) {
+        return HmacHashFunction.hmacSha512(key);
     }
 
     // ==================== Convenience Methods | 便捷方法 ====================

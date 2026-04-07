@@ -229,4 +229,17 @@ public final class OpenResource {
     public static ResourceLoader loader(ClassLoader classLoader) {
         return ResourceLoader.create(classLoader);
     }
+
+    // ==================== Watcher | 监听器 ====================
+
+    /**
+     * Create a new ResourceWatcher for monitoring file changes
+     * 创建新的 ResourceWatcher 用于监听文件变更
+     *
+     * @return resource watcher | 资源监听器
+     * @throws IOException if cannot create watcher | 无法创建监听器时抛出
+     */
+    public static ResourceWatcher createWatcher() throws IOException {
+        return new ResourceWatcher();
+    }
 }

@@ -1,8 +1,10 @@
 package cloud.opencode.base.cache;
 
-import cloud.opencode.base.cache.protection.BloomFilter;
 import cloud.opencode.base.cache.protection.SingleFlight;
+import cloud.opencode.base.hash.Funnel;
+import cloud.opencode.base.hash.bloom.BloomFilter;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
@@ -60,7 +62,7 @@ import java.util.function.Function;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-cache V2.0.0
  */
-public final class ProtectedCache<K, V> implements Cache<K, V> {
+public final class ProtectedCache<K, V> implements Cache<K, V>, AutoCloseable {
 
     private static final System.Logger LOGGER = System.getLogger(ProtectedCache.class.getName());
     private static final int CLEANUP_THRESHOLD = 1000;
@@ -68,7 +70,7 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
     private static final long NEGATIVE_CACHE_CLEANUP_INTERVAL_MS = 30_000; // 30 seconds
 
     private final Cache<K, V> delegate;
-    private final BloomFilter negativeBloomFilter;
+    private final BloomFilter<K> negativeBloomFilter;
     private final SingleFlight<K, V> singleFlight;
     private final boolean useBloomFilter;
     private final boolean useSingleFlight;
@@ -84,10 +86,15 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
         this.negativeCacheDuration = builder.negativeCacheDuration;
 
         if (useBloomFilter) {
-            this.negativeBloomFilter = BloomFilter.create(
-                    builder.expectedInsertions,
-                    builder.falsePositiveRate
-            );
+            // Use a generic Object funnel that hashes via toString() representation
+            @SuppressWarnings("unchecked")
+            Funnel<K> keyFunnel = (Funnel<K>) (Funnel<?>) (Object from, cloud.opencode.base.hash.Hasher into) ->
+                    into.putString(String.valueOf(from), StandardCharsets.UTF_8);
+            this.negativeBloomFilter = BloomFilter.<K>builder(keyFunnel)
+                    .expectedInsertions(builder.expectedInsertions)
+                    .fpp(builder.falsePositiveRate)
+                    .threadSafe(true)
+                    .build();
         } else {
             this.negativeBloomFilter = null;
         }
@@ -180,7 +187,7 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
         if (value == null) {
             // Track negative lookup
             if (useBloomFilter) {
-                negativeBloomFilter.add(key);
+                negativeBloomFilter.put(key);
             }
             if (negativeCacheDuration != null) {
                 negativeCacheExpiry.put(key, System.currentTimeMillis() + negativeCacheDuration.toMillis());
@@ -443,6 +450,17 @@ public final class ProtectedCache<K, V> implements Cache<K, V> {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    /**
+     * Close this cache, releasing all resources by delegating to {@link #shutdown()}.
+     * 关闭此缓存，通过委托给 {@link #shutdown()} 释放所有资源。
+     *
+     * @since V1.0.3
+     */
+    @Override
+    public void close() {
+        shutdown();
     }
 
     /**

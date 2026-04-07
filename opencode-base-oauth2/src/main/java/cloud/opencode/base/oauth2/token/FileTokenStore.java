@@ -7,6 +7,8 @@ import cloud.opencode.base.oauth2.exception.OAuth2Exception;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Optional;
@@ -77,6 +79,7 @@ public class FileTokenStore implements TokenStore {
             directory);
         try {
             Files.createDirectories(directory);
+            setDirectoryOwnerOnly(directory);
         } catch (IOException e) {
             throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_STORE_ERROR,
                     "Failed to create token store directory: " + directory, e);
@@ -93,7 +96,17 @@ public class FileTokenStore implements TokenStore {
         String content = serialize(token);
 
         try {
-            Files.writeString(file, content);
+            // Write to temp file first, set permissions, then atomically move
+            Path temp = Files.createTempFile(directory, ".token", ".tmp");
+            try {
+                Files.writeString(temp, content);
+                setOwnerOnly(temp);
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException e) {
+                // Clean up temp file on failure
+                try { Files.deleteIfExists(temp); } catch (IOException ignored) { }
+                throw e;
+            }
         } catch (IOException e) {
             throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_STORE_ERROR,
                     "Failed to save token: " + key, e);
@@ -187,6 +200,80 @@ public class FileTokenStore implements TokenStore {
     }
 
     /**
+     * Set file permissions to owner-only (rw-------) on POSIX systems.
+     * 在 POSIX 系统上设置文件权限为仅所有者（rw-------）。
+     *
+     * @param path the file path | 文件路径
+     */
+    private void setOwnerOnly(Path path) {
+        try {
+            Set<PosixFilePermission> ownerOnly = Set.of(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE);
+            Files.setPosixFilePermissions(path, ownerOnly);
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // Non-POSIX filesystem (Windows) — permissions not available
+        }
+    }
+
+    /**
+     * Set directory permissions to owner-only (rwx------) on POSIX systems.
+     * 在 POSIX 系统上设置目录权限为仅所有者（rwx------）。
+     *
+     * @param dir the directory path | 目录路径
+     */
+    private void setDirectoryOwnerOnly(Path dir) {
+        try {
+            Set<PosixFilePermission> ownerOnly = Set.of(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.OWNER_EXECUTE);
+            Files.setPosixFilePermissions(dir, ownerOnly);
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // Non-POSIX filesystem (Windows) — permissions not available
+        }
+    }
+
+    /**
+     * Escape newlines and backslashes in a value for safe line-based serialization.
+     * 转义值中的换行符和反斜杠，以便安全的基于行的序列化。
+     *
+     * @param value the value | 值
+     * @return the escaped value | 转义后的值
+     */
+    private String escapeValue(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    /**
+     * Unescape a serialized value, reversing escapeValue().
+     * 反转义序列化的值，逆转 escapeValue()。
+     *
+     * @param value the escaped value | 转义后的值
+     * @return the original value or null if empty | 原始值，为空则返回 null
+     */
+    private String unescapeValue(String value) {
+        if (value == null || value.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '\\' && i + 1 < value.length()) {
+                char next = value.charAt(i + 1);
+                switch (next) {
+                    case 'n' -> { sb.append('\n'); i++; }
+                    case 'r' -> { sb.append('\r'); i++; }
+                    case '\\' -> { sb.append('\\'); i++; }
+                    default -> sb.append(c);
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * Serialize token to string
      * 将令牌序列化为字符串
      *
@@ -195,16 +282,16 @@ public class FileTokenStore implements TokenStore {
      */
     private String serialize(OAuth2Token token) {
         StringBuilder sb = new StringBuilder();
-        sb.append("accessToken=").append(token.accessToken()).append("\n");
-        sb.append("tokenType=").append(token.tokenType()).append("\n");
+        sb.append("accessToken=").append(escapeValue(token.accessToken())).append("\n");
+        sb.append("tokenType=").append(escapeValue(token.tokenType())).append("\n");
         if (token.refreshToken() != null) {
-            sb.append("refreshToken=").append(token.refreshToken()).append("\n");
+            sb.append("refreshToken=").append(escapeValue(token.refreshToken())).append("\n");
         }
         if (token.idToken() != null) {
-            sb.append("idToken=").append(token.idToken()).append("\n");
+            sb.append("idToken=").append(escapeValue(token.idToken())).append("\n");
         }
         if (!token.scopes().isEmpty()) {
-            sb.append("scopes=").append(String.join(" ", token.scopes())).append("\n");
+            sb.append("scopes=").append(escapeValue(String.join(" ", token.scopes()))).append("\n");
         }
         sb.append("issuedAt=").append(token.issuedAt().toEpochMilli()).append("\n");
         if (token.expiresAt() != null) {
@@ -228,7 +315,8 @@ public class FileTokenStore implements TokenStore {
             if (eq <= 0) continue;
 
             String key = line.substring(0, eq);
-            String value = line.substring(eq + 1);
+            String rawValue = line.substring(eq + 1);
+            String value = unescapeValue(rawValue);
 
             switch (key) {
                 case "accessToken" -> builder.accessToken(value);
@@ -237,11 +325,11 @@ public class FileTokenStore implements TokenStore {
                 case "idToken" -> builder.idToken(value);
                 case "scopes" -> builder.scopeString(value);
                 case "issuedAt" -> {
-                    try { builder.issuedAt(Instant.ofEpochMilli(Long.parseLong(value))); }
+                    try { builder.issuedAt(Instant.ofEpochMilli(Long.parseLong(rawValue))); }
                     catch (NumberFormatException ignored) { /* skip corrupt value */ }
                 }
                 case "expiresAt" -> {
-                    try { builder.expiresAt(Instant.ofEpochMilli(Long.parseLong(value))); }
+                    try { builder.expiresAt(Instant.ofEpochMilli(Long.parseLong(rawValue))); }
                     catch (NumberFormatException ignored) { /* skip corrupt value */ }
                 }
             }

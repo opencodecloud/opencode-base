@@ -1,6 +1,9 @@
 package cloud.opencode.base.email.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.email.Email;
+
+import java.io.Serial;
 
 /**
  * Email Exception Base Class
@@ -24,7 +27,7 @@ import cloud.opencode.base.email.Email;
  *     if (e.isRetryable()) {
  *         // Schedule for retry
  *     }
- *     log.error("Error code: {}", e.getErrorCode().getCode());
+ *     log.error("Error code: {}", e.getEmailErrorCode().getCode());
  * }
  * }</pre>
  *
@@ -38,9 +41,14 @@ import cloud.opencode.base.email.Email;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-email V1.0.0
  */
-public class EmailException extends RuntimeException {
+public class EmailException extends OpenException {
 
-    private final EmailErrorCode errorCode;
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private static final String COMPONENT = "Email";
+
+    private final EmailErrorCode emailErrorCode;
     private final Email email;
 
     /**
@@ -85,19 +93,19 @@ public class EmailException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public EmailException(String message, Throwable cause, Email email, EmailErrorCode errorCode) {
-        super(message, cause);
-        this.errorCode = errorCode != null ? errorCode : EmailErrorCode.UNKNOWN;
+        super(COMPONENT, errorCode != null ? String.valueOf(errorCode.getCode()) : "0", message, cause);
+        this.emailErrorCode = errorCode != null ? errorCode : EmailErrorCode.UNKNOWN;
         this.email = email;
     }
 
     /**
-     * Get the error code
-     * 获取错误码
+     * Get the email error code
+     * 获取邮件错误码
      *
-     * @return the error code | 错误码
+     * @return the email error code | 邮件错误码
      */
-    public EmailErrorCode getErrorCode() {
-        return errorCode;
+    public EmailErrorCode getEmailErrorCode() {
+        return emailErrorCode;
     }
 
     /**
@@ -117,6 +125,6 @@ public class EmailException extends RuntimeException {
      * @return true if retryable | 可重试返回true
      */
     public boolean isRetryable() {
-        return errorCode.isRetryable();
+        return emailErrorCode.isRetryable();
     }
 }

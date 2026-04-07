@@ -1,5 +1,7 @@
 package cloud.opencode.base.core.tuple;
 
+import cloud.opencode.base.core.func.QuadFunction;
+
 import java.io.Serializable;
 import java.util.function.Function;
 
@@ -126,6 +128,18 @@ public record Quadruple<A, B, C, D>(A first, B second, C third, D fourth) implem
      */
     public <T> Quadruple<A, B, C, T> mapFourth(Function<? super D, ? extends T> mapper) {
         return new Quadruple<>(first, second, third, mapper.apply(fourth));
+    }
+
+    /**
+     * Applies a quad-function
+     * 应用四元函数
+     *
+     * @param function the quad-function | 四元函数
+     * @param <R>      result type | 结果类型
+     * @return the function result | 函数结果
+     */
+    public <R> R apply(QuadFunction<? super A, ? super B, ? super C, ? super D, ? extends R> function) {
+        return function.apply(first, second, third, fourth);
     }
 
     /**

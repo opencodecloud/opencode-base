@@ -429,7 +429,7 @@ public final class OpenCache {
     public static <K, V> Cache<K, V> wTinyLfuCache(long maxSize) {
         return OpenCache.<K, V>builder()
                 .maximumSize(maxSize)
-                .evictionPolicy(EvictionPolicy.wTinyLfu())
+                .evictionPolicy(EvictionPolicy.wTinyLfu((int) Math.min(maxSize, Integer.MAX_VALUE)))
                 .build();
     }
 
@@ -548,8 +548,8 @@ public final class OpenCache {
     }
 
     /**
-     * Create W-TinyLFU eviction policy
-     * 创建 W-TinyLFU 淘汰策略
+     * Create W-TinyLFU eviction policy with default expected size (10,000)
+     * 创建默认期望大小（10,000）的 W-TinyLFU 淘汰策略
      *
      * @param <K> key type | 键类型
      * @param <V> value type | 值类型
@@ -557,6 +557,19 @@ public final class OpenCache {
      */
     public static <K, V> EvictionPolicy<K, V> wTinyLfu() {
         return EvictionPolicy.wTinyLfu();
+    }
+
+    /**
+     * Create W-TinyLFU eviction policy sized for the expected cache capacity
+     * 创建根据期望缓存容量调整大小的 W-TinyLFU 淘汰策略
+     *
+     * @param expectedSize the expected maximum number of cache entries | 期望的缓存最大条目数
+     * @param <K> key type | 键类型
+     * @param <V> value type | 值类型
+     * @return W-TinyLFU policy | W-TinyLFU 策略
+     */
+    public static <K, V> EvictionPolicy<K, V> wTinyLfu(int expectedSize) {
+        return EvictionPolicy.wTinyLfu(expectedSize);
     }
 
     // ==================== Expiry Policy Factories | 过期策略工厂 ====================
@@ -609,7 +622,10 @@ public final class OpenCache {
      *
      * @param <K> key type | 键类型
      * @param <V> value type | 值类型
+     * @deprecated Use {@link cloud.opencode.base.cache.config.CacheConfig.Builder} instead for full configuration capabilities.
+     * 已废弃，请使用 {@link cloud.opencode.base.cache.config.CacheConfig.Builder} 以获得完整的配置能力。
      */
+    @Deprecated(since = "1.0.3", forRemoval = true)
     public static final class CacheBuilder<K, V> {
 
         /** Creates a new CacheBuilder instance | 创建新的 CacheBuilder 实例 */

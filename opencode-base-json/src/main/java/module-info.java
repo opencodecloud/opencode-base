@@ -30,6 +30,7 @@ module cloud.opencode.base.json {
     exports cloud.opencode.base.json;
     exports cloud.opencode.base.json.adapter;
     exports cloud.opencode.base.json.annotation;
+    exports cloud.opencode.base.json.identity;
     exports cloud.opencode.base.json.diff;
     exports cloud.opencode.base.json.exception;
     exports cloud.opencode.base.json.patch;
@@ -39,6 +40,7 @@ module cloud.opencode.base.json {
     exports cloud.opencode.base.json.security;
     exports cloud.opencode.base.json.spi;
     exports cloud.opencode.base.json.stream;
+    exports cloud.opencode.base.json.util;
 
     // SPI: Allow ServiceLoader to find JsonProvider implementations
     uses cloud.opencode.base.json.spi.JsonProvider;

@@ -6,6 +6,7 @@ import cloud.opencode.base.image.validation.ImageValidator;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -68,6 +69,12 @@ public final class OpenImage {
      * 加载图片时允许的最大像素数（1 亿像素）。超过此限制的图片将被拒绝以防止内存溢出。
      */
     private static final long MAX_PIXELS = 100_000_000L;
+
+    /**
+     * Maximum input byte size for stream reads (200 MB).
+     * 流读取的最大输入字节数（200 MB）。
+     */
+    private static final int MAX_INPUT_BYTES = 200 * 1024 * 1024;
 
     private OpenImage() {
         // Utility class
@@ -146,8 +153,8 @@ public final class OpenImage {
      */
     public static Image read(InputStream in) throws ImageIOException {
         try {
-            // Buffer the stream so we can check dimensions before full load
-            byte[] bytes = in.readAllBytes();
+            // Buffer the stream with size limit to prevent memory exhaustion
+            byte[] bytes = in.readNBytes(MAX_INPUT_BYTES);
             try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
                 checkDimensions(bais);
             }
@@ -553,6 +560,7 @@ public final class OpenImage {
      * @return the image wrapper | 图片包装器
      */
     public static Image createBlank(int width, int height) {
+        validateBlankDimensions(width, height);
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         return new Image(image);
     }
@@ -567,12 +575,32 @@ public final class OpenImage {
      * @return the image wrapper | 图片包装器
      */
     public static Image createBlank(int width, int height, int color) {
+        validateBlankDimensions(width, height);
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                image.setRGB(x, y, color);
-            }
+        Graphics2D g2d = image.createGraphics();
+        try {
+            g2d.setColor(new Color(color, true));
+            g2d.fillRect(0, 0, width, height);
+        } finally {
+            g2d.dispose();
         }
         return new Image(image);
+    }
+
+    /**
+     * Validate dimensions for blank image creation to prevent image-bomb DoS.
+     * 校验空白图片创建的尺寸，防止图像炸弹DoS攻击。
+     */
+    private static void validateBlankDimensions(int width, int height) {
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException(
+                    "Image dimensions must be positive: " + width + "x" + height);
+        }
+        long pixels = (long) width * height;
+        if (pixels > MAX_PIXELS) {
+            throw new IllegalArgumentException(
+                    "Image too large: " + width + "x" + height +
+                    " (" + pixels + " pixels exceeds limit of " + MAX_PIXELS + ")");
+        }
     }
 }

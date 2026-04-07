@@ -6,7 +6,7 @@
 
 **A modern, zero-dependency Java utility library for JDK 25+**
 
-OpenCode Base is a comprehensive toolkit of 43 modular components covering core utilities, data processing, security, concurrency, and business logic — all built on modern Java features including virtual threads, records, sealed classes, and pattern matching.
+OpenCode Base is a comprehensive toolkit of 45 modular components covering core utilities, data processing, security, concurrency, machine learning inference, and business logic — all built on modern Java features including virtual threads, records, sealed classes, and pattern matching.
 
 ## Highlights
 
@@ -14,7 +14,7 @@ OpenCode Base is a comprehensive toolkit of 43 modular components covering core 
 - **JDK 25+ Native** — Virtual threads, records, sealed classes, pattern matching
 - **JPMS Modular** — Full Java module system support
 - **Production Ready** — 14 rounds of deep security audits, 338+ issues fixed
-- **43 Modules** — Pick only what you need, each module is independently usable
+- **45 Modules** — Pick only what you need, each module is independently usable
 - **Bilingual Javadoc** — English + Chinese documentation
 
 > **[中文文档 README_zh.md](README_zh.md)**
@@ -27,7 +27,7 @@ OpenCode Base is a comprehensive toolkit of 43 modular components covering core 
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-core</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -37,7 +37,7 @@ Add more modules as needed:
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-json</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -76,19 +76,19 @@ List<Result> results = OpenParallel.parallelMap(items, this::process);
 ## Architecture
 
 ```
-opencode-base (43 modules)
+opencode-base (45 modules)
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Business Components (3xx) — 16               │
+│                    Business Components (3xx) — 15               │
 │  Captcha  Email  Event  Feature  Geo  Graph  Image  Lunar       │
-│  Money  SMS  Test  TimeSeries  Tree  Web  Pdf  Cron             │
+│  Money  Test  TimeSeries  Tree  Web  Pdf  Cron                  │
 ├─────────────────────────────────────────────────────────────────┤
-│                    Domain Components (2xx) — 10                  │
-│  Config  Functional  Json  Log  Parallel  Pool                   │
-│  Serialization  Xml  Yml  OAuth2                                 │
+│                    Domain Components (2xx) — 12                  │
+│  Config  Csv  Functional  Json  Log  Parallel  Pool              │
+│  Serialization  Xml  Yml  OAuth2  Neural                         │
 ├─────────────────────────────────────────────────────────────────┤
-│                    Foundation Components (1xx) — 16              │
+│                    Foundation Components (1xx) — 17              │
 │  Cache  ClassLoader  Collections  Crypto  Date  DeepClone  Hash │
-│  I18n  ID  IO  Reflect  String  Expression  Lock  Rules         │
+│  I18n  ID  IO  Math  Reflect  String  Expression  Lock  Rules   │
 │  Observability                                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Core (0xx) — 1                                │
@@ -150,6 +150,9 @@ Lock abstraction. `LocalLock` (ReentrantLock wrapper), `SpinLock` (busy-wait for
 #### rules
 Lightweight rule engine. Condition-action rules with priority, rule groups, decision tables (CSV/in-memory), DSL builder, hot reload, rule listeners, composite conditions (AND/OR/NOT), `RuleEngine` with fire-first/fire-all modes.
 
+#### math
+Scientific computing library. Linear algebra (`Vector`, `Matrix`), probability distributions (Normal, T, Chi-Squared, F, Beta, Gamma, LogNormal, Binomial), numerical analysis (Brent's root-finding, Simpson's integration, differentiation), interpolation, combinatorics (binomial coefficients, permutations), special functions (gamma, beta, erf), descriptive statistics with streaming accumulator, hypothesis testing (T-test, Chi-Square, ANOVA), regression, Spearman/Kendall correlation.
+
 #### observability
 Tracing and diagnostics. `OpenTelemetryTracer` with span management, `SlowLogCollector` (bounded, thread-safe, configurable threshold), noop tracer for zero-overhead disabled tracing.
 
@@ -157,6 +160,9 @@ Tracing and diagnostics. `OpenTelemetryTracer` with span management, `SlowLogCol
 
 #### config
 Configuration management. Multi-source (Properties/YAML/JSON/environment variables/system properties), hot reload with change listeners, type-safe binding, placeholder resolution, profile support, hierarchical config merging, config validation.
+
+#### csv
+CSV processing. RFC 4180 compliant parser/writer with DoS and formula-injection protection. Object binding (CSV ↔ Record/POJO via `@CsvColumn`/`@CsvFormat` annotations), streaming `CsvReader`/`CsvWriter` for low-memory processing, document diff, merge (concat/inner join/left join), fluent query/filter/projection, column statistics, row sampling, split into chunks, transformation pipeline, rule-based validation.
 
 #### functional
 Functional programming. `Try` (exception-safe computation), `Either` (left/right), `Option` (null-safe), `Lazy` (deferred evaluation), `Pipeline` (data transformation chain), `Lens` (immutable update), `For` (monadic comprehension), `Future` (async), pattern matching utilities.
@@ -181,6 +187,9 @@ XML processing. DOM/SAX/StAX parsing, XPath queries, Schema validation, XSLT tra
 
 #### yml
 YAML processing. Multi-document parsing, anchor/alias support, merge keys, type-safe value access, `PlaceholderResolver`, safe loading with depth/size/alias limits (`YmlSafeLoader`), SPI-based parser.
+
+#### neural
+Neural network inference engine. Custom `.ocm` binary model format with computation graph. `Tensor` (float32, stride-based, zero-copy views), ~30 operators (Conv1D/2D, DepthwiseConv2D, MaxPool/AvgPool, LSTM, BiLSTM, CTC decode/beam-search, BatchNorm, Dropout, Linear, all standard activations), `InferenceSession` for model execution, loss functions (MSE, MAE, CrossEntropy, Huber, CosineSimilarity), evaluation metrics (Accuracy, Precision, Recall, F1, ConfusionMatrix), input normalization (MinMax, Z-Score, L2), weight initialization, quantization support.
 
 #### oauth2
 OAuth2/OIDC client. Authorization Code flow, Client Credentials, Device Code, PKCE (RFC 7636), auto token refresh, OIDC discovery, provider presets (Google, GitHub, Microsoft), `FileTokenStore`, constant-time token comparison.
@@ -213,9 +222,6 @@ Chinese lunar calendar. Solar ↔ lunar date conversion (1900-2100), 24 solar te
 
 #### money
 Money and currency. Precise `Money` type (BigDecimal-based), multi-currency with `Currency` enum, allocation (`AllocationUtil`: ratio/percentage/weight/round-robin), Chinese uppercase conversion (壹佰贰拾叁元), formatting, `MoneyCalcUtil` (sum/average/max/min).
-
-#### sms
-SMS messaging. Multi-platform support (Aliyun, Tencent Cloud, Huawei Cloud), template management, batch sending, rate limiting (`SmsRateLimiter`), phone number validation, send result tracking, pluggable provider SPI.
 
 #### test
 Testing utilities. Fluent assertions (`OpenAssert`), mock proxy, data generation (`Faker`: name/phone/email/address/company), `SensitiveDataGenerator`, `BenchmarkRunner` (warmup/iterations/percentile), `ThreadSafetyChecker`, `Wait` utility, HTTP mock server.
@@ -273,9 +279,9 @@ mvn compile -pl opencode-base-json,opencode-base-cache -am
 
 | Metric | Value |
 |--------|-------|
-| Modules | 43 |
-| Source Files | 1,900+ |
-| Test Files | 1,700+ |
+| Modules | 45 |
+| Source Files | 2,400+ |
+| Test Files | 2,100+ |
 | Security Audit Rounds | 14 |
 | Issues Fixed | 338+ |
 | Java Version | 25 |

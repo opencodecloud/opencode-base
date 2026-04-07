@@ -13,6 +13,14 @@
 - **Lambda 延迟求值**：延迟消息构造，提升性能
 - **标记支持**：通过标记实现日志分类和过滤
 
+### V1.0.3 新增功能
+- **日志事件模型**：不可变 `LogEvent` 记录，携带完整事件上下文（级别、消息、异常、标记、MDC、时间戳、线程、调用者）
+- **调用者信息**：`CallerInfo` 记录，通过 StackWalker 捕获类名、方法名、文件名和行号
+- **日志过滤管道**：`LogFilter` 接口 + `LogFilterChain`，内置 `LevelFilter`、`MarkerFilter`、`ThrottleFilter`
+- **异步日志**：`AsyncLogger` 基于虚拟线程的异步分发包装器，支持背压回退和优雅关闭
+- **动态日志级别**：`DynamicLevelManager` 单例，支持运行时按 Logger 名称调整日志级别，无需重启
+- **彩色控制台**：`ConsoleFormatter` ANSI 彩色输出 + `AnsiColor` 枚举，自动检测终端能力
+
 ### 增强功能
 - **结构化日志**：JSON 风格的键值对结构化日志条目，适用于 ELK/Loki
 - **日志脱敏**：密码、手机号、身份证等敏感数据脱敏
@@ -31,7 +39,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-log</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -96,6 +104,51 @@ String masked = LogMasking.mask("13812345678", MaskingStrategy.PHONE);
 // 输出: 138****5678
 ```
 
+### 异步日志
+
+```java
+import cloud.opencode.base.log.async.AsyncLogger;
+
+Logger delegate = LoggerFactory.getLogger(MyService.class);
+try (AsyncLogger async = AsyncLogger.wrap(delegate)) {
+    async.info("通过虚拟线程异步记录");
+    async.flush(); // 等待挂起的消息处理完成
+}
+```
+
+### 日志过滤
+
+```java
+import cloud.opencode.base.log.filter.*;
+
+LogFilterChain chain = new LogFilterChain();
+chain.addFilter(new LevelFilter(LogLevel.WARN));           // 仅 WARN 及以上
+chain.addFilter(new ThrottleFilter(Duration.ofSeconds(5))); // 去重
+
+LogEvent event = LogEvent.builder(LogLevel.INFO, "test").build();
+FilterAction result = chain.apply(event); // DENY（低于 WARN）
+```
+
+### 动态日志级别
+
+```java
+import cloud.opencode.base.log.level.DynamicLevelManager;
+
+DynamicLevelManager manager = DynamicLevelManager.getInstance();
+manager.setLevel("com.example.MyService", LogLevel.DEBUG); // 运行时启用 DEBUG
+manager.resetLevel("com.example.MyService");               // 恢复默认
+```
+
+### 调用者信息
+
+```java
+import cloud.opencode.base.log.CallerInfo;
+
+CallerInfo info = CallerInfo.capture();
+System.out.println(info.toShortString());  // "MyClass.myMethod:42"
+System.out.println(info.toCompactString()); // "MyClass:42"
+```
+
 ## 类参考
 
 | 类名 | 说明 |
@@ -130,6 +183,17 @@ String masked = LogMasking.mask("13812345678", MaskingStrategy.PHONE);
 | `LogProviderFactory` | 日志提供者发现和管理工厂 |
 | `MDCAdapter` | MDC 实现的 SPI 接口 |
 | `NDCAdapter` | NDC 实现的 SPI 接口 |
+| `LogEvent` | 不可变日志事件记录，携带完整上下文 |
+| `CallerInfo` | 调用者位置记录（类名、方法、文件、行号）|
+| `LogFilter` | 日志事件过滤的函数式接口 |
+| `LogFilterChain` | 线程安全的过滤器链，支持短路求值 |
+| `LevelFilter` | 内置按级别阈值过滤器 |
+| `MarkerFilter` | 内置按标记名称过滤器 |
+| `ThrottleFilter` | 内置重复消息限流过滤器 |
+| `AsyncLogger` | 基于虚拟线程的异步日志包装器 |
+| `DynamicLevelManager` | 运行时按 Logger 名称管理日志级别 |
+| `ConsoleFormatter` | 支持 ANSI 颜色的日志行格式化器 |
+| `AnsiColor` | ANSI 颜色代码枚举 |
 
 ## 环境要求
 

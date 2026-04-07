@@ -89,6 +89,9 @@ public final class CentralityUtil {
     /** Default convergence threshold | 默认收敛阈值 */
     public static final double DEFAULT_TOLERANCE = 1e-6;
 
+    /** Epsilon for floating-point distance comparison in Brandes' algorithm | Brandes算法中浮点距离比较的容差 */
+    private static final double DISTANCE_EPSILON = 1e-10;
+
     private CentralityUtil() {
         // Utility class
     }
@@ -265,79 +268,17 @@ public final class CentralityUtil {
             centrality.put(v, 0.0);
         }
 
-        // Brandes' algorithm
+        // Brandes' algorithm: accumulate single-source contributions
         for (V source : graph.vertices()) {
-            // Single-source shortest paths
-            Deque<V> stack = new ArrayDeque<>();
-            Map<V, List<V>> predecessors = new HashMap<>();
-            Map<V, Double> dist = new HashMap<>();
-            Map<V, Double> sigma = new HashMap<>();
-
-            for (V v : graph.vertices()) {
-                predecessors.put(v, new ArrayList<>());
-                dist.put(v, Double.MAX_VALUE);
-                sigma.put(v, 0.0);
-            }
-
-            dist.put(source, 0.0);
-            sigma.put(source, 1.0);
-
-            PriorityQueue<VertexDist<V>> queue = new PriorityQueue<>(
-                    Comparator.comparingDouble(VertexDist::dist));
-            queue.offer(new VertexDist<>(source, 0.0));
-
-            while (!queue.isEmpty()) {
-                VertexDist<V> current = queue.poll();
-                V v = current.vertex();
-
-                if (current.dist() > dist.get(v)) {
-                    continue;
-                }
-
-                stack.push(v);
-
-                for (Edge<V> edge : graph.outEdges(v)) {
-                    V w = edge.to();
-                    double vwDist = dist.get(v) + edge.weight();
-
-                    if (vwDist < dist.get(w)) {
-                        dist.put(w, vwDist);
-                        queue.offer(new VertexDist<>(w, vwDist));
-                        sigma.put(w, 0.0);
-                        predecessors.get(w).clear();
-                    }
-
-                    if (Math.abs(vwDist - dist.get(w)) < 1e-10) {
-                        sigma.merge(w, sigma.get(v), Double::sum);
-                        predecessors.get(w).add(v);
-                    }
-                }
-            }
-
-            // Accumulation
-            Map<V, Double> delta = new HashMap<>();
-            for (V v : graph.vertices()) {
-                delta.put(v, 0.0);
-            }
-
-            while (!stack.isEmpty()) {
-                V w = stack.pop();
-                for (V v : predecessors.get(w)) {
-                    double contribution = (sigma.get(v) / sigma.get(w)) * (1.0 + delta.get(w));
-                    delta.merge(v, contribution, Double::sum);
-                }
-                if (!w.equals(source)) {
-                    centrality.merge(w, delta.get(w), Double::sum);
-                }
-            }
+            brandesSingleSource(graph, source, centrality);
         }
 
         // Normalize
         if (normalized) {
             int n = graph.vertexCount();
             double factor = graph.isDirected()
-                    ? 1.0 / ((n - 1) * (n - 2))
-                    : 2.0 / ((n - 1) * (n - 2));
+                    ? 1.0 / ((long) (n - 1) * (n - 2))
+                    : 2.0 / ((long) (n - 1) * (n - 2));
 
             if (n > 2) {
                 for (V v : centrality.keySet()) {
@@ -347,6 +288,81 @@ public final class CentralityUtil {
         }
 
         return centrality;
+    }
+
+    /**
+     * Perform BFS/Dijkstra from a single source and back-propagate dependency scores (Brandes' algorithm).
+     * 从单个源执行BFS/Dijkstra并反向传播依赖分数（Brandes算法）。
+     *
+     * @param <V> the vertex type | 顶点类型
+     * @param graph the graph | 图
+     * @param source the source vertex | 源顶点
+     * @param centrality the centrality accumulator map (updated in place) | 中心性累加映射（就地更新）
+     */
+    private static <V> void brandesSingleSource(Graph<V> graph, V source, Map<V, Double> centrality) {
+        // Single-source shortest paths
+        Deque<V> stack = new ArrayDeque<>();
+        Map<V, List<V>> predecessors = new HashMap<>();
+        Map<V, Double> dist = new HashMap<>();
+        Map<V, Double> sigma = new HashMap<>();
+
+        for (V v : graph.vertices()) {
+            predecessors.put(v, new ArrayList<>());
+            dist.put(v, Double.MAX_VALUE);
+            sigma.put(v, 0.0);
+        }
+
+        dist.put(source, 0.0);
+        sigma.put(source, 1.0);
+
+        PriorityQueue<VertexDist<V>> queue = new PriorityQueue<>(
+                Comparator.comparingDouble(VertexDist::dist));
+        queue.offer(new VertexDist<>(source, 0.0));
+
+        while (!queue.isEmpty()) {
+            VertexDist<V> current = queue.poll();
+            V v = current.vertex();
+
+            if (current.dist() > dist.get(v)) {
+                continue;
+            }
+
+            stack.push(v);
+
+            for (Edge<V> edge : graph.outEdges(v)) {
+                V w = edge.to();
+                double vwDist = dist.get(v) + edge.weight();
+
+                if (vwDist < dist.get(w)) {
+                    dist.put(w, vwDist);
+                    queue.offer(new VertexDist<>(w, vwDist));
+                    sigma.put(w, 0.0);
+                    predecessors.get(w).clear();
+                }
+
+                if (Math.abs(vwDist - dist.get(w)) < DISTANCE_EPSILON) {
+                    sigma.merge(w, sigma.get(v), Double::sum);
+                    predecessors.get(w).add(v);
+                }
+            }
+        }
+
+        // Accumulation (back-propagation of dependency scores)
+        Map<V, Double> delta = new HashMap<>();
+        for (V v : graph.vertices()) {
+            delta.put(v, 0.0);
+        }
+
+        while (!stack.isEmpty()) {
+            V w = stack.pop();
+            for (V v : predecessors.get(w)) {
+                double contribution = (sigma.get(v) / sigma.get(w)) * (1.0 + delta.get(w));
+                delta.merge(v, contribution, Double::sum);
+            }
+            if (!w.equals(source)) {
+                centrality.merge(w, delta.get(w), Double::sum);
+            }
+        }
     }
 
     // ==================== PageRank | PageRank算法 ====================

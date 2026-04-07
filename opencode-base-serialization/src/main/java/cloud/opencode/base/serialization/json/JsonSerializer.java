@@ -7,6 +7,7 @@ import cloud.opencode.base.serialization.TypeReference;
 import cloud.opencode.base.serialization.exception.OpenSerializationException;
 
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 
 /**
  * JsonSerializer - JSON Serialization (delegates to OpenJson)
@@ -69,7 +70,7 @@ public class JsonSerializer implements Serializer {
     @Override
     public byte[] serialize(Object obj) {
         if (obj == null) {
-            return "null".getBytes();
+            return "null".getBytes(StandardCharsets.UTF_8);
         }
 
         try {
@@ -99,10 +100,9 @@ public class JsonSerializer implements Serializer {
         }
 
         try {
-            // Convert to OpenJson TypeReference
             cloud.opencode.base.json.TypeReference<T> jsonTypeRef =
                     cloud.opencode.base.json.TypeReference.of(typeRef.getType());
-            return OpenJson.fromJson(new String(data), jsonTypeRef);
+            return OpenJson.fromJson(data, jsonTypeRef);
         } catch (Exception e) {
             throw OpenSerializationException.deserializeFailed(data, typeRef.getRawType(), FORMAT, e);
         }
@@ -121,7 +121,7 @@ public class JsonSerializer implements Serializer {
             }
             cloud.opencode.base.json.TypeReference<T> jsonTypeRef =
                     cloud.opencode.base.json.TypeReference.of(type);
-            return OpenJson.fromJson(new String(data), jsonTypeRef);
+            return OpenJson.fromJson(data, jsonTypeRef);
         } catch (Exception e) {
             Class<?> targetType = type instanceof Class<?> c ? c : Object.class;
             throw OpenSerializationException.deserializeFailed(data, targetType, FORMAT, e);

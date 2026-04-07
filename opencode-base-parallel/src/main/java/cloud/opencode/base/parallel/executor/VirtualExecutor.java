@@ -250,14 +250,16 @@ public final class VirtualExecutor implements AutoCloseable {
             return task;
         }
         return () -> {
+            boolean acquired = false;
             try {
                 semaphore.acquire();
+                acquired = true;
                 task.run();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new OpenParallelException("Task interrupted", e);
             } finally {
-                semaphore.release();
+                if (acquired) semaphore.release();
             }
         };
     }
@@ -267,14 +269,16 @@ public final class VirtualExecutor implements AutoCloseable {
             return task;
         }
         return () -> {
+            boolean acquired = false;
             try {
                 semaphore.acquire();
+                acquired = true;
                 return task.call();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new OpenParallelException("Task interrupted", e);
             } finally {
-                semaphore.release();
+                if (acquired) semaphore.release();
             }
         };
     }

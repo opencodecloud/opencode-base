@@ -69,6 +69,7 @@ import java.util.function.Function;
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @see Splitter
+ * @see <a href="../string/builder/Joiner.html">cloud.opencode.base.string.builder.Joiner</a> (extended version with CharMatcher support)
  * @since JDK 25, opencode-base-core V1.0.0
  */
 public final class Joiner {

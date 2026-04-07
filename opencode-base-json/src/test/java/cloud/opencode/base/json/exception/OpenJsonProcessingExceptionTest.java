@@ -1,5 +1,6 @@
 package cloud.opencode.base.json.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -290,6 +291,61 @@ class OpenJsonProcessingExceptionTest {
             OpenJsonProcessingException ex = new OpenJsonProcessingException("Error");
 
             assertThat(ex.getSource()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("OpenException 继承测试")
+    class OpenExceptionInheritanceTests {
+
+        @Test
+        @DisplayName("是 OpenException 的子类")
+        void testExtendsOpenException() {
+            OpenJsonProcessingException ex = new OpenJsonProcessingException("test");
+            assertThat(ex).isInstanceOf(OpenException.class);
+            assertThat(ex.getComponent()).isEqualTo("json");
+            assertThat(ex.getErrorCode()).isEqualTo("UNKNOWN");
+        }
+
+        @Test
+        @DisplayName("getMessage 包含组件和错误码前缀")
+        void testGetMessageFormat() {
+            OpenJsonProcessingException ex = new OpenJsonProcessingException(
+                "Parse failed", OpenJsonProcessingException.ErrorType.PARSE_ERROR);
+
+            assertThat(ex.getMessage()).startsWith("[json] (PARSE_ERROR) ");
+            assertThat(ex.getMessage()).contains("Parse failed");
+        }
+
+        @Test
+        @DisplayName("getMessage 带位置信息包含前缀和位置")
+        void testGetMessageWithLocationFormat() {
+            OpenJsonProcessingException ex = new OpenJsonProcessingException(
+                "Unexpected token", OpenJsonProcessingException.ErrorType.PARSE_ERROR,
+                null, 5, 10, null);
+
+            assertThat(ex.getMessage()).startsWith("[json] (PARSE_ERROR) ");
+            assertThat(ex.getMessage()).contains("Unexpected token");
+            assertThat(ex.getMessage()).contains("at line 5, column 10");
+        }
+
+        @Test
+        @DisplayName("getRawMessage 返回不含前缀的原始消息")
+        void testGetRawMessage() {
+            OpenJsonProcessingException ex = new OpenJsonProcessingException(
+                "some error", OpenJsonProcessingException.ErrorType.IO_ERROR);
+
+            assertThat(ex.getRawMessage()).isEqualTo("some error");
+        }
+
+        @Test
+        @DisplayName("不同错误类型映射到正确的 errorCode")
+        void testErrorTypeAsErrorCode() {
+            OpenJsonProcessingException ex = new OpenJsonProcessingException(
+                "err", OpenJsonProcessingException.ErrorType.SERIALIZATION_ERROR);
+
+            assertThat(ex.getErrorCode()).isEqualTo("SERIALIZATION_ERROR");
+            assertThat(ex.getComponent()).isEqualTo("json");
         }
     }
 }

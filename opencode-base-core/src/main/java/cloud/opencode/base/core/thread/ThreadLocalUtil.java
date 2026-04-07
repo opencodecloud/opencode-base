@@ -59,7 +59,10 @@ public final class ThreadLocalUtil {
     /**
      * Gets the ThreadLocal value
      * 获取 ThreadLocal 值
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
      */
+    @Deprecated(since = "1.0.3")
     @SuppressWarnings("unchecked")
     public static <T> T get(String key) {
         ThreadLocal<T> threadLocal = (ThreadLocal<T>) THREAD_LOCALS.get(key);
@@ -69,7 +72,10 @@ public final class ThreadLocalUtil {
     /**
      * Gets the ThreadLocal value, returns default when absent
      * 获取 ThreadLocal 值，不存在时返回默认值
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
      */
+    @Deprecated(since = "1.0.3")
     public static <T> T get(String key, T defaultValue) {
         T value = get(key);
         return value != null ? value : defaultValue;
@@ -78,7 +84,10 @@ public final class ThreadLocalUtil {
     /**
      * Gets the ThreadLocal value, computes via Supplier when absent
      * 获取 ThreadLocal 值，不存在时通过 Supplier 计算
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
      */
+    @Deprecated(since = "1.0.3")
     public static <T> T getOrCompute(String key, Supplier<T> supplier) {
         T value = get(key);
         if (value == null) {
@@ -91,7 +100,10 @@ public final class ThreadLocalUtil {
     /**
      * Sets the ThreadLocal value
      * 设置 ThreadLocal 值
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
      */
+    @Deprecated(since = "1.0.3")
     @SuppressWarnings("unchecked")
     public static <T> void set(String key, T value) {
         ThreadLocal<T> threadLocal = (ThreadLocal<T>) THREAD_LOCALS.computeIfAbsent(key, k -> new ThreadLocal<>());
@@ -99,9 +111,12 @@ public final class ThreadLocalUtil {
     }
 
     /**
-     * Removes the specified ThreadLocal
-     * 移除指定 ThreadLocal
+     * Removes the specified ThreadLocal value for the current thread
+     * 移除当前线程的指定 ThreadLocal 值
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
      */
+    @Deprecated(since = "1.0.3")
     public static void remove(String key) {
         ThreadLocal<?> threadLocal = THREAD_LOCALS.get(key);
         if (threadLocal != null) {
@@ -110,11 +125,48 @@ public final class ThreadLocalUtil {
     }
 
     /**
-     * Clears all ThreadLocals for the current thread
-     * 清除当前线程的所有 ThreadLocal
+     * Unregisters a named ThreadLocal from the global registry and removes its value.
+     * This allows the ThreadLocal instance to be garbage collected.
+     * 从全局注册表中注销指定名称的 ThreadLocal 并移除其值，使 ThreadLocal 实例可被 GC 回收。
+     *
+     * @param name the ThreadLocal name to unregister - 要注销的 ThreadLocal 名称
      */
+    public static void unregister(String name) {
+        ThreadLocal<?> threadLocal = THREAD_LOCALS.remove(name);
+        if (threadLocal != null) {
+            threadLocal.remove();
+        }
+    }
+
+    /**
+     * Clears all ThreadLocal values for the current thread without affecting the global registry.
+     * Other threads' values remain accessible and can still be cleaned up later.
+     * 清除当前线程的所有 ThreadLocal 值，不影响全局注册表。
+     * 其他线程的值仍可访问，后续仍可清理。
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
+     */
+    @Deprecated(since = "1.0.3")
     public static void clear() {
         THREAD_LOCALS.values().forEach(ThreadLocal::remove);
+    }
+
+    /**
+     * Unregisters all ThreadLocal entries: removes values for the current thread and clears the global registry.
+     * 注销所有 ThreadLocal 条目：移除当前线程的值并清空全局注册表。
+     *
+     * <p><strong>WARNING:</strong> This is a global operation that affects ALL threads.
+     * After this call, ThreadLocal values set by other threads become unreachable through this utility
+     * and can no longer be cleaned up via {@link #clear()} or {@link #remove(String)}.
+     * Typically only used during application shutdown.</p>
+     *
+     * <p><strong>警告：</strong>这是一个全局操作，会影响所有线程。
+     * 调用后，其他线程通过本工具设置的 ThreadLocal 值将无法再通过 {@link #clear()} 或
+     * {@link #remove(String)} 清理。通常仅在应用关闭时使用。</p>
+     */
+    public static void unregisterAll() {
+        THREAD_LOCALS.values().forEach(ThreadLocal::remove);
+        THREAD_LOCALS.clear();
     }
 
     /**
@@ -122,7 +174,7 @@ public final class ThreadLocalUtil {
      * 检查 ThreadLocal 是否存在
      */
     public static boolean contains(String key) {
-        return get(key) != null;
+        return THREAD_LOCALS.containsKey(key);
     }
 
     /**
@@ -165,7 +217,10 @@ public final class ThreadLocalUtil {
     /**
      * Executes in the specified context
      * 在指定上下文中执行
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
      */
+    @Deprecated(since = "1.0.3")
     public static <T> void runWithContext(String key, T value, Runnable runnable) {
         T oldValue = get(key);
         try {
@@ -183,7 +238,10 @@ public final class ThreadLocalUtil {
     /**
      * Executes in the specified context and returns a result
      * 在指定上下文中执行并返回结果
+     *
+     * @deprecated Use {@link ScopedValueUtil} instead for virtual-thread-safe context propagation.
      */
+    @Deprecated(since = "1.0.3")
     public static <T, R> R callWithContext(String key, T value, Supplier<R> supplier) {
         T oldValue = get(key);
         try {
@@ -203,6 +261,6 @@ public final class ThreadLocalUtil {
      * 获取所有 ThreadLocal 的 key
      */
     public static java.util.Set<String> keys() {
-        return THREAD_LOCALS.keySet();
+        return java.util.Set.copyOf(THREAD_LOCALS.keySet());
     }
 }

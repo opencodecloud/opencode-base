@@ -1,5 +1,7 @@
 package cloud.opencode.base.xml.sax;
 
+import cloud.opencode.base.core.exception.OpenException;
+import cloud.opencode.base.xml.exception.OpenXmlException;
 import cloud.opencode.base.xml.exception.XmlParseException;
 import org.junit.jupiter.api.*;
 import org.xml.sax.SAXParseException;
@@ -13,7 +15,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 @DisplayName("SaxParseException Tests")
 class SaxParseExceptionTest {
@@ -81,6 +83,22 @@ class SaxParseExceptionTest {
             SaxParseException exception = new SaxParseException("error", 1, 1);
 
             assertThat(exception).isInstanceOf(XmlParseException.class);
+        }
+
+        @Test
+        @DisplayName("should be instance of OpenXmlException")
+        void shouldBeInstanceOfOpenXmlException() {
+            SaxParseException exception = new SaxParseException("error", 1, 1);
+
+            assertThat(exception).isInstanceOf(OpenXmlException.class);
+        }
+
+        @Test
+        @DisplayName("should be instance of OpenException")
+        void shouldBeInstanceOfOpenException() {
+            SaxParseException exception = new SaxParseException("error", 1, 1);
+
+            assertThat(exception).isInstanceOf(OpenException.class);
         }
     }
 }

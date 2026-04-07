@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageOperationException 异常测试")
 class ImageOperationExceptionTest {
@@ -26,8 +27,8 @@ class ImageOperationExceptionTest {
         void testConstructorWithMessage() {
             ImageOperationException ex = new ImageOperationException("Operation failed");
 
-            assertThat(ex.getMessage()).isEqualTo("Operation failed");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.INVALID_PARAMETERS);
+            assertThat(ex.getRawMessage()).isEqualTo("Operation failed");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.INVALID_PARAMETERS);
             assertThat(ex.getOperation()).isNull();
         }
 
@@ -36,7 +37,7 @@ class ImageOperationExceptionTest {
         void testConstructorWithMessageAndOperation() {
             ImageOperationException ex = new ImageOperationException("Resize failed", "resize");
 
-            assertThat(ex.getMessage()).isEqualTo("Resize failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Resize failed");
             assertThat(ex.getOperation()).isEqualTo("resize");
         }
 
@@ -45,8 +46,8 @@ class ImageOperationExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             ImageOperationException ex = new ImageOperationException("Crop failed", ImageErrorCode.CROP_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("Crop failed");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.CROP_FAILED);
+            assertThat(ex.getRawMessage()).isEqualTo("Crop failed");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.CROP_FAILED);
         }
 
         @Test
@@ -55,7 +56,7 @@ class ImageOperationExceptionTest {
             Throwable cause = new RuntimeException("Internal error");
             ImageOperationException ex = new ImageOperationException("Op failed", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Op failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Op failed");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
 
@@ -65,9 +66,9 @@ class ImageOperationExceptionTest {
             Throwable cause = new RuntimeException("Error");
             ImageOperationException ex = new ImageOperationException("Rotate failed", cause, ImageErrorCode.ROTATE_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("Rotate failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Rotate failed");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.ROTATE_FAILED);
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.ROTATE_FAILED);
         }
     }
 
@@ -102,6 +103,22 @@ class ImageOperationExceptionTest {
             ImageOperationException ex = new ImageOperationException("Test");
 
             assertThat(ex).isInstanceOf(ImageException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageOperationException ex = new ImageOperationException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageOperationException ex = new ImageOperationException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

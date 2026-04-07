@@ -1,19 +1,24 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.geo.Coordinate;
 
+import java.io.Serial;
+
 /**
- * Geo Exception Base Class
- * 地理异常基类
+ * Geo Exception Base Class - Unified exception base for all geographic operations
+ * 地理异常基类 - 所有地理操作的统一异常基类
  *
- * <p>Base exception class for all geographic operations.</p>
- * <p>所有地理操作的基础异常类。</p>
+ * <p>Base exception class for all geographic operations, extending {@link OpenException}
+ * to integrate with the OpenCode unified exception framework.</p>
+ * <p>所有地理操作的基础异常类，继承 {@link OpenException} 以集成 OpenCode 统一异常框架。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
- *   <li>Error code support - 错误码支持</li>
+ *   <li>Error code support via {@link GeoErrorCode} - 通过 {@link GeoErrorCode} 支持错误码</li>
  *   <li>Coordinate context - 坐标上下文</li>
  *   <li>Chained exceptions - 异常链</li>
+ *   <li>OpenException integration with component "Geo" - 集成 OpenException，组件名 "Geo"</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -32,7 +37,10 @@ import cloud.opencode.base.geo.Coordinate;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-geo V1.0.0
  */
-public class GeoException extends RuntimeException {
+public class GeoException extends OpenException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final GeoErrorCode errorCode;
     private final Coordinate coordinate;
@@ -80,18 +88,20 @@ public class GeoException extends RuntimeException {
      * @param coordinate the related coordinate | 相关坐标
      */
     public GeoException(String message, Throwable cause, GeoErrorCode errorCode, Coordinate coordinate) {
-        super(message, cause);
+        super("Geo",
+            errorCode != null ? String.valueOf(errorCode.getCode()) : String.valueOf(GeoErrorCode.UNKNOWN.getCode()),
+            message, cause);
         this.errorCode = errorCode != null ? errorCode : GeoErrorCode.UNKNOWN;
         this.coordinate = coordinate;
     }
 
     /**
-     * Get the error code
-     * 获取错误码
+     * Get the geo error code
+     * 获取地理错误码
      *
-     * @return the error code | 错误码
+     * @return the geo error code | 地理错误码
      */
-    public GeoErrorCode getErrorCode() {
+    public GeoErrorCode getGeoErrorCode() {
         return errorCode;
     }
 

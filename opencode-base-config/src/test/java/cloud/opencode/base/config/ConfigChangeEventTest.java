@@ -149,16 +149,17 @@ class ConfigChangeEventTest {
     class ToStringTests {
 
         @Test
-        @DisplayName("toString - 包含所有字段")
+        @DisplayName("toString - 包含 key 和 changeType，不泄露值")
         void testToString() {
             ConfigChangeEvent event = ConfigChangeEvent.modified("key", "old", "new");
 
             String str = event.toString();
             assertThat(str).contains("ConfigChangeEvent");
             assertThat(str).contains("key='key'");
-            assertThat(str).contains("oldValue='old'");
-            assertThat(str).contains("newValue='new'");
             assertThat(str).contains("MODIFIED");
+            // Values are redacted from toString() to prevent sensitive data leakage
+            assertThat(str).doesNotContain("old");
+            assertThat(str).doesNotContain("new");
         }
     }
 }

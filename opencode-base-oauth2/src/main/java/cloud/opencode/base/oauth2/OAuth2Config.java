@@ -22,6 +22,10 @@ import java.util.Set;
  *   <li>Scope management - 权限范围管理</li>
  *   <li>PKCE settings - PKCE 设置</li>
  *   <li>Timeout configuration - 超时配置</li>
+ *   <li>PAR endpoint (RFC 9126) - PAR 端点</li>
+ *   <li>Introspection endpoint (RFC 7662) - 内省端点</li>
+ *   <li>Resource indicator (RFC 8707) - 资源指示器</li>
+ *   <li>Issuer validation (RFC 9207) - 颁发者验证</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -34,6 +38,10 @@ import java.util.Set;
  *     .tokenEndpoint("https://oauth.example.com/token")
  *     .redirectUri("https://yourapp.com/callback")
  *     .scopes("openid", "email", "profile")
+ *     .parEndpoint("https://oauth.example.com/par")
+ *     .introspectionEndpoint("https://oauth.example.com/introspect")
+ *     .resource("https://api.example.com")
+ *     .expectedIssuer("https://oauth.example.com")
  *     .build();
  * }</pre>
  *
@@ -60,7 +68,11 @@ public record OAuth2Config(
         boolean usePkce,
         Duration connectTimeout,
         Duration readTimeout,
-        Duration refreshThreshold
+        Duration refreshThreshold,
+        String parEndpoint,
+        String introspectionEndpoint,
+        String resource,
+        String expectedIssuer
 ) {
 
     /**
@@ -74,6 +86,18 @@ public record OAuth2Config(
         connectTimeout = connectTimeout != null ? connectTimeout : Duration.ofSeconds(10);
         readTimeout = readTimeout != null ? readTimeout : Duration.ofSeconds(30);
         refreshThreshold = refreshThreshold != null ? refreshThreshold : Duration.ofMinutes(5);
+    }
+
+    /**
+     * Returns a string representation with clientSecret redacted.
+     * 返回 clientSecret 已脱敏的字符串表示。
+     */
+    @Override
+    public String toString() {
+        return "OAuth2Config[clientId=" + clientId
+                + ", clientSecret=" + (clientSecret != null ? "***" : "null")
+                + ", tokenEndpoint=" + tokenEndpoint
+                + ", grantType=" + grantType + "]";
     }
 
     /**
@@ -137,6 +161,46 @@ public record OAuth2Config(
     }
 
     /**
+     * Check if PAR endpoint is configured (RFC 9126)
+     * 检查是否配置了 PAR 端点（RFC 9126）
+     *
+     * @return true if configured | 已配置返回 true
+     */
+    public boolean hasParEndpoint() {
+        return parEndpoint != null && !parEndpoint.isBlank();
+    }
+
+    /**
+     * Check if introspection endpoint is configured (RFC 7662)
+     * 检查是否配置了内省端点（RFC 7662）
+     *
+     * @return true if configured | 已配置返回 true
+     */
+    public boolean hasIntrospectionEndpoint() {
+        return introspectionEndpoint != null && !introspectionEndpoint.isBlank();
+    }
+
+    /**
+     * Check if resource indicator is configured (RFC 8707)
+     * 检查是否配置了资源指示器（RFC 8707）
+     *
+     * @return true if configured | 已配置返回 true
+     */
+    public boolean hasResource() {
+        return resource != null && !resource.isBlank();
+    }
+
+    /**
+     * Check if expected issuer is configured for validation (RFC 9207)
+     * 检查是否配置了用于验证的预期颁发者（RFC 9207）
+     *
+     * @return true if configured | 已配置返回 true
+     */
+    public boolean hasExpectedIssuer() {
+        return expectedIssuer != null && !expectedIssuer.isBlank();
+    }
+
+    /**
      * Create a new builder
      * 创建新的构建器
      *
@@ -165,6 +229,10 @@ public record OAuth2Config(
         private Duration connectTimeout = Duration.ofSeconds(10);
         private Duration readTimeout = Duration.ofSeconds(30);
         private Duration refreshThreshold = Duration.ofMinutes(5);
+        private String parEndpoint;
+        private String introspectionEndpoint;
+        private String resource;
+        private String expectedIssuer;
 
         /**
          * Set the client ID
@@ -362,6 +430,54 @@ public record OAuth2Config(
         }
 
         /**
+         * Set the Pushed Authorization Request endpoint (RFC 9126)
+         * 设置推送授权请求端点（RFC 9126）
+         *
+         * @param parEndpoint the PAR endpoint | PAR 端点
+         * @return this builder | 此构建器
+         */
+        public Builder parEndpoint(String parEndpoint) {
+            this.parEndpoint = parEndpoint;
+            return this;
+        }
+
+        /**
+         * Set the token introspection endpoint (RFC 7662)
+         * 设置令牌内省端点（RFC 7662）
+         *
+         * @param introspectionEndpoint the introspection endpoint | 内省端点
+         * @return this builder | 此构建器
+         */
+        public Builder introspectionEndpoint(String introspectionEndpoint) {
+            this.introspectionEndpoint = introspectionEndpoint;
+            return this;
+        }
+
+        /**
+         * Set the resource indicator (RFC 8707)
+         * 设置资源指示器（RFC 8707）
+         *
+         * @param resource the resource indicator | 资源指示器
+         * @return this builder | 此构建器
+         */
+        public Builder resource(String resource) {
+            this.resource = resource;
+            return this;
+        }
+
+        /**
+         * Set the expected issuer for validation (RFC 9207)
+         * 设置用于验证的预期颁发者（RFC 9207）
+         *
+         * @param expectedIssuer the expected issuer | 预期颁发者
+         * @return this builder | 此构建器
+         */
+        public Builder expectedIssuer(String expectedIssuer) {
+            this.expectedIssuer = expectedIssuer;
+            return this;
+        }
+
+        /**
          * Build the OAuth2Config
          * 构建 OAuth2Config
          *
@@ -384,7 +500,11 @@ public record OAuth2Config(
                     usePkce,
                     connectTimeout,
                     readTimeout,
-                    refreshThreshold
+                    refreshThreshold,
+                    parEndpoint,
+                    introspectionEndpoint,
+                    resource,
+                    expectedIssuer
             );
         }
     }

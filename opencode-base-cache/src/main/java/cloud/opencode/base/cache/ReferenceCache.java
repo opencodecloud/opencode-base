@@ -748,18 +748,30 @@ public final class ReferenceCache<K, V> implements Cache<K, V> {
 
         @Override
         public V put(K key, V value) {
-            V old = get(key);
-            ReferenceCache.this.put(key, value);
-            return old;
+            Objects.requireNonNull(key, "key cannot be null");
+            Objects.requireNonNull(value, "value cannot be null");
+            processReferenceQueue();
+            Object wrappedKey = wrapKeyForLookup(key);
+            @SuppressWarnings("unchecked")
+            V[] result = (V[]) new Object[1];
+            store.compute(wrappedKey, (k, existingRef) -> {
+                if (existingRef != null) {
+                    V oldValue = existingRef.getValue();
+                    result[0] = oldValue;
+                    if (oldValue != null && removalListener != null) {
+                        removalListener.onRemoval(key, oldValue, RemovalCause.REPLACED);
+                    }
+                }
+                return createEntry(key, value);
+            });
+            return result[0];
         }
 
         @Override
         public V remove(Object key) {
             @SuppressWarnings("unchecked")
             K k = (K) key;
-            V old = get(k);
-            ReferenceCache.this.invalidate(k);
-            return old;
+            return ReferenceCache.this.getAndRemove(k);
         }
 
         @Override
@@ -779,14 +791,23 @@ public final class ReferenceCache<K, V> implements Cache<K, V> {
 
         @Override
         public boolean remove(Object key, Object value) {
-            V current = get(key);
-            if (Objects.equals(current, value)) {
-                @SuppressWarnings("unchecked")
-                K k = (K) key;
-                ReferenceCache.this.invalidate(k);
-                return true;
-            }
-            return false;
+            @SuppressWarnings("unchecked")
+            K k = (K) key;
+            processReferenceQueue();
+            Object wrappedKey = wrapKeyForLookup(k);
+            boolean[] removed = new boolean[1];
+            store.computeIfPresent(wrappedKey, (wk, existingRef) -> {
+                V current = existingRef.getValue();
+                if (Objects.equals(current, value)) {
+                    removed[0] = true;
+                    if (current != null && removalListener != null) {
+                        removalListener.onRemoval(k, current, RemovalCause.EXPLICIT);
+                    }
+                    return null; // remove entry
+                }
+                return existingRef; // keep entry
+            });
+            return removed[0];
         }
 
         @Override

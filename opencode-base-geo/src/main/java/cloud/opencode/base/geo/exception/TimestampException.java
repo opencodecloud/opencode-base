@@ -47,7 +47,6 @@ public class TimestampException extends GeoSecurityException {
      * @param cause the cause | 原因
      */
     public TimestampException(String message, Throwable cause) {
-        super(message, GeoErrorCode.INVALID_TIMESTAMP);
-        initCause(cause);
+        super(message, cause, GeoErrorCode.INVALID_TIMESTAMP);
     }
 }

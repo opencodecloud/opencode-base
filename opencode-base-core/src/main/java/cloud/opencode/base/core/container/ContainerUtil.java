@@ -49,10 +49,20 @@ public final class ContainerUtil {
      * Returns the size of the container object.
      * 返回容器对象的大小。
      *
-     * <p>Supported types: Collection, Map, CharSequence, Array, Optional.</p>
+     * <p>Supported types: Collection, Map, CharSequence, Array, Optional.
+     * Returns -1 if the object type is not recognized as a container.</p>
+     * <p>支持的类型：Collection、Map、CharSequence、Array、Optional。
+     * 如果对象类型不是可识别的容器则返回 -1。</p>
+     *
+     * <p><b>API Note:</b> Callers should check for a return value of -1 to detect unsupported types.
+     * A return value of -1 does not indicate an error, but rather that the given object
+     * is not a recognized container type.
+     * 调用方应检查返回值是否为 -1 以检测不支持的类型。
+     * 返回 -1 并不表示错误，而是表示给定对象不是可识别的容器类型。</p>
      *
      * @param obj the container object | 容器对象
-     * @return the size, or -1 if the type is not supported | 大小，不支持的类型返回 -1
+     * @return the size of the container, or -1 if the object type is not recognized as a container
+     *         容器的大小，如果对象类型不是可识别的容器则返回 -1
      */
     public static int size(Object obj) {
         if (obj == null) {

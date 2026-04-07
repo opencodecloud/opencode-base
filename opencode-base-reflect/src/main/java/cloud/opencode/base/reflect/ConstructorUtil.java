@@ -48,7 +48,8 @@ import java.util.function.Predicate;
  */
 public final class ConstructorUtil {
 
-    private static final Map<ConstructorKey, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
+    private static final Map<ConstructorKey, Constructor<?>> CONSTRUCTOR_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private ConstructorUtil() {
     }

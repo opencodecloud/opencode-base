@@ -276,6 +276,7 @@ class EvictionPolicyTest {
                 case EvictionPolicy.LRU<String> lru -> "LRU: " + lru.maxObjects();
                 case EvictionPolicy.LFU<String> lfu -> "LFU: " + lfu.minBorrowCount();
                 case EvictionPolicy.Composite<String> comp -> "Composite: " + comp.policies().size();
+                case EvictionPolicy.MaxAge<String> maxAge -> "MaxAge: " + maxAge.maxLifetime();
             };
         }
     }

@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 /**
  * Cache Manager - Global cache instance management
@@ -225,11 +226,7 @@ public final class CacheManager {
      */
     @SuppressWarnings("unchecked")
     public <K, V> java.util.Map<String, Cache<K, V>> getCachesByPattern(String pattern) {
-        String regex = pattern
-                .replace(".", "\\.")
-                .replace("*", ".*")
-                .replace("?", ".");
-        java.util.regex.Pattern compiled = java.util.regex.Pattern.compile("^" + regex + "$");
+        Pattern compiled = Pattern.compile("^" + globToSafeRegex(pattern) + "$");
 
         java.util.Map<String, Cache<K, V>> result = new java.util.LinkedHashMap<>();
         for (java.util.Map.Entry<String, Cache<?, ?>> entry : caches.entrySet()) {
@@ -238,6 +235,27 @@ public final class CacheManager {
             }
         }
         return result;
+    }
+
+    /**
+     * Convert a glob pattern (with * and ? wildcards) to a safe regular expression.
+     * Each character is individually processed to prevent ReDoS attacks.
+     * 将通配符模式（* 和 ?）转换为安全的正则表达式。逐字符处理以防止 ReDoS 攻击。
+     *
+     * @param glob the glob pattern | 通配符模式
+     * @return safe regex string | 安全的正则表达式字符串
+     */
+    private static String globToSafeRegex(String glob) {
+        StringBuilder sb = new StringBuilder(glob.length() * 2);
+        for (int i = 0; i < glob.length(); i++) {
+            char c = glob.charAt(i);
+            switch (c) {
+                case '*' -> sb.append(".*");
+                case '?' -> sb.append('.');
+                default -> sb.append(Pattern.quote(String.valueOf(c)));
+            }
+        }
+        return sb.toString();
     }
 
     /**

@@ -1,5 +1,9 @@
 package cloud.opencode.base.timeseries.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.io.Serial;
+
 /**
  * Time Series Exception
  * 时间序列异常
@@ -9,8 +13,9 @@ package cloud.opencode.base.timeseries.exception;
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
- *   <li>Structured error codes (data, query, computation, capacity) - 结构化错误码</li>
+ *   <li>Structured error codes (data, query, computation, capacity, alignment, rate) - 结构化错误码</li>
  *   <li>Detail message and cause chaining - 详细消息和原因链</li>
+ *   <li>Extends OpenException for unified exception hierarchy - 继承 OpenException 统一异常体系</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -33,7 +38,12 @@ package cloud.opencode.base.timeseries.exception;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-timeseries V1.0.0
  */
-public class TimeSeriesException extends RuntimeException {
+public class TimeSeriesException extends OpenException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private static final String COMPONENT = "TimeSeries";
 
     private final TimeSeriesErrorCode errorCode;
 
@@ -44,7 +54,7 @@ public class TimeSeriesException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public TimeSeriesException(TimeSeriesErrorCode errorCode) {
-        super(errorCode.message());
+        super(COMPONENT, errorCode.code(), errorCode.message());
         this.errorCode = errorCode;
     }
 
@@ -56,7 +66,7 @@ public class TimeSeriesException extends RuntimeException {
      * @param detail the detail message | 详细消息
      */
     public TimeSeriesException(TimeSeriesErrorCode errorCode, String detail) {
-        super(errorCode.message() + ": " + detail);
+        super(COMPONENT, errorCode.code(), errorCode.message() + ": " + detail);
         this.errorCode = errorCode;
     }
 
@@ -68,7 +78,7 @@ public class TimeSeriesException extends RuntimeException {
      * @param cause the cause | 原因
      */
     public TimeSeriesException(TimeSeriesErrorCode errorCode, Throwable cause) {
-        super(errorCode.message(), cause);
+        super(COMPONENT, errorCode.code(), errorCode.message(), cause);
         this.errorCode = errorCode;
     }
 
@@ -81,7 +91,7 @@ public class TimeSeriesException extends RuntimeException {
      * @param cause the cause | 原因
      */
     public TimeSeriesException(TimeSeriesErrorCode errorCode, String detail, Throwable cause) {
-        super(errorCode.message() + ": " + detail, cause);
+        super(COMPONENT, errorCode.code(), errorCode.message() + ": " + detail, cause);
         this.errorCode = errorCode;
     }
 

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.MonthDay;
 import java.util.List;
@@ -272,6 +273,183 @@ class FestivalTest {
         @DisplayName("春节是农历节日")
         void testSpringFestivalIsLunar() {
             assertThat(Festival.SPRING_FESTIVAL.type()).isEqualTo(Festival.FestivalType.LUNAR);
+        }
+    }
+
+    @Nested
+    @DisplayName("新增节日测试 V1.0.3")
+    class NewFestivalsV103Tests {
+
+        @Test
+        @DisplayName("地球日 - 4月22日")
+        void testEarthDay() {
+            assertThat(Festival.EARTH_DAY).isNotNull();
+            assertThat(Festival.EARTH_DAY.name()).isEqualTo("地球日");
+            assertThat(Festival.EARTH_DAY.englishName()).isEqualTo("Earth Day");
+            assertThat(Festival.EARTH_DAY.date()).isEqualTo(MonthDay.of(4, 22));
+            assertThat(Festival.EARTH_DAY.type()).isEqualTo(Festival.FestivalType.SOLAR);
+        }
+
+        @Test
+        @DisplayName("万圣节 - 10月31日")
+        void testHalloween() {
+            assertThat(Festival.HALLOWEEN).isNotNull();
+            assertThat(Festival.HALLOWEEN.name()).isEqualTo("万圣节");
+            assertThat(Festival.HALLOWEEN.date()).isEqualTo(MonthDay.of(10, 31));
+            assertThat(Festival.HALLOWEEN.type()).isEqualTo(Festival.FestivalType.SOLAR);
+        }
+
+        @Test
+        @DisplayName("上巳节 - 三月三")
+        void testShangSi() {
+            assertThat(Festival.SHANG_SI).isNotNull();
+            assertThat(Festival.SHANG_SI.name()).isEqualTo("上巳节");
+            assertThat(Festival.SHANG_SI.date()).isEqualTo(MonthDay.of(3, 3));
+            assertThat(Festival.SHANG_SI.type()).isEqualTo(Festival.FestivalType.LUNAR);
+        }
+
+        @Test
+        @DisplayName("下元节 - 十月十五")
+        void testXiaYuan() {
+            assertThat(Festival.XIA_YUAN).isNotNull();
+            assertThat(Festival.XIA_YUAN.name()).isEqualTo("下元节");
+            assertThat(Festival.XIA_YUAN.date()).isEqualTo(MonthDay.of(10, 15));
+            assertThat(Festival.XIA_YUAN.type()).isEqualTo(Festival.FestivalType.LUNAR);
+        }
+
+        @Test
+        @DisplayName("寒衣节 - 十月初一")
+        void testHanYi() {
+            assertThat(Festival.HAN_YI).isNotNull();
+            assertThat(Festival.HAN_YI.name()).isEqualTo("寒衣节");
+            assertThat(Festival.HAN_YI.date()).isEqualTo(MonthDay.of(10, 1));
+            assertThat(Festival.HAN_YI.type()).isEqualTo(Festival.FestivalType.LUNAR);
+        }
+
+        @Test
+        @DisplayName("天穿节 - 正月二十")
+        void testTianChuan() {
+            assertThat(Festival.TIAN_CHUAN).isNotNull();
+            assertThat(Festival.TIAN_CHUAN.name()).isEqualTo("天穿节");
+            assertThat(Festival.TIAN_CHUAN.date()).isEqualTo(MonthDay.of(1, 20));
+            assertThat(Festival.TIAN_CHUAN.type()).isEqualTo(Festival.FestivalType.LUNAR);
+        }
+
+        @Test
+        @DisplayName("新增公历节日包含在getAllSolarFestivals中")
+        void testNewSolarFestivalsInList() {
+            List<Festival> all = Festival.getAllSolarFestivals();
+            assertThat(all).contains(Festival.EARTH_DAY, Festival.HALLOWEEN);
+        }
+
+        @Test
+        @DisplayName("新增农历节日包含在getAllLunarFestivals中")
+        void testNewLunarFestivalsInList() {
+            List<Festival> all = Festival.getAllLunarFestivals();
+            assertThat(all).contains(Festival.SHANG_SI, Festival.XIA_YUAN,
+                    Festival.HAN_YI, Festival.TIAN_CHUAN);
+        }
+
+        @Test
+        @DisplayName("4月22日能查到地球日")
+        void testEarthDayLookup() {
+            List<Festival> festivals = Festival.getSolarFestivals(LocalDate.of(2024, 4, 22));
+            assertThat(festivals.stream().anyMatch(f -> f.name().equals("地球日"))).isTrue();
+        }
+
+        @Test
+        @DisplayName("三月三能查到上巳节")
+        void testShangSiLookup() {
+            List<Festival> festivals = Festival.getLunarFestivals(3, 3);
+            assertThat(festivals.stream().anyMatch(f -> f.name().equals("上巳节"))).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("除夕修复测试 V1.0.3")
+    class ChuXiFixTests {
+
+        @Test
+        @DisplayName("getChuXi返回正确日期")
+        void testGetChuXi() {
+            Festival chuXi = Festival.getChuXi(2024);
+            assertThat(chuXi.name()).isEqualTo("除夕");
+            assertThat(chuXi.englishName()).isEqualTo("New Year's Eve");
+            assertThat(chuXi.type()).isEqualTo(Festival.FestivalType.LUNAR);
+            int day = chuXi.date().getDayOfMonth();
+            assertThat(day).isBetween(29, 30);
+        }
+
+        @Test
+        @DisplayName("腊月三十有除夕（常规查找）")
+        void testChuXiOnDay30() {
+            List<Festival> festivals = Festival.getLunarFestivals(12, 30);
+            assertThat(festivals.stream().anyMatch(f -> f.name().equals("除夕"))).isTrue();
+        }
+
+        @Test
+        @DisplayName("getLunarFestivals带年份能检测29日除夕")
+        void testChuXiWithYearContext() {
+            // Test the year-aware overload
+            // For a year where month 12 has 29 days, day 29 should include 除夕
+            // For a year where month 12 has 30 days, day 29 should NOT include 除夕
+            Festival chuXi2024 = Festival.getChuXi(2024);
+            int lastDay = chuXi2024.date().getDayOfMonth();
+
+            if (lastDay == 29) {
+                // This year has 29-day month 12
+                List<Festival> festivals = Festival.getLunarFestivals(2024, 12, 29);
+                assertThat(festivals.stream().anyMatch(f -> f.name().equals("除夕"))).isTrue();
+            } else {
+                // This year has 30-day month 12
+                List<Festival> festivals = Festival.getLunarFestivals(2024, 12, 29);
+                // Should NOT include 除夕 since the month has 30 days
+                assertThat(festivals.stream().noneMatch(f -> f.name().equals("除夕"))).isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("NEW_YEARS_EVE常量日期为12月30日")
+        void testNewYearsEveConstant() {
+            assertThat(Festival.NEW_YEARS_EVE.date()).isEqualTo(MonthDay.of(12, 30));
+        }
+    }
+
+    @Nested
+    @DisplayName("动态节日测试 V1.0.3")
+    class DynamicFestivalTests {
+
+        @Test
+        @DisplayName("母亲节是五月第二个星期日")
+        void testMothersDay() {
+            LocalDate mothersDay2024 = Festival.getMothersDay(2024);
+            assertThat(mothersDay2024.getMonthValue()).isEqualTo(5);
+            assertThat(mothersDay2024.getDayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
+            // Second Sunday of May 2024 = May 12
+            assertThat(mothersDay2024.getDayOfMonth()).isEqualTo(12);
+        }
+
+        @Test
+        @DisplayName("父亲节是六月第三个星期日")
+        void testFathersDay() {
+            LocalDate fathersDay2024 = Festival.getFathersDay(2024);
+            assertThat(fathersDay2024.getMonthValue()).isEqualTo(6);
+            assertThat(fathersDay2024.getDayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
+            // Third Sunday of June 2024 = June 16
+            assertThat(fathersDay2024.getDayOfMonth()).isEqualTo(16);
+        }
+
+        @Test
+        @DisplayName("母亲节不同年份日期不同")
+        void testMothersDayDifferentYears() {
+            LocalDate md2024 = Festival.getMothersDay(2024);
+            LocalDate md2025 = Festival.getMothersDay(2025);
+            assertThat(md2024).isNotEqualTo(md2025);
+            // But both are Sundays in May
+            assertThat(md2024.getDayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
+            assertThat(md2025.getDayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
+            assertThat(md2024.getMonthValue()).isEqualTo(5);
+            assertThat(md2025.getMonthValue()).isEqualTo(5);
         }
     }
 }

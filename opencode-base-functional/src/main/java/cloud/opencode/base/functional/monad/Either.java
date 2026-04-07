@@ -1,9 +1,14 @@
 package cloud.opencode.base.functional.monad;
 
+import cloud.opencode.base.functional.exception.OpenFunctionalException;
+
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  * Either Monad - Represents one of two possible values (Left or Right)
@@ -233,6 +238,132 @@ public sealed interface Either<L, R> permits Either.Left, Either.Right {
      */
     Either<L, R> peekLeft(Consumer<? super L> action);
 
+    // ==================== Filtering | 过滤 ====================
+
+    /**
+     * Filter the Right value with a predicate, converting to Left if it fails.
+     * 用谓词过滤 Right 值，如果不满足则转换为 Left。
+     *
+     * <p>If this is a Right and the predicate matches, returns this.
+     * If this is a Right but the predicate fails, returns Left with the orElse value.
+     * If this is a Left, returns this unchanged.</p>
+     * <p>如果是 Right 且谓词匹配，返回 this。
+     * 如果是 Right 但谓词不匹配，返回包含 orElse 值的 Left。
+     * 如果是 Left，原样返回。</p>
+     *
+     * @param predicate the predicate to test the Right value | 用于测试 Right 值的谓词
+     * @param orElse    supplier for the Left value if predicate fails | 谓词不满足时的 Left 值提供者
+     * @return filtered Either | 过滤后的 Either
+     */
+    default Either<L, R> filterOrElse(Predicate<? super R> predicate, Supplier<? extends L> orElse) {
+        Objects.requireNonNull(predicate, "predicate must not be null");
+        Objects.requireNonNull(orElse, "orElse must not be null");
+        if (isRight() && !predicate.test(getRight().orElse(null))) {
+            return Either.left(orElse.get());
+        }
+        return this;
+    }
+
+    // ==================== Conversions | 类型转换 ====================
+
+    /**
+     * Convert to Option: Right becomes Some, Left becomes None.
+     * 转换为 Option：Right 变为 Some，Left 变为 None。
+     *
+     * @return Option containing the Right value, or empty | 包含 Right 值的 Option，或为空
+     */
+    default Option<R> toOption() {
+        if (isRight()) {
+            return Option.of(getRight().orElse(null));
+        }
+        return Option.none();
+    }
+
+    /**
+     * Convert to Try: Right becomes Success, Left becomes Failure.
+     * 转换为 Try：Right 变为 Success，Left 变为 Failure。
+     *
+     * <p>For Left: if the value is a Throwable, it is used directly;
+     * otherwise an OpenFunctionalException wrapping it is created.</p>
+     * <p>对于 Left：如果值是 Throwable，则直接使用；
+     * 否则创建包装它的 OpenFunctionalException。</p>
+     *
+     * @return Try containing the Right value or the Left error | 包含 Right 值或 Left 错误的 Try
+     */
+    default Try<R> toTry() {
+        if (isRight()) {
+            return Try.success(getRight().orElse(null));
+        }
+        L leftValue = getLeft().orElse(null);
+        if (leftValue instanceof Throwable t) {
+            return Try.failure(t);
+        }
+        return Try.failure(new OpenFunctionalException("Either.Left: " + leftValue));
+    }
+
+    /**
+     * Convert to Validation: Right becomes Valid, Left becomes Invalid.
+     * 转换为 Validation：Right 变为 Valid，Left 变为 Invalid。
+     *
+     * @return Validation containing the Right value or the Left error | 包含 Right 值或 Left 错误的 Validation
+     */
+    default Validation<L, R> toValidation() {
+        if (isRight()) {
+            return Validation.valid(getRight().orElse(null));
+        }
+        return Validation.invalid(getLeft().orElse(null));
+    }
+
+    /**
+     * Convert to Stream: Right becomes a single-element Stream, Left becomes empty.
+     * 转换为 Stream：Right 变为单元素 Stream，Left 变为空 Stream。
+     *
+     * @return Stream containing the Right value, or empty | 包含 Right 值的 Stream，或为空
+     */
+    default Stream<R> stream() {
+        if (isRight()) {
+            return getRight().stream();
+        }
+        return Stream.empty();
+    }
+
+    // ==================== Testing | 测试方法 ====================
+
+    /**
+     * Check if this is a Right containing the given value.
+     * 检查是否为包含给定值的 Right。
+     *
+     * @param value the value to compare | 要比较的值
+     * @return true if Right and value equals contained value | 如果是 Right 且值相等返回 true
+     */
+    default boolean contains(R value) {
+        return isRight() && Objects.equals(getRight().orElse(null), value);
+    }
+
+    /**
+     * Check if this is a Right and the predicate matches the value.
+     * 检查是否为 Right 且谓词匹配该值。
+     *
+     * @param predicate the predicate to test | 要测试的谓词
+     * @return true if Right and predicate matches | 如果是 Right 且谓词匹配返回 true
+     */
+    default boolean exists(Predicate<? super R> predicate) {
+        Objects.requireNonNull(predicate, "predicate must not be null");
+        return isRight() && predicate.test(getRight().orElse(null));
+    }
+
+    /**
+     * Check if this is a Left (vacuously true) or the predicate matches the Right value.
+     * 检查是否为 Left（空真）或谓词匹配 Right 值。
+     *
+     * @param predicate the predicate to test | 要测试的谓词
+     * @return true if Left or predicate matches Right value | 如果是 Left 或谓词匹配 Right 值返回 true
+     */
+    default boolean forAll(Predicate<? super R> predicate) {
+        Objects.requireNonNull(predicate, "predicate must not be null");
+        return isLeft() || predicate.test(getRight().orElse(null));
+    }
+
     // ==================== Left Implementation | Left 实现 ====================
 
     /**
@@ -333,6 +464,14 @@ public sealed interface Either<L, R> permits Either.Left, Either.Right {
         public Either<L, R> peekLeft(Consumer<? super L> action) {
             action.accept(value);
             return this;
+        }
+
+        @Override
+        public Try<R> toTry() {
+            if (value instanceof Throwable t) {
+                return Try.failure(t);
+            }
+            return Try.failure(new OpenFunctionalException("Either.Left: " + value));
         }
 
         @Override
@@ -452,6 +591,11 @@ public sealed interface Either<L, R> permits Either.Left, Either.Right {
         @Override
         public Either<L, R> peekLeft(Consumer<? super L> action) {
             return this;
+        }
+
+        @Override
+        public Try<R> toTry() {
+            return Try.success(value);
         }
 
         @Override

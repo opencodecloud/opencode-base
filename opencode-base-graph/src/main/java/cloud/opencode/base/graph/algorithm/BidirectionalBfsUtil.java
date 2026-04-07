@@ -271,7 +271,7 @@ public final class BidirectionalBfsUtil {
 
         // Filter by total distance
         result.removeIf(v -> {
-            int totalDist = distFromSource.getOrDefault(v, Integer.MAX_VALUE)
+            long totalDist = (long) distFromSource.getOrDefault(v, Integer.MAX_VALUE)
                 + distFromTarget.getOrDefault(v, Integer.MAX_VALUE);
             return totalDist > maxDistance;
         });

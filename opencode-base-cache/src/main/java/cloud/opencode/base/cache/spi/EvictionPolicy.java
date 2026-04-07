@@ -124,8 +124,8 @@ public interface EvictionPolicy<K, V> {
     }
 
     /**
-     * Create W-TinyLFU (Window TinyLFU) policy
-     * 创建 W-TinyLFU（窗口 TinyLFU）策略
+     * Create W-TinyLFU (Window TinyLFU) policy with default expected size (10,000)
+     * 创建默认期望大小（10,000）的 W-TinyLFU（窗口 TinyLFU）策略
      *
      * @param <K> key type | 键类型
      * @param <V> value type | 值类型
@@ -133,6 +133,25 @@ public interface EvictionPolicy<K, V> {
      */
     static <K, V> EvictionPolicy<K, V> wTinyLfu() {
         return new cloud.opencode.base.cache.internal.eviction.WTinyLfuEvictionPolicy<>();
+    }
+
+    /**
+     * Create W-TinyLFU (Window TinyLFU) policy sized for the expected cache capacity.
+     * 创建根据期望缓存容量调整大小的 W-TinyLFU（窗口 TinyLFU）策略。
+     *
+     * <p>The internal Count-Min Sketch is sized proportionally to {@code expectedSize}
+     * to maintain a low collision rate. Use this overload when the cache maximum size
+     * is known in advance.</p>
+     * <p>内部 Count-Min Sketch 的大小与 {@code expectedSize} 成比例，
+     * 以保持较低的碰撞率。当缓存最大大小事先已知时，使用此重载。</p>
+     *
+     * @param expectedSize the expected maximum number of cache entries | 期望的缓存最大条目数
+     * @param <K> key type | 键类型
+     * @param <V> value type | 值类型
+     * @return W-TinyLFU policy | W-TinyLFU 策略
+     */
+    static <K, V> EvictionPolicy<K, V> wTinyLfu(int expectedSize) {
+        return new cloud.opencode.base.cache.internal.eviction.WTinyLfuEvictionPolicy<>(expectedSize);
     }
 
     // ==================== Composition Methods | 组合方法 ====================

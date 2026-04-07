@@ -3,6 +3,9 @@ package cloud.opencode.base.cron;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * OpenCron - Cron Expression Facade
@@ -188,6 +191,173 @@ public final class OpenCron {
         return CronValidator.getEstimatedInterval(expression);
     }
 
+    // ==================== Duration Convenience | 时间间隔便利 ====================
+
+    /**
+     * Gets the duration until the next execution
+     * 获取距下次执行的时间间隔
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the reference time | 参考时间
+     * @return the duration to next execution, or null | 距下次执行的Duration，或null
+     */
+    public static Duration timeToNextExecution(String expression, ZonedDateTime from) {
+        return CronExpression.parse(expression).timeToNextExecution(from);
+    }
+
+    /**
+     * Gets the duration since the last execution
+     * 获取距上次执行的时间间隔
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the reference time | 参考时间
+     * @return the duration from last execution, or null | 距上次执行的Duration，或null
+     */
+    public static Duration timeFromLastExecution(String expression, ZonedDateTime from) {
+        return CronExpression.parse(expression).timeFromLastExecution(from);
+    }
+
+    // ==================== Executions Between | 区间执行 ====================
+
+    /**
+     * Counts executions between two times
+     * 计算两个时间点之间的执行次数
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the start time (exclusive) | 开始时间（不包含）
+     * @param to         the end time (inclusive) | 结束时间（包含）
+     * @return the count of executions | 执行次数
+     */
+    public static long countExecutionsBetween(String expression, ZonedDateTime from, ZonedDateTime to) {
+        return CronExpression.parse(expression).countExecutionsBetween(from, to);
+    }
+
+    /**
+     * Lists all executions between two times
+     * 列出两个时间点之间的所有执行时间
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the start time (exclusive) | 开始时间（不包含）
+     * @param to         the end time (inclusive) | 结束时间（包含）
+     * @return unmodifiable list of execution times | 不可修改的执行时间列表
+     */
+    public static List<ZonedDateTime> executionsBetween(String expression, ZonedDateTime from, ZonedDateTime to) {
+        return CronExpression.parse(expression).executionsBetween(from, to);
+    }
+
+    // ==================== Equivalence | 等价性 ====================
+
+    /**
+     * Checks if two cron expressions produce the same schedule
+     * 检查两个Cron表达式是否产生相同的调度
+     *
+     * @param expr1 the first cron expression | 第一个Cron表达式
+     * @param expr2 the second cron expression | 第二个Cron表达式
+     * @return true if equivalent schedules | 如果调度等价返回true
+     */
+    public static boolean isEquivalent(String expr1, String expr2) {
+        return CronExpression.parse(expr1).isEquivalentTo(CronExpression.parse(expr2));
+    }
+
+    // ==================== Explain | 解释 ====================
+
+    /**
+     * Gets a comprehensive explanation for debugging
+     * 获取用于调试的综合解释信息
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the reference time | 参考时间
+     * @return the explanation | 解释信息
+     */
+    public static CronExplanation explain(String expression, ZonedDateTime from) {
+        return CronExpression.parse(expression).explain(from);
+    }
+
+    // ==================== Stream | 流式调度 ====================
+
+    /**
+     * Returns a lazy stream of future execution times
+     * 返回未来执行时间的惰性流
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the start time (exclusive) | 开始时间（不包含）
+     * @return an ordered stream of execution times | 有序的执行时间流
+     */
+    public static Stream<ZonedDateTime> stream(String expression, ZonedDateTime from) {
+        return CronExpression.parse(expression).stream(from);
+    }
+
+    /**
+     * Returns a lazy stream of past execution times (newest first)
+     * 返回过去执行时间的惰性流（最新在前）
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the reference time (exclusive) | 参考时间（不包含）
+     * @return an ordered stream of past execution times | 有序的过去执行时间流
+     */
+    public static Stream<ZonedDateTime> reverseStream(String expression, ZonedDateTime from) {
+        return CronExpression.parse(expression).reverseStream(from);
+    }
+
+    // ==================== Filtered Scheduling | 过滤调度 ====================
+
+    /**
+     * Gets the next execution time that satisfies a filter
+     * 获取满足过滤条件的下次执行时间
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the start time (exclusive) | 开始时间（不包含）
+     * @param filter     the filter predicate | 过滤谓词
+     * @return the next matching execution time, or null | 下次匹配的执行时间
+     */
+    public static ZonedDateTime nextExecution(String expression, ZonedDateTime from,
+                                              Predicate<ZonedDateTime> filter) {
+        return CronExpression.parse(expression).nextExecution(from, filter);
+    }
+
+    /**
+     * Gets the previous execution time that satisfies a filter
+     * 获取满足过滤条件的上次执行时间
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param from       the reference time (exclusive) | 参考时间（不包含）
+     * @param filter     the filter predicate | 过滤谓词
+     * @return the previous matching execution time, or null | 上次匹配的执行时间
+     */
+    public static ZonedDateTime previousExecution(String expression, ZonedDateTime from,
+                                                  Predicate<ZonedDateTime> filter) {
+        return CronExpression.parse(expression).previousExecution(from, filter);
+    }
+
+    // ==================== Overlap Detection | 重叠检测 ====================
+
+    /**
+     * Finds the next time both expressions fire simultaneously
+     * 查找两个表达式同时触发的下一个时间
+     *
+     * @param expr1 the first cron expression | 第一个Cron表达式
+     * @param expr2 the second cron expression | 第二个Cron表达式
+     * @param from  the start time (exclusive) | 开始时间（不包含）
+     * @return the next overlapping time, or null | 下一个重叠时间
+     */
+    public static ZonedDateTime nextOverlap(String expr1, String expr2, ZonedDateTime from) {
+        return CronExpression.parse(expr1).nextOverlap(CronExpression.parse(expr2), from);
+    }
+
+    /**
+     * Checks if two expressions overlap in a time range
+     * 检查两个表达式在时间范围内是否有重叠
+     *
+     * @param expr1 the first cron expression | 第一个Cron表达式
+     * @param expr2 the second cron expression | 第二个Cron表达式
+     * @param from  the start time (exclusive) | 开始时间（不包含）
+     * @param to    the end time (inclusive) | 结束时间（包含）
+     * @return true if overlapping | 如果重叠返回true
+     */
+    public static boolean hasOverlap(String expr1, String expr2, ZonedDateTime from, ZonedDateTime to) {
+        return CronExpression.parse(expr1).hasOverlapBetween(CronExpression.parse(expr2), from, to);
+    }
+
     // ==================== Describe | 描述 ====================
 
     /**
@@ -199,6 +369,18 @@ public final class OpenCron {
      */
     public static String describe(String expression) {
         return CronExpression.parse(expression).describe();
+    }
+
+    /**
+     * Gets a human-readable description in the specified locale
+     * 获取指定语言的人类可读描述
+     *
+     * @param expression the cron expression | Cron表达式
+     * @param locale     the locale | 语言
+     * @return the localized description | 本地化描述
+     */
+    public static String describe(String expression, Locale locale) {
+        return CronExpression.parse(expression).describe(locale);
     }
 
     // ==================== Builder | 构建器 ====================

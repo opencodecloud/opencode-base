@@ -451,13 +451,17 @@ public final class AhoCorasick {
                 TrieNode child = entry.getValue();
                 queue.add(child);
 
-                // Find failure link
+                // Find failure link — single get() per node, no double hash.
+                // 查找失败链接：每节点一次 get()，无双重哈希。
                 TrieNode fallback = current.suffixLink;
-                while (fallback != null && !fallback.children.containsKey(c)) {
+                TrieNode fallbackChild = null;
+                while (fallback != null) {
+                    fallbackChild = fallback.children.get(c);
+                    if (fallbackChild != null) break;
                     fallback = fallback.suffixLink;
                 }
 
-                child.suffixLink = (fallback == null) ? root : fallback.children.get(c);
+                child.suffixLink = (fallbackChild == null) ? root : fallbackChild;
 
                 // Propagate output links
                 if (child.suffixLink.isEnd) {
@@ -470,10 +474,14 @@ public final class AhoCorasick {
     }
 
     private TrieNode getNextState(TrieNode current, char c) {
-        while (current != null && !current.children.containsKey(c)) {
+        // Single get() per node instead of containsKey() + get() (two hash computations).
+        // 每个节点只做一次 get()，替代 containsKey() + get() 两次哈希计算。
+        while (current != null) {
+            TrieNode next = current.children.get(c);
+            if (next != null) return next;
             current = current.suffixLink;
         }
-        return (current == null) ? root : current.children.get(c);
+        return root;
     }
 
     private List<PatternMatch> mergeOverlapping(List<PatternMatch> matches, String originalText) {

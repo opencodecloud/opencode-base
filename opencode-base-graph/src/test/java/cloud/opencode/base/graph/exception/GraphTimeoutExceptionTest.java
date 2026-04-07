@@ -28,8 +28,8 @@ class GraphTimeoutExceptionTest {
         void testMessageOnlyConstructor() {
             GraphTimeoutException ex = new GraphTimeoutException("Computation timed out");
 
-            assertThat(ex.getMessage()).isEqualTo("Computation timed out");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.TIMEOUT);
+            assertThat(ex.getMessage()).contains("Computation timed out");
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.TIMEOUT);
             assertThat(ex.getTimeout()).isNull();
         }
 
@@ -89,8 +89,8 @@ class GraphTimeoutExceptionTest {
         void testErrorCode() {
             GraphTimeoutException ex = new GraphTimeoutException("test");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.TIMEOUT);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(4002);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.TIMEOUT);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(4002);
         }
     }
 }

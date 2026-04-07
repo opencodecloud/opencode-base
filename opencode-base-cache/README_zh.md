@@ -19,6 +19,10 @@
 - **响应式 API**：JDK Flow API 和 Project Reactor 支持（ReactiveCache）
 - **弹性加载**：重试、熔断器、隔离舱和超时（ResilientCacheLoader）
 - **采样统计**：高吞吐量概率性统计（SamplingStatsCounter）
+- **标签批量失效**：按标签批量失效缓存条目（TaggedCache）
+- **条件原子操作**：Cache 接口 replaceIf / computeIfMatch CAS 方法
+- **缓存快照持久化**：将缓存内容保存到磁盘并恢复（CacheSnapshot）
+- **无锁读路径**：tryLock 降级，高并发读不再被淘汰追踪阻塞
 - **多级缓存**：多层缓存组合（MultiLevelCache）
 - **分布式缓存**：分布式缓存接口及配置
 - **压缩缓存**：值压缩装饰器（CompressedCache）
@@ -34,7 +38,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-cache</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -71,6 +75,7 @@
 | `VariableTtlCache` | 可变 TTL 缓存 |
 | `CompressedCache` | 压缩值缓存 |
 | `MultiLevelCache` | 多级缓存 |
+| `TaggedCache` | 标签批量失效装饰器 |
 
 ### 配置
 
@@ -174,6 +179,38 @@
 | `CacheWarmerManager` | 缓存预热管理器 |
 | `CacheTestSupport` | 缓存测试支持 |
 | `OpenCacheException` | 缓存异常 |
+| `CacheSnapshot` | 缓存快照持久化工具 |
+
+### Cache 接口新增 CAS 方法
+
+| 方法 | 说明 |
+|------|------|
+| `replaceIf(key, predicate, newValue)` | 条件满足时替换值 |
+| `computeIfMatch(key, predicate, remapper)` | 条件满足时计算新值 |
+
+### TaggedCache 方法
+
+| 方法 | 说明 |
+|------|------|
+| `TaggedCache.wrap(cache)` | 包装缓存为标签缓存 |
+| `put(key, value, tags...)` | 写入值并关联标签 |
+| `putWithTtl(key, value, ttl, tags...)` | 写入值并关联标签，指定 TTL |
+| `addTags(key, tags...)` | 为已有 key 添加标签 |
+| `getKeysByTag(tag)` | 获取标签关联的所有 key |
+| `getTags(key)` | 获取 key 关联的所有标签 |
+| `invalidateByTag(tag)` | 按标签批量失效 |
+| `invalidateByTags(tags...)` | 按多个标签批量失效 |
+| `getAllTags()` | 获取所有标签 |
+| `getTagSize(tag)` | 获取标签关联的 key 数量 |
+
+### CacheSnapshot 方法
+
+| 方法 | 说明 |
+|------|------|
+| `save(cache, path, keySerializer, valueSerializer)` | 保存缓存到磁盘（自定义序列化） |
+| `restore(path, cache, keyDeserializer, valueDeserializer)` | 从磁盘恢复缓存（自定义反序列化） |
+| `saveStringCache(cache, path)` | 保存 String 缓存到磁盘 |
+| `restoreStringCache(path, cache)` | 从磁盘恢复 String 缓存 |
 
 ### Spring 集成
 
@@ -240,6 +277,72 @@ Function<String, User> resilientLoader = ResilientCacheLoader.<String, User>buil
     .build();
 ```
 
+### 标签批量失效
+
+```java
+import cloud.opencode.base.cache.TaggedCache;
+import cloud.opencode.base.cache.OpenCache;
+import cloud.opencode.base.cache.Cache;
+
+Cache<String, String> base = OpenCache.lruCache(1000);
+TaggedCache<String, String> cache = TaggedCache.wrap(base);
+
+cache.put("user:1", "Alice", "tenant:acme", "role:admin");
+cache.put("user:2", "Bob", "tenant:acme", "role:user");
+cache.put("user:3", "Charlie", "tenant:beta", "role:admin");
+
+// 按标签失效 tenant:acme 下所有条目
+cache.invalidateByTag("tenant:acme"); // 移除 user:1 和 user:2
+
+// 按标签失效所有 admin 条目
+cache.invalidateByTag("role:admin"); // 移除 user:3（user:1 已被移除）
+```
+
+### 条件原子操作（CAS）
+
+```java
+import cloud.opencode.base.cache.Cache;
+import cloud.opencode.base.cache.OpenCache;
+
+Cache<String, Integer> counter = OpenCache.lruCache(100);
+counter.put("hits", 10);
+counter.replaceIf("hits", v -> v < 100, 20); // 替换：10 < 100
+counter.computeIfMatch("hits", v -> v == 20, v -> v + 1); // Optional.of(21)
+```
+
+### 缓存快照持久化
+
+```java
+import cloud.opencode.base.cache.util.CacheSnapshot;
+import cloud.opencode.base.cache.Cache;
+import cloud.opencode.base.cache.OpenCache;
+import java.nio.file.Path;
+
+Cache<String, String> cache = OpenCache.lruCache(1000);
+cache.put("key1", "value1");
+cache.put("key2", "value2");
+
+// 保存缓存到磁盘
+CacheSnapshot.saveStringCache(cache, Path.of("/tmp/cache-snapshot.dat"));
+
+// 重启后恢复
+Cache<String, String> newCache = OpenCache.lruCache(1000);
+CacheSnapshot.restoreStringCache(Path.of("/tmp/cache-snapshot.dat"), newCache);
+```
+
+## 安全修复（开发者须知）
+
+- `DefaultCache.get(K, loader)` 现在是原子操作（使用 `store.compute`），防止缓存击穿
+- `evictionLock` 改为 `ReentrantLock` + `tryLock`，读路径不再阻塞
+- `CopyOnReadCache` 默认 copier 添加了 `ObjectInputFilter`
+- `WriteBehindCache` shutdown 循环 flush 全部待处理写入（之前可能丢数据）
+- `TenantCache` tenantId 有长度（256）和数量（10000）限制
+
+## 性能优化（开发者须知）
+
+- `get()` 路径：tryLock 降级，高并发读不再被 eviction tracking 阻塞
+- `CacheSnapshot.save`：改为流式遍历，消除 O(n) 内存峰值
+
 ## 环境要求
 
 - Java 25+（使用虚拟线程、密封接口、Record）
@@ -248,3 +351,9 @@ Function<String, User> resilientLoader = ResilientCacheLoader.<String, User>buil
 ## 许可证
 
 Apache License 2.0
+
+## 作者
+
+Leon Soo - [OpenCode.cloud](https://opencode.cloud)
+
+@author Leon Soo, @since JDK 25

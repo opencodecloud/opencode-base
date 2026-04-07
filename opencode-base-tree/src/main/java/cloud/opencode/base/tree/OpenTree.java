@@ -1,5 +1,10 @@
 package cloud.opencode.base.tree;
 
+import cloud.opencode.base.tree.operation.TreeMerger;
+import cloud.opencode.base.tree.operation.TreeSorter;
+import cloud.opencode.base.tree.operation.TreeStatistics;
+import cloud.opencode.base.tree.operation.TreeUtil;
+import cloud.opencode.base.tree.path.PathFinder;
 import cloud.opencode.base.tree.serialization.TreeSerializer;
 import cloud.opencode.base.tree.virtual.LazyChildLoader;
 import cloud.opencode.base.tree.virtual.VirtualTree;
@@ -26,6 +31,10 @@ import java.util.stream.Collectors;
  *   <li>Tree statistics (depth, size, leaves) - 树统计（深度、大小、叶子节点）</li>
  *   <li>Virtual tree with lazy loading - 支持懒加载的虚拟化树</li>
  *   <li>Serialization to JSON, XML, Map - 序列化为JSON、XML、Map</li>
+ *   <li>Tree merging with conflict resolution - 树合并与冲突解决</li>
+ *   <li>Comprehensive tree statistics - 全面的树统计</li>
+ *   <li>Lowest common ancestor (LCA) - 最近公共祖先</li>
+ *   <li>Subtree extraction and siblings - 子树提取和兄弟节点</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -270,7 +279,7 @@ public final class OpenTree {
      * @param <T> the node type | 节点类型
      */
     public static <T extends Treeable<T, ?>> void traverseBreadthFirst(List<T> roots, Consumer<T> visitor) {
-        Deque<T> queue = new LinkedList<>(roots);
+        Deque<T> queue = new ArrayDeque<>(roots);
         while (!queue.isEmpty()) {
             T node = queue.poll();
             visitor.accept(node);
@@ -507,7 +516,9 @@ public final class OpenTree {
      * @param nodes the nodes to sort | 要排序的节点
      * @param comparator the comparator | 比较器
      * @param <T> the node type | 节点类型
+     * @deprecated Use {@link #sort(List, Comparator)} instead, which uses iterative depth-safe TreeSorter
      */
+    @Deprecated(since = "1.0.3", forRemoval = true)
     public static <T extends Treeable<T, ?>> void sortTree(List<T> nodes, Comparator<T> comparator) {
         nodes.sort(comparator);
         for (T node : nodes) {
@@ -686,5 +697,167 @@ public final class OpenTree {
      */
     public static <T> String treeNodeToXml(TreeNode<T> root, Function<T, Map<String, Object>> dataSerializer) {
         return TreeSerializer.treeNodeToXml(root, dataSerializer);
+    }
+
+    // ==================== Merge methods | 合并方法 ====================
+
+    /**
+     * Merge two tree forests, keeping left node on conflict
+     * 合并两个树森林，冲突时保留左侧节点
+     *
+     * @param left the left forest | 左侧森林
+     * @param right the right forest | 右侧森林
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the merged forest | 合并后的森林
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> List<T> mergeKeepLeft(List<T> left, List<T> right) {
+        return TreeMerger.mergeKeepLeft(left, right);
+    }
+
+    /**
+     * Merge two tree forests, keeping right node on conflict
+     * 合并两个树森林，冲突时保留右侧节点
+     *
+     * @param left the left forest | 左侧森林
+     * @param right the right forest | 右侧森林
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the merged forest | 合并后的森林
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> List<T> mergeKeepRight(List<T> left, List<T> right) {
+        return TreeMerger.mergeKeepRight(left, right);
+    }
+
+    /**
+     * Merge two tree forests with custom conflict resolution
+     * 使用自定义冲突解决合并两个树森林
+     *
+     * @param left the left forest | 左侧森林
+     * @param right the right forest | 右侧森林
+     * @param strategy conflict resolution function | 冲突解决函数
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the merged forest | 合并后的森林
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> List<T> merge(
+            List<T> left, List<T> right, TreeMerger.MergeStrategy<T> strategy) {
+        return TreeMerger.merge(left, right, strategy);
+    }
+
+    // ==================== Sort methods | 排序方法 ====================
+
+    /**
+     * Sort tree recursively using TreeSorter
+     * 使用 TreeSorter 递归排序树
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param comparator the comparator | 比较器
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> void sort(List<T> roots, Comparator<T> comparator) {
+        TreeSorter.sort(roots, comparator);
+    }
+
+    /**
+     * Sort tree recursively by extracted key
+     * 按提取的键递归排序树
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param keyExtractor the key extractor | 键提取器
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @param <U> the comparable key type | 可比较键类型
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID, U extends Comparable<? super U>> void sortBy(
+            List<T> roots, Function<T, U> keyExtractor) {
+        TreeSorter.sortBy(roots, keyExtractor);
+    }
+
+    /**
+     * Check if tree is sorted at all levels
+     * 检查树在所有层级是否已排序
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param comparator the comparator | 比较器
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return true if sorted | 如果已排序返回true
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> boolean isSorted(List<T> roots, Comparator<T> comparator) {
+        return TreeSorter.isSorted(roots, comparator);
+    }
+
+    // ==================== Statistics methods | 统计方法 ====================
+
+    /**
+     * Collect comprehensive tree statistics in a single BFS pass
+     * 通过单次 BFS 收集全面的树统计
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the statistics | 统计信息
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> TreeStatistics statistics(List<T> roots) {
+        return TreeStatistics.of(roots);
+    }
+
+    // ==================== LCA methods | 最近公共祖先方法 ====================
+
+    /**
+     * Find lowest common ancestor of two nodes by ID
+     * 通过ID查找两个节点的最近公共祖先
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param id1 the first node ID | 第一个节点ID
+     * @param id2 the second node ID | 第二个节点ID
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the LCA if both nodes exist | 如果两个节点都存在返回最近公共祖先
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> Optional<T> findLCA(List<T> roots, ID id1, ID id2) {
+        return PathFinder.findLowestCommonAncestor(roots, id1, id2);
+    }
+
+    // ==================== Subtree & Sibling methods | 子树与兄弟方法 ====================
+
+    /**
+     * Extract the subtree rooted at the node with the given ID
+     * 提取以给定ID节点为根的子树
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param id the target node ID | 目标节点ID
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the subtree or empty if not found | 子树，未找到返回空
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> Optional<T> extractSubtree(List<T> roots, ID id) {
+        return TreeUtil.extractSubtree(roots, id);
+    }
+
+    /**
+     * Get sibling nodes of the node with the given ID
+     * 获取给定ID节点的兄弟节点
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param id the target node ID | 目标节点ID
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the sibling nodes | 兄弟节点列表
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> List<T> getSiblings(List<T> roots, ID id) {
+        return TreeUtil.getSiblings(roots, id);
     }
 }

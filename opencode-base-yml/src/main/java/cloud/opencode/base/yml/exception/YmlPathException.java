@@ -1,5 +1,7 @@
 package cloud.opencode.base.yml.exception;
 
+import java.io.Serial;
+
 /**
  * YAML Path Exception - Thrown when path access fails
  * YAML 路径异常 - 当路径访问失败时抛出
@@ -11,6 +13,7 @@ package cloud.opencode.base.yml.exception;
  * <ul>
  *   <li>Tracks the failing path for diagnostics - 跟踪失败路径以供诊断</li>
  *   <li>Factory methods for index-out-of-bounds and type-mismatch errors - 索引越界和类型不匹配错误的工厂方法</li>
+ *   <li>Error code YML_PATH_001 - 错误码 YML_PATH_001</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -31,9 +34,18 @@ package cloud.opencode.base.yml.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-yml V1.0.0
+ * @since JDK 25, opencode-base-yml V1.0.3
  */
 public class YmlPathException extends OpenYmlException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Default error code for path exceptions.
+     * 路径异常的默认错误码。
+     */
+    private static final String ERROR_CODE = "YML_PATH_001";
 
     private final String path;
 
@@ -44,7 +56,7 @@ public class YmlPathException extends OpenYmlException {
      * @param path the missing path | 缺失的路径
      */
     public YmlPathException(String path) {
-        super("Path not found: " + path);
+        super(ERROR_CODE, "Path not found: " + path);
         this.path = path;
     }
 
@@ -56,7 +68,7 @@ public class YmlPathException extends OpenYmlException {
      * @param message the detail message | 详细消息
      */
     public YmlPathException(String path, String message) {
-        super(message);
+        super(ERROR_CODE, message);
         this.path = path;
     }
 
@@ -69,7 +81,7 @@ public class YmlPathException extends OpenYmlException {
      * @param cause   the cause | 原因
      */
     public YmlPathException(String path, String message, Throwable cause) {
-        super(message, cause);
+        super(ERROR_CODE, message, cause);
         this.path = path;
     }
 

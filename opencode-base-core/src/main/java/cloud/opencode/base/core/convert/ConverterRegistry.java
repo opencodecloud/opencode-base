@@ -8,7 +8,6 @@ import cloud.opencode.base.core.convert.impl.StringConverter;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.sql.Timestamp;
 import java.time.*;
 import java.util.Calendar;
 import java.util.Date;
@@ -261,10 +260,25 @@ public final class ConverterRegistry {
 
         // 旧版日期类型
         register(Date.class, DateConverter.dateConverter());
-        register(java.sql.Date.class, DateConverter.sqlDateConverter());
-        register(java.sql.Time.class, DateConverter.sqlTimeConverter());
-        register(Timestamp.class, DateConverter.timestampConverter());
         register(Calendar.class, DateConverter.calendarConverter());
+
+        // java.sql 日期类型（运行时可选，requires static java.sql）
+        registerSqlDateConverters();
+    }
+
+    /**
+     * Registers java.sql date/time converters if java.sql module is available at runtime.
+     * 如果运行时 java.sql 模块可用，则注册 java.sql 日期/时间转换器。
+     */
+    private static void registerSqlDateConverters() {
+        try {
+            Class.forName("java.sql.Date");
+            register(java.sql.Date.class, DateConverter.sqlDateConverter());
+            register(java.sql.Time.class, DateConverter.sqlTimeConverter());
+            register(java.sql.Timestamp.class, DateConverter.timestampConverter());
+        } catch (ClassNotFoundException | NoClassDefFoundError _) {
+            // java.sql module not available at runtime — skip registration
+        }
     }
 
     // ==================== 数组转换器 ====================

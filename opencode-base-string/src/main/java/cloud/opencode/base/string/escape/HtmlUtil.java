@@ -1,7 +1,5 @@
 package cloud.opencode.base.string.escape;
 
-import java.util.Map;
-
 /**
  * HTML Escape Utility - Provides HTML string escaping methods.
  * HTML转义工具 - 提供HTML字符串转义方法。
@@ -43,30 +41,52 @@ public final class HtmlUtil {
         throw new AssertionError("Utility class should not be instantiated");
     }
 
-    private static final Map<String, String> HTML_ESCAPES = Map.of(
-        "&", "&amp;",
-        "<", "&lt;",
-        ">", "&gt;",
-        "\"", "&quot;",
-        "'", "&#39;"
-    );
-
     public static String escape(String str) {
         if (str == null) return null;
+        // char switch eliminates: toCharArray() allocation, String.valueOf(c) per char,
+        // HashMap.get() per char. 5 known entities are inlined.
+        // char switch 消除: toCharArray() 分配、每字符 String.valueOf(c)、每字符 HashMap.get()。
         StringBuilder sb = new StringBuilder(str.length() + 16);
-        for (char c : str.toCharArray()) {
-            String escaped = HTML_ESCAPES.get(String.valueOf(c));
-            sb.append(escaped != null ? escaped : c);
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            switch (c) {
+                case '&'  -> sb.append("&amp;");
+                case '<'  -> sb.append("&lt;");
+                case '>'  -> sb.append("&gt;");
+                case '"'  -> sb.append("&quot;");
+                case '\'' -> sb.append("&#39;");
+                default   -> sb.append(c);
+            }
         }
         return sb.toString();
     }
 
     public static String unescape(String str) {
         if (str == null) return null;
-        return str.replace("&amp;", "&")
-                  .replace("&lt;", "<")
-                  .replace("&gt;", ">")
-                  .replace("&quot;", "\"")
-                  .replace("&#39;", "'");
+        // Quick check: no '&' means no entities to unescape.
+        // 快速检查：无 '&' 则无需反转义。
+        if (str.indexOf('&') < 0) return str;
+        // Single-pass with batch append replaces 5 chained replace() calls (5 full scans).
+        // 单遍历 + 批量追加，替代 5 次链式 replace()（5 次完整扫描）。
+        StringBuilder sb = new StringBuilder(str.length());
+        int i = 0;
+        int literalStart = 0;
+        int len = str.length();
+        while (i < len) {
+            if (str.charAt(i) == '&') {
+                sb.append(str, literalStart, i);
+                if (str.startsWith("&amp;", i))       { sb.append('&');  i += 5; }
+                else if (str.startsWith("&lt;", i))    { sb.append('<');  i += 4; }
+                else if (str.startsWith("&gt;", i))    { sb.append('>');  i += 4; }
+                else if (str.startsWith("&quot;", i))  { sb.append('"');  i += 6; }
+                else if (str.startsWith("&#39;", i))   { sb.append('\''); i += 5; }
+                else                                   { sb.append('&');  i += 1; }
+                literalStart = i;
+            } else {
+                i++;
+            }
+        }
+        if (literalStart < len) sb.append(str, literalStart, len);
+        return sb.toString();
     }
 }

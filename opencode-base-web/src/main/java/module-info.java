@@ -31,6 +31,8 @@
 module cloud.opencode.base.web {
     // Required modules
     requires transitive cloud.opencode.base.core;
+    requires transitive cloud.opencode.base.json;
+    requires transitive cloud.opencode.base.crypto;
     requires java.net.http;
 
     // Note: TraceId integration with opencode-base-log is handled dynamically
@@ -49,9 +51,15 @@ module cloud.opencode.base.web {
     exports cloud.opencode.base.web.cookie;
     exports cloud.opencode.base.web.sse;
     exports cloud.opencode.base.web.body;
+    exports cloud.opencode.base.web.problem;
+    exports cloud.opencode.base.web.cache;
+    exports cloud.opencode.base.web.cors;
+    exports cloud.opencode.base.web.security;
+    exports cloud.opencode.base.web.ratelimit;
 
     // SPI: Allow ServiceLoader to find provider implementations
     uses cloud.opencode.base.web.spi.ResultCodeProvider;
     uses cloud.opencode.base.web.spi.ResultCustomizer;
     uses cloud.opencode.base.web.crypto.ResultEncryptor;
+    uses cloud.opencode.base.web.crypto.EncryptionKeyResolver;
 }

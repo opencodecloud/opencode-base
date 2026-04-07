@@ -48,6 +48,9 @@ import java.util.Locale;
  */
 public final class MoneyFormatUtil {
 
+    private static final BigDecimal YI = new BigDecimal("100000000");
+    private static final BigDecimal WAN = new BigDecimal("10000");
+
     private MoneyFormatUtil() {
         // Utility class
     }
@@ -92,7 +95,7 @@ public final class MoneyFormatUtil {
         if (amount == null) {
             return "";
         }
-        NumberFormat nf = NumberFormat.getNumberInstance();
+        NumberFormat nf = NumberFormat.getNumberInstance(Locale.ROOT);
         nf.setMinimumFractionDigits(scale);
         nf.setMaximumFractionDigits(scale);
         return nf.format(amount);
@@ -202,7 +205,8 @@ public final class MoneyFormatUtil {
         if (money == null) {
             return "";
         }
-        DecimalFormat df = new DecimalFormat(pattern);
+        DecimalFormat df = new DecimalFormat(pattern,
+                java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
         return df.format(money.amount());
     }
 
@@ -222,13 +226,13 @@ public final class MoneyFormatUtil {
         String sign = money.isNegative() ? "-" : "";
         String symbol = money.currency().getSymbol();
 
-        if (amount.compareTo(new BigDecimal("100000000")) >= 0) {
+        if (amount.compareTo(YI) >= 0) {
             // 亿
-            return sign + symbol + amount.divide(new BigDecimal("100000000"), 2,
+            return sign + symbol + amount.divide(YI, 2,
                 java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "亿";
-        } else if (amount.compareTo(new BigDecimal("10000")) >= 0) {
+        } else if (amount.compareTo(WAN) >= 0) {
             // 万
-            return sign + symbol + amount.divide(new BigDecimal("10000"), 2,
+            return sign + symbol + amount.divide(WAN, 2,
                 java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "万";
         }
         return sign + format(money.abs());
@@ -246,7 +250,7 @@ public final class MoneyFormatUtil {
         if (rate == null) {
             return "";
         }
-        NumberFormat pf = NumberFormat.getPercentInstance();
+        NumberFormat pf = NumberFormat.getPercentInstance(Locale.ROOT);
         pf.setMinimumFractionDigits(scale);
         pf.setMaximumFractionDigits(scale);
         return pf.format(rate);

@@ -48,7 +48,14 @@ public sealed interface Node permits
         FunctionCallNode,
         CollectionFilterNode,
         CollectionProjectNode,
-        ListLiteralNode {
+        ListLiteralNode,
+        ElvisNode,
+        InNode,
+        BetweenNode,
+        BitwiseOpNode,
+        LambdaNode,
+        MapLiteralNode,
+        StringInterpolationNode {
 
     /**
      * Evaluate this node

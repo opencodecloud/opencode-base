@@ -118,7 +118,13 @@ public class ConfigBinder {
 
     private void bindSimpleField(String key, Field field, Object target) throws Exception {
         if (!config.hasKey(key)) {
-            return; // Skip missing optional fields
+            // Apply @DefaultValue if present on the field
+            DefaultValue defaultValue = field.getAnnotation(DefaultValue.class);
+            if (defaultValue != null) {
+                Object converted = converters.convert(defaultValue.value(), field.getType());
+                field.set(target, converted);
+            }
+            return;
         }
 
         String value = config.getString(key);

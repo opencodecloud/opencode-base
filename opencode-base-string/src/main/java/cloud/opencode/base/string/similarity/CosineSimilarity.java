@@ -46,16 +46,19 @@ public final class CosineSimilarity {
         double dotProduct = 0.0;
         double mag1 = 0.0;
         double mag2 = 0.0;
-        
-        for (String word : vec1.keySet()) {
-            int count1 = vec1.get(word);
-            int count2 = vec2.getOrDefault(word, 0);
-            dotProduct += count1 * count2;
-            mag1 += count1 * count1;
+
+        // entrySet() avoids a second map lookup per word (vs keySet() + get()).
+        // entrySet() 替代 keySet() + get()，每个词减少一次哈希查找。
+        for (Map.Entry<String, Integer> e : vec1.entrySet()) {
+            int count1 = e.getValue();
+            Integer v2 = vec2.get(e.getKey());
+            int count2 = v2 == null ? 0 : v2;
+            dotProduct += (double) count1 * count2;
+            mag1 += (double) count1 * count1;
         }
-        
+
         for (int count : vec2.values()) {
-            mag2 += count * count;
+            mag2 += (double) count * count;
         }
         
         if (mag1 == 0 || mag2 == 0) return 0.0;

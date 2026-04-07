@@ -311,6 +311,16 @@ public final class OpenResource {
     }
 
     private static String normalizePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return path;
+        }
+        // Reject path traversal sequences (check each segment for "..")
+        for (String segment : path.replace('\\', '/').split("/")) {
+            if ("..".equals(segment)) {
+                throw new OpenIOOperationException("read", path,
+                        "Resource path must not contain path traversal (..): " + path);
+            }
+        }
         if (path.startsWith("/")) {
             return path.substring(1);
         }

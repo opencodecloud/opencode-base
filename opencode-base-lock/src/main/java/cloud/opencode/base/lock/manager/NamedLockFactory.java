@@ -66,6 +66,7 @@ import java.util.function.Supplier;
 public class NamedLockFactory {
 
     private final int stripes;
+    private final int stripeMask;
     private final Lock<Long>[] stripedLocks;
     private final ConcurrentMap<String, Lock<Long>> namedLocks;
     private final LockConfig config;
@@ -103,14 +104,18 @@ public class NamedLockFactory {
         if (stripes <= 0) {
             throw new IllegalArgumentException("Stripes must be positive");
         }
-        this.stripes = stripes;
+        // Round up to power of two for fast bitwise indexing
+        int actualStripes = Integer.highestOneBit(stripes - 1) << 1;
+        if (actualStripes <= 0) actualStripes = 1;
+        this.stripes = actualStripes;
+        this.stripeMask = actualStripes - 1;
         this.useStriping = useStriping;
         this.config = config;
         this.namedLocks = new ConcurrentHashMap<>();
 
         if (useStriping) {
-            this.stripedLocks = new Lock[stripes];
-            for (int i = 0; i < stripes; i++) {
+            this.stripedLocks = new Lock[actualStripes];
+            for (int i = 0; i < actualStripes; i++) {
                 this.stripedLocks[i] = new LocalLock(config);
             }
         } else {
@@ -131,10 +136,7 @@ public class NamedLockFactory {
      */
     public Lock<Long> getLock(String name) {
         if (useStriping) {
-            // Use bitwise AND to handle Integer.MIN_VALUE case safely
-            // Math.abs(Integer.MIN_VALUE) returns Integer.MIN_VALUE (negative)
-            int index = (name.hashCode() & 0x7FFFFFFF) % stripes;
-            return stripedLocks[index];
+            return stripedLocks[name.hashCode() & stripeMask];
         } else {
             return namedLocks.computeIfAbsent(name, k -> new LocalLock(config));
         }

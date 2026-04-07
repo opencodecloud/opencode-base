@@ -99,10 +99,10 @@ class OpenIllegalStateExceptionTest {
     class InheritanceTests {
 
         @Test
-        @DisplayName("是 OpenException 的子类")
-        void testExtendsOpenException() {
+        @DisplayName("是 IllegalStateException 的子类")
+        void testExtendsIllegalStateException() {
             OpenIllegalStateException ex = new OpenIllegalStateException("Test");
-            assertThat(ex).isInstanceOf(OpenException.class);
+            assertThat(ex).isInstanceOf(IllegalStateException.class);
         }
     }
 }

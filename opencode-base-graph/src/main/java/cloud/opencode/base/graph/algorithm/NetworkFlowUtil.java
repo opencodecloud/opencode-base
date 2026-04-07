@@ -64,6 +64,18 @@ import java.util.*;
  */
 public final class NetworkFlowUtil {
 
+    /**
+     * Minimum residual capacity threshold to avoid floating-point stagnation.
+     * 最小残余容量阈值，避免浮点精度导致的停滞。
+     */
+    private static final double FLOW_EPSILON = 1e-10;
+
+    /**
+     * Maximum iterations for Ford-Fulkerson augmenting path search.
+     * Ford-Fulkerson增广路径搜索的最大迭代次数。
+     */
+    private static final int MAX_FLOW_ITERATIONS = 1_000_000;
+
     private NetworkFlowUtil() {
         // Utility class
     }
@@ -103,14 +115,14 @@ public final class NetworkFlowUtil {
         double totalFlow = 0.0;
 
         // Find augmenting paths using BFS
-        while (true) {
+        for (int _iter = 0; _iter < MAX_FLOW_ITERATIONS; _iter++) {
             // BFS to find shortest augmenting path
             Map<V, V> parent = new HashMap<>();
             Map<V, Double> pathCapacity = new HashMap<>();
 
             double bottleneck = bfsAugmentingPath(residual, source, sink, parent, pathCapacity);
 
-            if (bottleneck == 0) {
+            if (bottleneck < FLOW_EPSILON) {
                 break; // No augmenting path found
             }
 
@@ -158,11 +170,11 @@ public final class NetworkFlowUtil {
         ResidualGraph<V> residual = new ResidualGraph<>(graph);
         double totalFlow = 0.0;
 
-        while (true) {
+        for (int _iter = 0; _iter < MAX_FLOW_ITERATIONS; _iter++) {
             Set<V> visited = new HashSet<>();
             double pathFlow = dfsAugmentingPath(residual, source, sink, Double.MAX_VALUE, visited);
 
-            if (pathFlow == 0) {
+            if (pathFlow < FLOW_EPSILON) {
                 break;
             }
             totalFlow += pathFlow;
@@ -194,13 +206,13 @@ public final class NetworkFlowUtil {
         ResidualGraph<V> residual = new ResidualGraph<>(graph);
 
         // Run Ford-Fulkerson
-        while (true) {
+        for (int _iter = 0; _iter < MAX_FLOW_ITERATIONS; _iter++) {
             Map<V, V> parent = new HashMap<>();
             Map<V, Double> pathCapacity = new HashMap<>();
 
             double bottleneck = bfsAugmentingPath(residual, source, sink, parent, pathCapacity);
 
-            if (bottleneck == 0) {
+            if (bottleneck < FLOW_EPSILON) {
                 break;
             }
 
@@ -249,13 +261,13 @@ public final class NetworkFlowUtil {
         double totalFlow = 0.0;
 
         // Run Ford-Fulkerson
-        while (true) {
+        for (int _iter = 0; _iter < MAX_FLOW_ITERATIONS; _iter++) {
             Map<V, V> parent = new HashMap<>();
             Map<V, Double> pathCapacity = new HashMap<>();
 
             double bottleneck = bfsAugmentingPath(residual, source, sink, parent, pathCapacity);
 
-            if (bottleneck == 0) {
+            if (bottleneck < FLOW_EPSILON) {
                 break;
             }
 
@@ -310,13 +322,13 @@ public final class NetworkFlowUtil {
         ResidualGraph<V> residual = new ResidualGraph<>(graph);
 
         // Run Ford-Fulkerson
-        while (true) {
+        for (int _iter = 0; _iter < MAX_FLOW_ITERATIONS; _iter++) {
             Map<V, V> parent = new HashMap<>();
             Map<V, Double> pathCapacity = new HashMap<>();
 
             double bottleneck = bfsAugmentingPath(residual, source, sink, parent, pathCapacity);
 
-            if (bottleneck == 0) {
+            if (bottleneck < FLOW_EPSILON) {
                 break;
             }
 

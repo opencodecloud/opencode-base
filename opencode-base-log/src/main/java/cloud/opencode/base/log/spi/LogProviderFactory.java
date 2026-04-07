@@ -58,6 +58,7 @@ public final class LogProviderFactory {
     private static final AtomicReference<LogProvider> CURRENT_PROVIDER = new AtomicReference<>();
     private static final Map<String, LogProvider> PROVIDERS = new ConcurrentHashMap<>();
     private static volatile boolean initialized = false;
+    private static volatile boolean shutdownHookRegistered = false;
 
     private LogProviderFactory() {
         // Utility class
@@ -199,8 +200,13 @@ public final class LogProviderFactory {
 
         initialized = true;
 
-        // Register shutdown hook
-        Runtime.getRuntime().addShutdownHook(new Thread(LogProviderFactory::shutdown));
+        // Register shutdown hook (only once)
+        if (!shutdownHookRegistered) {
+            shutdownHookRegistered = true;
+            Runtime.getRuntime().addShutdownHook(Thread.ofVirtual()
+                    .name("log-provider-shutdown")
+                    .unstarted(LogProviderFactory::shutdown));
+        }
     }
 
     /**

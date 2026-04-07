@@ -38,10 +38,12 @@
 - **RecordUtil**: Utilities for Java records (components, construction, conversion)
 - **RecordBuilder**: Build record instances dynamically
 - **RecordComponent**: Describes a record component
+- **RecordMapper**: Advanced Record/Bean mapping with field renaming, exclusion, and type conversion
 
 ### Sealed Class Support
 - **SealedUtil**: Utilities for sealed classes and interfaces
 - **PermittedSubclasses**: Enumerate and inspect permitted subclasses
+- **SealedDispatcher**: Type-safe exhaustive dispatch for sealed hierarchies
 
 ### Type System
 - **TypeToken**: Captures full generic type information at runtime
@@ -61,13 +63,24 @@
 ### Accessor Layer
 - **FieldAccessor**: Direct field access (reflection-based)
 - **MethodHandleAccessor**: High-performance access via MethodHandle
-- **VarHandleAccessor**: Highest-performance access via VarHandle
+- **VarHandleAccessor**: VarHandle-based access for atomic operations
+- **LambdaAccessor**: Near-zero-cost access via LambdaMetafactory (fastest after warmup)
 - **PropertyAccessor**: Unified property access interface
-- **PropertyAccessors**: Factory for creating optimal accessor instances
+- **PropertyAccessors**: Factory for creating optimal accessor instances (supports LAMBDA strategy)
 - **BeanAccessor**: High-level bean property accessor
 
-### Performance
-- **ReflectCache**: Thread-safe cache for reflection metadata (fields, methods, constructors)
+### Module System
+- **ModuleUtil**: Module-system-aware reflection with accessibility checks, diagnostics, and graceful fallback
+
+### Annotation Merging
+- **AnnotationMerger**: Composed annotation attribute resolution (like Spring's AnnotatedElementUtils)
+
+### Method Signature
+- **MethodSignature**: Method signature representation, matching, override detection, and JVM descriptor generation
+
+### Performance & Security
+- **ReflectCache**: GC-aware cache for reflection metadata (WeakHashMap prevents ClassLoader leaks)
+- **Platform-type protection**: All `setAccessible` calls are guarded against JDK internal types (`java.*`, `javax.*`, `sun.*`, `jdk.*`)
 
 ## Quick Start
 
@@ -76,7 +89,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-reflect</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -145,6 +158,73 @@ Person person = RecordBuilder.of(Person.class)
 List<RecordComponent> components = RecordUtil.getComponents(Person.class);
 ```
 
+### LambdaAccessor (High-Performance)
+```java
+import cloud.opencode.base.reflect.accessor.*;
+
+// Near-zero-cost property access via LambdaMetafactory
+PropertyAccessor<User> accessor = PropertyAccessors.create(User.class, "name", PropertyAccessors.Strategy.LAMBDA);
+String name = accessor.get(user, String.class);
+accessor.set(user, "Alice");
+```
+
+### Sealed Class Dispatch
+```java
+import cloud.opencode.base.reflect.sealed.*;
+
+// Type-safe exhaustive dispatch for sealed hierarchies
+SealedDispatcher<Shape, Double> areaCalculator = SealedDispatcher.builder(Shape.class, Double.class)
+    .on(Circle.class, c -> Math.PI * c.radius() * c.radius())
+    .on(Rectangle.class, r -> r.width() * r.height())
+    .on(Triangle.class, t -> 0.5 * t.base() * t.height())
+    .build(); // validates all branches are covered
+
+double area = areaCalculator.dispatch(someShape);
+```
+
+### Record Mapping
+```java
+import cloud.opencode.base.reflect.record.*;
+
+// Record ↔ Record / Bean mapping with renaming and conversion
+RecordMapper<UserDTO, User> mapper = RecordMapper.builder(UserDTO.class, User.class)
+    .map("userName", "name")
+    .exclude("password")
+    .convert("age", val -> Integer.parseInt(val.toString()))
+    .build();
+
+User user = mapper.map(dto);
+List<User> users = mapper.mapAll(dtoList);
+```
+
+### Annotation Merging
+```java
+import cloud.opencode.base.reflect.AnnotationMerger;
+
+// Resolve composed annotation attributes (like Spring's @GetMapping → @RequestMapping)
+RequestMapping merged = AnnotationMerger.getMergedAnnotation(method, RequestMapping.class);
+Map<String, Object> attrs = AnnotationMerger.getMergedAttributes(element, MyAnnotation.class);
+```
+
+### Module System Utilities
+```java
+import cloud.opencode.base.reflect.module.ModuleUtil;
+
+// Check if deep reflection is possible
+boolean canReflect = ModuleUtil.canDeepReflect(targetClass, callerClass);
+String diagnostic = ModuleUtil.getAccessDiagnostic(targetClass, callerClass);
+ModuleUtil.ModuleInfo info = ModuleUtil.getModuleInfo(targetClass);
+```
+
+### Method Signature
+```java
+import cloud.opencode.base.reflect.invokable.MethodSignature;
+
+MethodSignature sig = MethodSignature.of(method);
+boolean isOverride = sig.isOverrideOf(superMethod);
+String descriptor = sig.toDescriptor(); // "(Ljava/lang/String;I)V"
+```
+
 ### Type Tokens
 ```java
 import cloud.opencode.base.reflect.type.*;
@@ -173,6 +253,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `ModifierUtil` | Additional modifier utility methods |
 | `ReflectUtil` | General reflection helper methods |
 | `ReflectCache` | Thread-safe cache for reflection metadata |
+| `AnnotationMerger` | Composed annotation attribute merging and synthesis |
 
 ### Accessor (`cloud.opencode.base.reflect.accessor`)
 | Class | Description |
@@ -183,6 +264,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `MethodHandleAccessor` | MethodHandle-based high-performance access |
 | `VarHandleAccessor` | VarHandle-based highest-performance access |
 | `BeanAccessor` | High-level bean property accessor |
+| `LambdaAccessor` | Near-zero-cost access via LambdaMetafactory |
 
 ### Bean (`cloud.opencode.base.reflect.bean`)
 | Class | Description |
@@ -203,6 +285,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `MethodInvokable<T,R>` | Invokable wrapper for methods |
 | `ConstructorInvokable<T>` | Invokable wrapper for constructors |
 | `Parameter` | Describes a method/constructor parameter |
+| `MethodSignature` | Method signature representation, matching, and override detection |
 
 ### Lambda (`cloud.opencode.base.reflect.lambda`)
 | Class | Description |
@@ -235,6 +318,7 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `RecordBuilder<T>` | Dynamic builder for record instances |
 | `RecordComponent` | Describes a record component |
 | `RecordUtil` | Record utility methods |
+| `RecordMapper<S,T>` | Advanced Record/Bean mapping with renaming, exclusion, and conversion |
 
 ### Sealed (`cloud.opencode.base.reflect.sealed`)
 | Class | Description |
@@ -242,6 +326,13 @@ Type type = token.getType(); // java.util.List<java.lang.String>
 | `OpenSealed` | Sealed class operations facade |
 | `SealedUtil` | Sealed class utility methods |
 | `PermittedSubclasses` | Enumerate permitted subclasses of a sealed type |
+| `SealedDispatcher<T,R>` | Type-safe exhaustive dispatch for sealed hierarchies |
+
+### Module (`cloud.opencode.base.reflect.module`)
+| Class | Description |
+|-------|-------------|
+| `ModuleUtil` | Module-system-aware reflection utilities with accessibility checks and diagnostics |
+| `ModuleUtil.ModuleInfo` | Record containing module metadata |
 
 ### Scan (`cloud.opencode.base.reflect.scan`)
 | Class | Description |

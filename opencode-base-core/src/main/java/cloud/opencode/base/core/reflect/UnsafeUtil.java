@@ -128,6 +128,7 @@ public final class UnsafeUtil {
     private static volatile MethodHandle memorySegmentCopyFromHandle;
     private static volatile MethodHandle memorySegmentByteSizeHandle;
     private static volatile MethodHandle memorySegmentOfAddressHandle; // MemorySegment.ofAddress
+    private static volatile MethodHandle memorySegmentAsSliceHandle; // MemorySegment.asSlice(long, long)
     private static volatile Object byteLayout; // ValueLayout.JAVA_BYTE
     private static volatile Object shortLayout;
     private static volatile Object intLayout;
@@ -135,8 +136,9 @@ public final class UnsafeUtil {
     private static volatile Object floatLayout;
     private static volatile Object doubleLayout;
 
-    // Track allocated segments for FFM (address -> {segment, arena, size})
-    private static final ConcurrentHashMap<Long, FFMAllocation> FFM_ALLOCATIONS = new ConcurrentHashMap<>();
+    // Track allocated segments for FFM (address -> {segment, arena, size}), sorted for O(log n) lookup
+    private static final java.util.concurrent.ConcurrentSkipListMap<Long, FFMAllocation> FFM_ALLOCATIONS =
+            new java.util.concurrent.ConcurrentSkipListMap<>();
 
     private record FFMAllocation(Object segment, Object arena, long size) {}
     private record SegmentAndOffset(Object segment, long offset) {}
@@ -145,11 +147,14 @@ public final class UnsafeUtil {
      * Find the segment containing the given address and calculate the offset
      */
     private static SegmentAndOffset findSegmentForAddress(long address, long minSize) {
-        for (var entry : FFM_ALLOCATIONS.entrySet()) {
+        var entry = FFM_ALLOCATIONS.floorEntry(address);
+        if (entry != null) {
             long baseAddr = entry.getKey();
             FFMAllocation alloc = entry.getValue();
-            if (address >= baseAddr && address + minSize <= baseAddr + alloc.size()) {
-                return new SegmentAndOffset(alloc.segment(), address - baseAddr);
+            long offset = address - baseAddr;
+            // Use subtraction instead of addition to avoid overflow
+            if (offset >= 0 && minSize <= alloc.size() - offset) {
+                return new SegmentAndOffset(alloc.segment(), offset);
             }
         }
         throw new IllegalStateException("No FFM allocation found containing address: " + address);
@@ -251,6 +256,10 @@ public final class UnsafeUtil {
             // Get MemorySegment.reinterpret(long)
             memorySegmentReinterpretHandle = lookup.findVirtual(memorySegmentClass, "reinterpret",
                 MethodType.methodType(memorySegmentClass, long.class));
+
+            // Get MemorySegment.asSlice(long, long)
+            memorySegmentAsSliceHandle = lookup.findVirtual(memorySegmentClass, "asSlice",
+                MethodType.methodType(memorySegmentClass, long.class, long.class));
 
             // Get ValueLayouts
             byteLayout = lookup.findStaticGetter(valueLayoutClass, "JAVA_BYTE",
@@ -831,6 +840,9 @@ public final class UnsafeUtil {
      * <p>Java 21: 使用 Unsafe (有弃用警告)</p>
      */
     public static long allocateMemory(long bytes) {
+        if (bytes <= 0) {
+            throw new IllegalArgumentException("bytes must be positive: " + bytes);
+        }
         ensureBackendInitialized();
         if (MEMORY_BACKEND == MemoryBackend.FFM) {
             return allocateMemoryFFM(bytes);
@@ -963,13 +975,9 @@ public final class UnsafeUtil {
 
     private static void setMemoryFFM(long address, long bytes, byte value) {
         try {
-            FFMAllocation alloc = FFM_ALLOCATIONS.get(address);
-            if (alloc == null) {
-                throw new IllegalStateException("No FFM allocation found for address: " + address);
-            }
-            // Create a view of the segment for the requested size
-            Object segmentView = memorySegmentReinterpretHandle.invoke(alloc.segment(), bytes);
-            memorySegmentFillHandle.invoke(segmentView, value);
+            SegmentAndOffset so = findSegmentForAddress(address, bytes);
+            Object slice = memorySegmentAsSliceHandle.invoke(so.segment(), so.offset(), bytes);
+            memorySegmentFillHandle.invoke(slice, value);
         } catch (Throwable e) {
             throw new OpenException("Failed to set memory via FFM", e);
         }
@@ -1002,20 +1010,12 @@ public final class UnsafeUtil {
 
     private static void copyMemoryFFM(long srcAddress, long destAddress, long bytes) {
         try {
-            FFMAllocation srcAlloc = FFM_ALLOCATIONS.get(srcAddress);
-            FFMAllocation destAlloc = FFM_ALLOCATIONS.get(destAddress);
+            SegmentAndOffset srcSo = findSegmentForAddress(srcAddress, bytes);
+            SegmentAndOffset destSo = findSegmentForAddress(destAddress, bytes);
 
-            if (srcAlloc == null) {
-                throw new IllegalStateException("No FFM allocation found for source address: " + srcAddress);
-            }
-            if (destAlloc == null) {
-                throw new IllegalStateException("No FFM allocation found for destination address: " + destAddress);
-            }
-
-            // Create views for the requested size
-            Object srcView = memorySegmentReinterpretHandle.invoke(srcAlloc.segment(), bytes);
-            Object destView = memorySegmentReinterpretHandle.invoke(destAlloc.segment(), bytes);
-            memorySegmentCopyFromHandle.invoke(destView, srcView);
+            Object srcSlice = memorySegmentAsSliceHandle.invoke(srcSo.segment(), srcSo.offset(), bytes);
+            Object destSlice = memorySegmentAsSliceHandle.invoke(destSo.segment(), destSo.offset(), bytes);
+            memorySegmentCopyFromHandle.invoke(destSlice, srcSlice);
         } catch (Throwable e) {
             throw new OpenException("Failed to copy memory via FFM", e);
         }

@@ -1,5 +1,6 @@
 package cloud.opencode.base.oauth2.provider;
 
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -269,6 +270,10 @@ public final class Providers {
      * @return the provider | 提供者
      */
     public static OAuth2Provider microsoftTenant(String tenantId) {
+        Objects.requireNonNull(tenantId, "tenantId cannot be null");
+        if (!tenantId.matches("[a-zA-Z0-9._-]+")) {
+            throw new IllegalArgumentException("tenantId contains invalid characters");
+        }
         return new OAuth2Provider() {
             @Override
             public String name() {

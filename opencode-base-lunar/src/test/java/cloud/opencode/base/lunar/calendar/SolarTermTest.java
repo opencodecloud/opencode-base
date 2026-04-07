@@ -184,30 +184,100 @@ class SolarTermTest {
         @DisplayName("节气当天返回节气")
         void testOnTermDay() {
             LocalDate date = SolarTerm.CHUN_FEN.getDate(2024);
-            SolarTerm term = SolarTerm.of(date);
-            assertThat(term).isEqualTo(SolarTerm.CHUN_FEN);
+            var term = SolarTerm.of(date);
+            assertThat(term).isPresent().hasValue(SolarTerm.CHUN_FEN);
         }
 
         @Test
-        @DisplayName("非节气当天返回null")
+        @DisplayName("非节气当天返回empty")
         void testNotOnTermDay() {
             LocalDate date = LocalDate.of(2024, 3, 15);
-            SolarTerm term = SolarTerm.of(date);
-            // 可能返回null或者最近的节气，根据实现
-            // 这里只验证不会抛出异常
-            assertThatCode(() -> SolarTerm.of(date)).doesNotThrowAnyException();
+            var term = SolarTerm.of(date);
+            assertThat(term).isEmpty();
+        }
+
+        @Test
+        @DisplayName("所有24个节气都能被of()找到")
+        void testAllTermsFoundByOf() {
+            for (SolarTerm expected : SolarTerm.values()) {
+                LocalDate date = expected.getDate(2024);
+                var actual = SolarTerm.of(date);
+                assertThat(actual).isPresent().hasValue(expected);
+            }
         }
     }
 
     @Nested
-    @DisplayName("ofYear方法测试")
+    @DisplayName("ofYear方法测试 - 返回SolarTermInfo列表")
     class OfYearTests {
 
         @Test
-        @DisplayName("返回24个节气")
+        @DisplayName("返回24个SolarTermInfo")
         void testReturnsAllTerms() {
-            List<SolarTerm> terms = SolarTerm.ofYear(2024);
+            var terms = SolarTerm.ofYear(2024);
             assertThat(terms).hasSize(24);
+        }
+
+        @Test
+        @DisplayName("每个SolarTermInfo包含正确的节气和日期")
+        void testTermInfoContent() {
+            var terms = SolarTerm.ofYear(2024);
+            for (SolarTermInfo info : terms) {
+                assertThat(info.term()).isNotNull();
+                assertThat(info.date()).isNotNull();
+                assertThat(info.date().getYear()).isEqualTo(2024);
+                assertThat(info.getName()).isEqualTo(info.term().getName());
+                assertThat(info.getEnglishName()).isEqualTo(info.term().getEnglishName());
+                assertThat(info.isMajor()).isEqualTo(info.term().isMajor());
+            }
+        }
+
+        @Test
+        @DisplayName("第一个是小寒")
+        void testFirstIsXiaoHan() {
+            var terms = SolarTerm.ofYear(2024);
+            assertThat(terms.getFirst().term()).isEqualTo(SolarTerm.XIAO_HAN);
+        }
+
+        @Test
+        @DisplayName("日期与getDate一致")
+        void testDatesMatch() {
+            var terms = SolarTerm.ofYear(2024);
+            for (SolarTermInfo info : terms) {
+                assertThat(info.date()).isEqualTo(info.term().getDate(2024));
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("getClosest方法测试")
+    class GetClosestTests {
+
+        @Test
+        @DisplayName("节气当天返回该节气")
+        void testOnTermDay() {
+            LocalDate date = SolarTerm.CHUN_FEN.getDate(2024);
+            SolarTermInfo closest = SolarTerm.getClosest(date);
+            assertThat(closest.term()).isEqualTo(SolarTerm.CHUN_FEN);
+            assertThat(closest.date()).isEqualTo(date);
+        }
+
+        @Test
+        @DisplayName("两个节气之间返回更近的")
+        void testBetweenTerms() {
+            // 立春 ~ 2024-02-04, 雨水 ~ 2024-02-19
+            LocalDate nearLiChun = LocalDate.of(2024, 2, 5);
+            SolarTermInfo closest = SolarTerm.getClosest(nearLiChun);
+            assertThat(closest.term()).isEqualTo(SolarTerm.LI_CHUN);
+        }
+
+        @Test
+        @DisplayName("返回的SolarTermInfo不为null")
+        void testNotNull() {
+            SolarTermInfo closest = SolarTerm.getClosest(LocalDate.of(2024, 6, 15));
+            assertThat(closest).isNotNull();
+            assertThat(closest.term()).isNotNull();
+            assertThat(closest.date()).isNotNull();
         }
     }
 
@@ -229,6 +299,35 @@ class SolarTermTest {
             LocalDate date = LocalDate.of(2024, 3, 25);
             SolarTerm prev = SolarTerm.previous(date);
             assertThat(prev).isNotNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("SolarTermInfo记录测试")
+    class SolarTermInfoTests {
+
+        @Test
+        @DisplayName("创建SolarTermInfo")
+        void testCreate() {
+            SolarTermInfo info = new SolarTermInfo(SolarTerm.LI_CHUN, LocalDate.of(2024, 2, 4));
+            assertThat(info.term()).isEqualTo(SolarTerm.LI_CHUN);
+            assertThat(info.date()).isEqualTo(LocalDate.of(2024, 2, 4));
+        }
+
+        @Test
+        @DisplayName("null参数抛出NullPointerException")
+        void testNullValidation() {
+            assertThatThrownBy(() -> new SolarTermInfo(null, LocalDate.of(2024, 1, 1)))
+                    .isInstanceOf(NullPointerException.class);
+            assertThatThrownBy(() -> new SolarTermInfo(SolarTerm.LI_CHUN, null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        @DisplayName("toString包含节气名和日期")
+        void testToString() {
+            SolarTermInfo info = new SolarTermInfo(SolarTerm.LI_CHUN, LocalDate.of(2024, 2, 4));
+            assertThat(info.toString()).contains("立春").contains("2024-02-04");
         }
     }
 }

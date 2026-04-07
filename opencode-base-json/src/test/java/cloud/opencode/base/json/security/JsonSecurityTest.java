@@ -119,10 +119,10 @@ class JsonSecurityTest {
         }
 
         @Test
-        @DisplayName("短用户名邮箱保持不变")
+        @DisplayName("短用户名邮箱全部脱敏")
         void testMaskShortEmail() {
             String result = JsonSecurity.mask("t@example.com", JsonMask.MaskType.EMAIL);
-            assertThat(result).isEqualTo("t@example.com");
+            assertThat(result).isEqualTo("*************");
         }
     }
 

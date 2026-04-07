@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,20 +27,21 @@ class TimestampExceptionTest {
         void testMessageOnlyConstructor() {
             TimestampException ex = new TimestampException("Invalid timestamp");
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid timestamp");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid timestamp");
+            assertThat(ex.getMessage()).contains("Invalid timestamp");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
         }
 
         @Test
         @DisplayName("消息和原因构造函数")
         void testMessageAndCauseConstructor() {
             RuntimeException cause = new RuntimeException("cause");
-            // Note: The current implementation has a bug where initCause is called after super() sets the cause
-            // Testing the message and error code only
-            TimestampException ex = new TimestampException("Invalid timestamp");
+            TimestampException ex = new TimestampException("Invalid timestamp", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid timestamp");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid timestamp");
+            assertThat(ex.getMessage()).contains("Invalid timestamp");
+            assertThat(ex.getCause()).isEqualTo(cause);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
         }
     }
 
@@ -61,6 +63,14 @@ class TimestampExceptionTest {
             TimestampException ex = new TimestampException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            TimestampException ex = new TimestampException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

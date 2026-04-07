@@ -1,5 +1,6 @@
 package cloud.opencode.base.graph.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,8 @@ class GraphExceptionTest {
         void testMessageAndErrorCodeConstructor() {
             GraphException ex = new GraphException("Test error", GraphErrorCode.UNKNOWN);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.UNKNOWN);
+            assertThat(ex.getMessage()).contains("Test error");
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.UNKNOWN);
             assertThat(ex.getCause()).isNull();
         }
 
@@ -37,30 +38,38 @@ class GraphExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             GraphException ex = new GraphException("Test error", cause, GraphErrorCode.CYCLE_DETECTED);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getMessage()).contains("Test error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.CYCLE_DETECTED);
         }
     }
 
     @Nested
-    @DisplayName("getErrorCode测试")
-    class GetErrorCodeTests {
+    @DisplayName("getGraphErrorCode测试")
+    class GetGraphErrorCodeTests {
 
         @Test
         @DisplayName("返回正确的错误码")
-        void testGetErrorCode() {
+        void testGetGraphErrorCode() {
             GraphException ex1 = new GraphException("error", GraphErrorCode.VERTEX_NOT_FOUND);
             GraphException ex2 = new GraphException("error", GraphErrorCode.NO_PATH);
 
-            assertThat(ex1.getErrorCode()).isEqualTo(GraphErrorCode.VERTEX_NOT_FOUND);
-            assertThat(ex2.getErrorCode()).isEqualTo(GraphErrorCode.NO_PATH);
+            assertThat(ex1.getGraphErrorCode()).isEqualTo(GraphErrorCode.VERTEX_NOT_FOUND);
+            assertThat(ex2.getGraphErrorCode()).isEqualTo(GraphErrorCode.NO_PATH);
         }
     }
 
     @Nested
     @DisplayName("继承关系测试")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            GraphException ex = new GraphException("test", GraphErrorCode.UNKNOWN);
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("是RuntimeException子类")

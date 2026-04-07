@@ -38,9 +38,9 @@ class CaptchaTypeTest {
     class EnumValuesTests {
 
         @Test
-        @DisplayName("values returns exactly 10 enum constants")
+        @DisplayName("values returns exactly 13 enum constants")
         void valuesReturnsExactlyTenConstants() {
-            assertThat(CaptchaType.values()).hasSize(10);
+            assertThat(CaptchaType.values()).hasSize(13);
         }
 
         @Test
@@ -116,7 +116,10 @@ class CaptchaTypeTest {
                 CaptchaType.SLIDER,
                 CaptchaType.CLICK,
                 CaptchaType.ROTATE,
-                CaptchaType.IMAGE_SELECT
+                CaptchaType.IMAGE_SELECT,
+                CaptchaType.AUDIO,
+                CaptchaType.JIGSAW,
+                CaptchaType.POW
             );
         }
     }
@@ -278,7 +281,7 @@ class CaptchaTypeTest {
                 .filter(CaptchaType::isInteractive)
                 .count();
 
-            assertThat(interactiveCount).isEqualTo(4);
+            assertThat(interactiveCount).isEqualTo(5);
         }
     }
 

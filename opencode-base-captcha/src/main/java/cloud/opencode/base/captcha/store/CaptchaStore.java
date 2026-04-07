@@ -123,4 +123,15 @@ public interface CaptchaStore {
     static CaptchaStore memory(int maxSize) {
         return new MemoryCaptchaStore(maxSize);
     }
+
+    /**
+     * Wraps a store with answer hashing for defense in depth.
+     * 使用答案哈希包装存储以实现纵深防御。
+     *
+     * @param delegate the delegate store | 被包装的存储
+     * @return the hashed store | 哈希存储
+     */
+    static HashedCaptchaStore hashed(CaptchaStore delegate) {
+        return HashedCaptchaStore.wrap(delegate);
+    }
 }

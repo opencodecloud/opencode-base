@@ -437,6 +437,81 @@ public class TimeSeries {
         return result;
     }
 
+    // === Shift methods ===
+
+    /**
+     * Create lagged series (shift values backward by n periods)
+     * 创建滞后序列（值向后移动 n 个周期）
+     *
+     * @param periods number of periods to lag | 滞后周期数
+     * @return lagged time series | 滞后序列
+     */
+    public TimeSeries lag(int periods) {
+        if (periods < 0) throw new IllegalArgumentException("periods must be >= 0, got: " + periods);
+        if (periods >= size()) return new TimeSeries(name + "_lag" + periods);
+        if (periods == 0) return new TimeSeries(name + "_lag0", getPoints());
+        List<DataPoint> list = new ArrayList<>(points.values());
+        List<DataPoint> result = new ArrayList<>();
+        for (int i = periods; i < list.size(); i++) {
+            result.add(DataPoint.of(list.get(i).timestamp(), list.get(i - periods).value()));
+        }
+        return new TimeSeries(name + "_lag" + periods, result);
+    }
+
+    /**
+     * Create lead series (shift values forward by n periods)
+     * 创建领先序列（值向前移动 n 个周期）
+     *
+     * @param periods number of periods to lead | 领先周期数
+     * @return lead time series | 领先序列
+     */
+    public TimeSeries lead(int periods) {
+        if (periods < 0) throw new IllegalArgumentException("periods must be >= 0, got: " + periods);
+        if (periods >= size()) return new TimeSeries(name + "_lead" + periods);
+        if (periods == 0) return new TimeSeries(name + "_lead0", getPoints());
+        List<DataPoint> list = new ArrayList<>(points.values());
+        List<DataPoint> result = new ArrayList<>();
+        for (int i = 0; i < list.size() - periods; i++) {
+            result.add(DataPoint.of(list.get(i).timestamp(), list.get(i + periods).value()));
+        }
+        return new TimeSeries(name + "_lead" + periods, result);
+    }
+
+    /**
+     * Shift all timestamps by duration
+     * 将所有时间戳偏移指定时长
+     *
+     * @param offset the duration to shift | 偏移时长
+     * @return shifted time series | 偏移后的序列
+     */
+    public TimeSeries shift(Duration offset) {
+        Objects.requireNonNull(offset, "offset must not be null");
+        List<DataPoint> shifted = points.values().stream()
+            .map(p -> DataPoint.of(p.timestamp().plus(offset), p.value(), p.tags()))
+            .toList();
+        return new TimeSeries(name + "_shifted", shifted);
+    }
+
+    /**
+     * Calculate percentage change over n periods
+     * 计算 n 个周期的百分比变化
+     *
+     * @param periods number of periods | 周期数
+     * @return percentage change series | 百分比变化序列
+     */
+    public TimeSeries pctChange(int periods) {
+        if (periods <= 0) throw new IllegalArgumentException("periods must be > 0, got: " + periods);
+        if (periods >= size()) return new TimeSeries(name + "_pctChange");
+        List<DataPoint> list = new ArrayList<>(points.values());
+        List<DataPoint> result = new ArrayList<>();
+        for (int i = periods; i < list.size(); i++) {
+            double prev = list.get(i - periods).value();
+            double pct = prev == 0 ? Double.NaN : (list.get(i).value() - prev) / prev;
+            result.add(DataPoint.of(list.get(i).timestamp(), pct));
+        }
+        return new TimeSeries(name + "_pctChange", result);
+    }
+
     // === Metadata methods ===
 
     /**

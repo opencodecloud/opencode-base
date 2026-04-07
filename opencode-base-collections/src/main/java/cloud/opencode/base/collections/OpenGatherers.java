@@ -1,6 +1,8 @@
 package cloud.opencode.base.collections;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.*;
 import java.util.stream.Gatherer;
 import java.util.stream.Gatherers;
@@ -725,6 +727,112 @@ public final class OpenGatherers {
      * @param value the value | 值
      */
     public record IndexedElement<T>(long index, T value) {}
+
+    // ==================== Zip Operations | 配对操作 ====================
+
+    /**
+     * Creates a gatherer that pairs each element with its zero-based index.
+     * 创建一个将每个元素与其从零开始的索引配对的收集器。
+     *
+     * <p>Unlike {@link #indexed()} which returns {@link IndexedElement}, this method
+     * returns {@link Pair Pair&lt;Long, T&gt;} for better interoperability with
+     * other Pair-based APIs.</p>
+     * <p>与返回 {@link IndexedElement} 的 {@link #indexed()} 不同，此方法返回
+     * {@link Pair Pair&lt;Long, T&gt;} 以便与其他基于 Pair 的 API 更好地互操作。</p>
+     *
+     * <p>Example: {@code [a, b, c] → [Pair(0,a), Pair(1,b), Pair(2,c)]}</p>
+     *
+     * @param <T> element type | 元素类型
+     * @return gatherer producing index-element pairs | 产生索引-元素配对的收集器
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-collections V1.0.3
+     */
+    public static <T> Gatherer<T, ?, Pair<Long, T>> zipWithIndex() {
+        return Gatherer.ofSequential(
+            AtomicLong::new,
+            (state, element, downstream) -> {
+                downstream.push(Pair.of(state.getAndIncrement(), element));
+                return true;
+            }
+        );
+    }
+
+    // ==================== Conditional Take | 条件获取 ====================
+
+    /**
+     * Creates a gatherer that takes elements while the predicate is true,
+     * including the first element that fails the predicate.
+     * 创建一个在谓词为真时获取元素的收集器，包括第一个不满足谓词的元素。
+     *
+     * <p>This differs from JDK's {@code takeWhile} which excludes the boundary element.</p>
+     * <p>这与 JDK 的 {@code takeWhile}（排除边界元素）不同。</p>
+     *
+     * <p>Example: {@code [1,2,3,4,5].takeWhileInclusive(x -> x < 3) → [1,2,3]}</p>
+     *
+     * @param <T>       element type | 元素类型
+     * @param predicate the predicate to test elements | 用于测试元素的谓词
+     * @return gatherer | 收集器
+     * @throws NullPointerException if predicate is null | 如果谓词为 null
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-collections V1.0.3
+     */
+    public static <T> Gatherer<T, ?, T> takeWhileInclusive(Predicate<? super T> predicate) {
+        Objects.requireNonNull(predicate, "Predicate must not be null");
+
+        return Gatherer.ofSequential(
+            AtomicBoolean::new,
+            (done, element, downstream) -> {
+                if (done.get()) {
+                    return false;
+                }
+                if (!predicate.test(element)) {
+                    done.set(true);
+                }
+                downstream.push(element);
+                return !done.get();
+            }
+        );
+    }
+
+    // ==================== Interleave Operations | 交错合并操作 ====================
+
+    /**
+     * Creates a gatherer that interleaves elements from the source stream
+     * with elements from the provided iterator, alternating between them.
+     * 创建一个将源流元素与提供的迭代器元素交替合并的收集器。
+     *
+     * <p>If one source is exhausted before the other, remaining elements
+     * from the longer source are appended.</p>
+     * <p>如果一个源在另一个之前耗尽，较长源的剩余元素将被追加。</p>
+     *
+     * <p>Example: {@code [1,2,3].interleave([a,b]) → [1,a,2,b,3]}</p>
+     *
+     * @param <T>   element type | 元素类型
+     * @param other the iterator to interleave with | 要交错合并的迭代器
+     * @return gatherer | 收集器
+     * @throws NullPointerException if other is null | 如果 other 为 null
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-collections V1.0.3
+     */
+    public static <T> Gatherer<T, ?, T> interleave(Iterator<? extends T> other) {
+        Objects.requireNonNull(other, "Iterator must not be null");
+
+        return Gatherer.ofSequential(
+            () -> other,
+            (iter, element, downstream) -> {
+                downstream.push(element);
+                if (iter.hasNext()) {
+                    downstream.push(iter.next());
+                }
+                return true;
+            },
+            (iter, downstream) -> {
+                while (iter.hasNext()) {
+                    downstream.push(iter.next());
+                }
+            }
+        );
+    }
 
     /**
      * Creates a peek gatherer for debugging.

@@ -111,17 +111,36 @@ public class TreeNode<T> {
 
     public int getHeight() {
         if (isLeaf()) return 0;
-        int maxHeight = 0;
-        for (TreeNode<T> child : children) {
-            maxHeight = Math.max(maxHeight, child.getHeight());
+        int maxDepth = 0;
+        Deque<TreeNode<T>> nodeStack = new ArrayDeque<>();
+        Deque<Integer> depthStack = new ArrayDeque<>();
+        nodeStack.push(this);
+        depthStack.push(0);
+        while (!nodeStack.isEmpty()) {
+            TreeNode<T> node = nodeStack.pop();
+            int depth = depthStack.pop();
+            if (node.isLeaf()) {
+                maxDepth = Math.max(maxDepth, depth);
+            } else {
+                for (TreeNode<T> child : node.children) {
+                    nodeStack.push(child);
+                    depthStack.push(depth + 1);
+                }
+            }
         }
-        return maxHeight + 1;
+        return maxDepth;
     }
 
     public TreeNode<T> getRoot() {
+        Set<TreeNode<T>> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         TreeNode<T> current = this;
+        visited.add(current);
         while (current.parent != null) {
             current = current.parent;
+            if (!visited.add(current)) {
+                // Cycle detected — return the last non-cyclic node
+                break;
+            }
         }
         return current;
     }
@@ -150,9 +169,16 @@ public class TreeNode<T> {
     }
 
     private void collectDescendants(TreeNode<T> node, List<TreeNode<T>> list) {
-        for (TreeNode<T> child : node.children) {
-            list.add(child);
-            collectDescendants(child, list);
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        for (int i = node.children.size() - 1; i >= 0; i--) {
+            stack.push(node.children.get(i));
+        }
+        while (!stack.isEmpty()) {
+            TreeNode<T> current = stack.pop();
+            list.add(current);
+            for (int i = current.children.size() - 1; i >= 0; i--) {
+                stack.push(current.children.get(i));
+            }
         }
     }
 
@@ -163,11 +189,16 @@ public class TreeNode<T> {
     }
 
     private void collectLeaves(TreeNode<T> node, List<TreeNode<T>> list) {
-        if (node.isLeaf()) {
-            list.add(node);
-        } else {
-            for (TreeNode<T> child : node.children) {
-                collectLeaves(child, list);
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        stack.push(node);
+        while (!stack.isEmpty()) {
+            TreeNode<T> current = stack.pop();
+            if (current.isLeaf()) {
+                list.add(current);
+            } else {
+                for (int i = current.children.size() - 1; i >= 0; i--) {
+                    stack.push(current.children.get(i));
+                }
             }
         }
     }
@@ -175,10 +206,14 @@ public class TreeNode<T> {
     // === Search methods ===
 
     public Optional<TreeNode<T>> find(Predicate<T> predicate) {
-        if (predicate.test(data)) return Optional.of(this);
-        for (TreeNode<T> child : children) {
-            Optional<TreeNode<T>> found = child.find(predicate);
-            if (found.isPresent()) return found;
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        stack.push(this);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            if (predicate.test(node.data)) return Optional.of(node);
+            for (int i = node.children.size() - 1; i >= 0; i--) {
+                stack.push(node.children.get(i));
+            }
         }
         return Optional.empty();
     }
@@ -190,26 +225,45 @@ public class TreeNode<T> {
     }
 
     private void findAll(Predicate<T> predicate, List<TreeNode<T>> results) {
-        if (predicate.test(data)) results.add(this);
-        for (TreeNode<T> child : children) {
-            child.findAll(predicate, results);
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        stack.push(this);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            if (predicate.test(node.data)) results.add(node);
+            for (int i = node.children.size() - 1; i >= 0; i--) {
+                stack.push(node.children.get(i));
+            }
         }
     }
 
     // === Traversal methods ===
 
     public void forEachPreOrder(Consumer<TreeNode<T>> action) {
-        action.accept(this);
-        for (TreeNode<T> child : children) {
-            child.forEachPreOrder(action);
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        stack.push(this);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            action.accept(node);
+            for (int i = node.children.size() - 1; i >= 0; i--) {
+                stack.push(node.children.get(i));
+            }
         }
     }
 
     public void forEachPostOrder(Consumer<TreeNode<T>> action) {
-        for (TreeNode<T> child : children) {
-            child.forEachPostOrder(action);
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        Deque<TreeNode<T>> output = new ArrayDeque<>();
+        stack.push(this);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            output.push(node);
+            for (TreeNode<T> child : node.children) {
+                stack.push(child);
+            }
         }
-        action.accept(this);
+        while (!output.isEmpty()) {
+            action.accept(output.pop());
+        }
     }
 
     public void forEachBreadthFirst(Consumer<TreeNode<T>> action) {
@@ -225,29 +279,54 @@ public class TreeNode<T> {
     // === Transform methods ===
 
     public <R> TreeNode<R> map(Function<T, R> mapper) {
-        TreeNode<R> mapped = new TreeNode<>(mapper.apply(data));
-        for (TreeNode<T> child : children) {
-            mapped.addChild(child.map(mapper));
+        // Iterative BFS to preserve child order
+        TreeNode<R> mappedRoot = new TreeNode<>(mapper.apply(data));
+        Deque<TreeNode<T>> sourceQueue = new ArrayDeque<>();
+        Deque<TreeNode<R>> targetQueue = new ArrayDeque<>();
+        sourceQueue.offer(this);
+        targetQueue.offer(mappedRoot);
+        while (!sourceQueue.isEmpty()) {
+            TreeNode<T> sourceNode = sourceQueue.poll();
+            TreeNode<R> targetNode = targetQueue.poll();
+            for (TreeNode<T> sourceChild : sourceNode.children) {
+                TreeNode<R> mappedChild = targetNode.addChild(mapper.apply(sourceChild.data));
+                sourceQueue.offer(sourceChild);
+                targetQueue.offer(mappedChild);
+            }
         }
-        return mapped;
+        return mappedRoot;
     }
 
     public TreeNode<T> filter(Predicate<T> predicate) {
         if (!predicate.test(data)) return null;
-        TreeNode<T> filtered = new TreeNode<>(data);
-        for (TreeNode<T> child : children) {
-            TreeNode<T> filteredChild = child.filter(predicate);
-            if (filteredChild != null) {
-                filtered.addChild(filteredChild);
+        // Iterative BFS to preserve child order
+        TreeNode<T> filteredRoot = new TreeNode<>(data);
+        Deque<TreeNode<T>> sourceQueue = new ArrayDeque<>();
+        Deque<TreeNode<T>> targetQueue = new ArrayDeque<>();
+        sourceQueue.offer(this);
+        targetQueue.offer(filteredRoot);
+        while (!sourceQueue.isEmpty()) {
+            TreeNode<T> sourceNode = sourceQueue.poll();
+            TreeNode<T> targetNode = targetQueue.poll();
+            for (TreeNode<T> sourceChild : sourceNode.children) {
+                if (predicate.test(sourceChild.data)) {
+                    TreeNode<T> filteredChild = targetNode.addChild(sourceChild.data);
+                    sourceQueue.offer(sourceChild);
+                    targetQueue.offer(filteredChild);
+                }
             }
         }
-        return filtered;
+        return filteredRoot;
     }
 
     public int size() {
-        int count = 1;
-        for (TreeNode<T> child : children) {
-            count += child.size();
+        int count = 0;
+        Deque<TreeNode<T>> queue = new ArrayDeque<>();
+        queue.add(this);
+        while (!queue.isEmpty()) {
+            TreeNode<T> node = queue.poll();
+            count++;
+            queue.addAll(node.children);
         }
         return count;
     }

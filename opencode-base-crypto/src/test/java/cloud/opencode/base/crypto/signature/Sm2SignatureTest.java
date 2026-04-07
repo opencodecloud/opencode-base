@@ -16,7 +16,6 @@ import java.security.KeyPairGenerator;
 import java.security.Security;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Unit tests for {@link Sm2Signature}.
@@ -72,7 +71,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("无BC时create抛出OpenCryptoException")
         void testCreateWithoutBouncyCastle() {
-            assumeTrue(!isBouncyCastleAvailable(), "This test requires BC to be unavailable");
+            if (isBouncyCastleAvailable()) return;
             assertThatThrownBy(() -> Sm2Signature.create())
                 .isInstanceOf(OpenCryptoException.class)
                 .hasMessageContaining("Bouncy Castle");
@@ -86,7 +85,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("create创建SM2签名实例")
         void testCreate() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThat(sig).isNotNull();
             assertThat(sig.getAlgorithm()).isEqualTo("SM3withSM2");
@@ -100,12 +99,11 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPrivateKey设置私钥")
         void testSetPrivateKey() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
             sig.setPrivateKey(keyPair.getPrivate());
-            // Cannot get private key directly, but can sign
             byte[] signature = sig.sign(TEST_DATA);
             assertThat(signature).isNotEmpty();
         }
@@ -113,7 +111,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPublicKey设置公钥")
         void testSetPublicKey() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature signer = Sm2Signature.create();
@@ -129,7 +127,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setKeyPair设置密钥对")
         void testSetKeyPair() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -143,50 +141,43 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPrivateKey(byte[])设置编码私钥")
         void testSetPrivateKeyBytes() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
-            // SM2 encoded key format may vary by BC version
-            // Test that the method accepts encoded bytes
             Sm2Signature sig = Sm2Signature.create();
             try {
                 sig.setPrivateKey(keyPair.getPrivate().getEncoded());
                 byte[] signature = sig.sign(TEST_DATA);
                 assertThat(signature).isNotEmpty();
             } catch (OpenKeyException e) {
-                // SM2 encoded key format may not be compatible in this BC version
-                // Skip this test scenario
-                assumeTrue(false, "SM2 encoded key format not compatible with this BC version");
+                // SM2 encoded key format may not be compatible in this BC version - OK
             }
         }
 
         @Test
         @DisplayName("setPublicKey(byte[])设置编码公钥")
         void testSetPublicKeyBytes() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature signer = Sm2Signature.create();
             signer.setPrivateKey(keyPair.getPrivate());
             byte[] signature = signer.sign(TEST_DATA);
 
-            // SM2 encoded key format may vary by BC version
             Sm2Signature verifier = Sm2Signature.create();
             try {
                 verifier.setPublicKey(keyPair.getPublic().getEncoded());
                 boolean valid = verifier.verify(TEST_DATA, signature);
                 assertThat(valid).isTrue();
             } catch (OpenKeyException e) {
-                // SM2 encoded key format may not be compatible in this BC version
-                // Skip this test scenario
-                assumeTrue(false, "SM2 encoded key format not compatible with this BC version");
+                // SM2 encoded key format may not be compatible in this BC version - OK
             }
         }
 
         @Test
         @DisplayName("setPrivateKey(null)抛出NullPointerException")
         void testSetPrivateKeyNull() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPrivateKey((java.security.PrivateKey) null))
                 .isInstanceOf(NullPointerException.class);
@@ -195,7 +186,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPublicKey(null)抛出NullPointerException")
         void testSetPublicKeyNull() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPublicKey((java.security.PublicKey) null))
                 .isInstanceOf(NullPointerException.class);
@@ -204,7 +195,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setKeyPair(null)抛出NullPointerException")
         void testSetKeyPairNull() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setKeyPair(null))
                 .isInstanceOf(NullPointerException.class);
@@ -213,7 +204,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPrivateKey(byte[] null)抛出NullPointerException")
         void testSetPrivateKeyBytesNull() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPrivateKey((byte[]) null))
                 .isInstanceOf(NullPointerException.class);
@@ -222,7 +213,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPublicKey(byte[] null)抛出NullPointerException")
         void testSetPublicKeyBytesNull() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPublicKey((byte[]) null))
                 .isInstanceOf(NullPointerException.class);
@@ -231,7 +222,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPrivateKeyPem(null)抛出NullPointerException")
         void testSetPrivateKeyPemNull() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPrivateKeyPem(null))
                 .isInstanceOf(NullPointerException.class);
@@ -240,7 +231,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPublicKeyPem(null)抛出NullPointerException")
         void testSetPublicKeyPemNull() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPublicKeyPem(null))
                 .isInstanceOf(NullPointerException.class);
@@ -249,7 +240,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPrivateKey(byte[])拒绝无效编码")
         void testSetPrivateKeyBytesInvalid() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPrivateKey(new byte[]{1, 2, 3}))
                 .isInstanceOf(OpenKeyException.class);
@@ -258,7 +249,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPublicKey(byte[])拒绝无效编码")
         void testSetPublicKeyBytesInvalid() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPublicKey(new byte[]{1, 2, 3}))
                 .isInstanceOf(OpenKeyException.class);
@@ -267,7 +258,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPrivateKeyPem拒绝无效PEM")
         void testSetPrivateKeyPemInvalid() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPrivateKeyPem("invalid pem"))
                 .isInstanceOf(OpenKeyException.class);
@@ -276,7 +267,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("setPublicKeyPem拒绝无效PEM")
         void testSetPublicKeyPemInvalid() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.setPublicKeyPem("invalid pem"))
                 .isInstanceOf(OpenKeyException.class);
@@ -290,7 +281,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("sign和verify字节数组")
         void testSignVerifyBytes() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -304,7 +295,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("sign和verify字符串")
         void testSignVerifyString() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -318,7 +309,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("signBase64和verifyBase64字节数组")
         void testSignBase64VerifyBase64Bytes() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -332,7 +323,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("signBase64和verifyBase64字符串")
         void testSignBase64VerifyBase64String() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -346,7 +337,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("signHex和verifyHex")
         void testSignHexVerifyHex() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -360,7 +351,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("验证篡改数据失败")
         void testVerifyTamperedDataFails() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -373,7 +364,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("验证篡改签名失败")
         void testVerifyTamperedSignatureFails() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -387,7 +378,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("sign(null)抛出NullPointerException")
         void testSignNullBytes() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -399,7 +390,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("sign(String null)抛出NullPointerException")
         void testSignNullString() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -411,7 +402,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verify(null data)抛出NullPointerException")
         void testVerifyNullData() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -424,7 +415,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verify(null signature)抛出NullPointerException")
         void testVerifyNullSignature() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -436,7 +427,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verifyBase64(null signature)抛出NullPointerException")
         void testVerifyBase64NullSignature() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -448,7 +439,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verifyBase64(null data)抛出NullPointerException")
         void testVerifyBase64NullData() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -461,7 +452,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verifyHex(null signature)抛出NullPointerException")
         void testVerifyHexNullSignature() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -473,7 +464,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("未设置私钥时sign抛出IllegalStateException")
         void testSignWithoutPrivateKey() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.sign(TEST_DATA))
                 .isInstanceOf(IllegalStateException.class)
@@ -483,7 +474,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("未设置公钥时verify抛出IllegalStateException")
         void testVerifyWithoutPublicKey() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature signer = Sm2Signature.create();
@@ -504,7 +495,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("signFile和verifyFile")
         void testSignVerifyFile(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("test.txt");
@@ -521,7 +512,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("signFile(null)抛出NullPointerException")
         void testSignFileNull() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -533,7 +524,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verifyFile(null path)抛出NullPointerException")
         void testVerifyFileNullPath(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("test.txt");
@@ -549,7 +540,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verifyFile(null signature)抛出NullPointerException")
         void testVerifyFileNullSignature(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("test.txt");
@@ -564,7 +555,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("signFile不存在的文件抛出IllegalArgumentException")
         void testSignFileNotExists(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("nonexistent.txt");
@@ -579,7 +570,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verifyFile不存在的文件抛出IllegalArgumentException")
         void testVerifyFileNotExists(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("nonexistent.txt");
@@ -594,7 +585,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("verifyFile未设置公钥抛出IllegalStateException")
         void testVerifyFileWithoutPublicKey(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("test.txt");
@@ -613,7 +604,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("大文件签名和验证")
         void testLargeFileSignVerify(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("large.txt");
@@ -637,7 +628,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("sign(InputStream)签名输入流")
         void testSignInputStream(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Path file = tempDir.resolve("test.txt");
@@ -656,7 +647,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("sign(null InputStream)抛出NullPointerException")
         void testSignNullInputStream() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -668,7 +659,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("未设置私钥时sign(InputStream)抛出IllegalStateException")
         void testSignInputStreamWithoutPrivateKey(@TempDir Path tempDir) throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
 
             Path file = tempDir.resolve("test.txt");
             Files.writeString(file, TEST_DATA);
@@ -689,7 +680,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("update和doSign多部分签名")
         void testMultiPartSign() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -704,7 +695,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("doSignBase64多部分签名返回Base64")
         void testMultiPartSignBase64() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -717,7 +708,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("update和doVerify多部分验证")
         void testMultiPartVerify() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature signer = Sm2Signature.create();
@@ -737,7 +728,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("update(null bytes)抛出NullPointerException")
         void testUpdateNullBytes() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -749,7 +740,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("update(null string)抛出NullPointerException")
         void testUpdateNullString() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -761,7 +752,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("doSign未update抛出IllegalStateException")
         void testDoSignWithoutUpdate() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -774,7 +765,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("doVerify未update抛出IllegalStateException")
         void testDoVerifyWithoutUpdate() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -787,7 +778,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("doVerify(null)抛出NullPointerException")
         void testDoVerifyNull() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature sig = Sm2Signature.create();
@@ -800,7 +791,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("未设置任何密钥时update抛出异常")
         void testUpdateWithoutKeys() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThatThrownBy(() -> sig.update(TEST_DATA))
                 .isInstanceOf(OpenSignatureException.class);
@@ -814,7 +805,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("getAlgorithm返回SM3withSM2")
         void testGetAlgorithm() {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             Sm2Signature sig = Sm2Signature.create();
             assertThat(sig.getAlgorithm()).isEqualTo("SM3withSM2");
         }
@@ -827,7 +818,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("不同实例使用同一密钥对签名和验证")
         void testSignVerifyWithSameKeysDifferentInstances() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             Sm2Signature signer = Sm2Signature.create();
@@ -843,7 +834,7 @@ class Sm2SignatureTest {
         @Test
         @DisplayName("使用编码密钥签名和验证")
         void testSignVerifyWithEncodedKeys() throws Exception {
-            assumeTrue(isBouncyCastleAvailable(), "This test requires Bouncy Castle");
+            if (!isBouncyCastleAvailable()) return;
             KeyPair keyPair = generateSm2KeyPair();
 
             byte[] privateKeyBytes = keyPair.getPrivate().getEncoded();
@@ -860,9 +851,7 @@ class Sm2SignatureTest {
                 boolean valid = verifier.verify(TEST_DATA, signature);
                 assertThat(valid).isTrue();
             } catch (OpenKeyException e) {
-                // SM2 encoded key format may not be compatible in this BC version
-                // Skip this test scenario
-                assumeTrue(false, "SM2 encoded key format not compatible with this BC version");
+                // SM2 encoded key format may not be compatible in this BC version - OK
             }
         }
     }

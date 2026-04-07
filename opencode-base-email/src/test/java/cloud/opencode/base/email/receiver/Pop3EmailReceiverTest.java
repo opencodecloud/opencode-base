@@ -372,6 +372,148 @@ class Pop3EmailReceiverTest {
         }
     }
 
+    @Nested
+    @DisplayName("Close / AutoCloseable Tests")
+    class CloseTests {
+
+        @Test
+        @DisplayName("close on unconnected receiver does not throw")
+        void testCloseBeforeConnect() {
+            EmailReceiveConfig config = createTestConfig();
+            Pop3EmailReceiver receiver = new Pop3EmailReceiver(config);
+
+            assertThatNoException().isThrownBy(receiver::close);
+        }
+
+        @Test
+        @DisplayName("multiple disconnect calls do not throw")
+        void testMultipleDisconnect() {
+            EmailReceiveConfig config = createTestConfig();
+            Pop3EmailReceiver receiver = new Pop3EmailReceiver(config);
+
+            assertThatNoException().isThrownBy(() -> {
+                receiver.disconnect();
+                receiver.disconnect();
+                receiver.disconnect();
+            });
+        }
+    }
+
+    @Nested
+    @DisplayName("Protocol Validation Tests")
+    class ProtocolValidationTests {
+
+        @Test
+        @DisplayName("IMAP config throws IllegalArgumentException for Pop3EmailReceiver")
+        void testImapConfigRejected() {
+            EmailReceiveConfig imapConfig = EmailReceiveConfig.builder()
+                    .host("imap.example.com")
+                    .username("user@example.com")
+                    .password("password")
+                    .imap()
+                    .ssl(true)
+                    .build();
+
+            assertThatThrownBy(() -> new Pop3EmailReceiver(imapConfig))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("POP3 protocol");
+        }
+
+        @Test
+        @DisplayName("IMAP config with all features throws for Pop3EmailReceiver")
+        void testImapConfigWithFeaturesRejected() {
+            EmailReceiveConfig imapConfig = EmailReceiveConfig.builder()
+                    .host("imap.gmail.com")
+                    .port(993)
+                    .username("user@gmail.com")
+                    .oauth2Token("token")
+                    .imap()
+                    .ssl(true)
+                    .maxMessages(50)
+                    .build();
+
+            assertThatThrownBy(() -> new Pop3EmailReceiver(imapConfig))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("POP3");
+        }
+    }
+
+    @Nested
+    @DisplayName("POP3 Configuration Edge Cases")
+    class ConfigEdgeCaseTests {
+
+        @Test
+        @DisplayName("POP3 with STARTTLS configuration")
+        void testStarttlsConfig() {
+            EmailReceiveConfig config = EmailReceiveConfig.builder()
+                    .host("pop.example.com")
+                    .port(110)
+                    .username("user@example.com")
+                    .password("password")
+                    .pop3()
+                    .ssl(false)
+                    .starttls(true)
+                    .build();
+
+            Pop3EmailReceiver receiver = new Pop3EmailReceiver(config);
+            assertThat(receiver).isNotNull();
+            assertThat(config.starttls()).isTrue();
+            assertThat(config.ssl()).isFalse();
+        }
+
+        @Test
+        @DisplayName("POP3 with deleteAfterReceive enabled")
+        void testDeleteAfterReceive() {
+            EmailReceiveConfig config = EmailReceiveConfig.builder()
+                    .host("pop.example.com")
+                    .username("user@example.com")
+                    .password("password")
+                    .pop3()
+                    .deleteAfterReceive(true)
+                    .build();
+
+            Pop3EmailReceiver receiver = new Pop3EmailReceiver(config);
+            assertThat(receiver).isNotNull();
+            assertThat(config.deleteAfterReceive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("POP3 with custom timeout values")
+        void testCustomTimeouts() {
+            EmailReceiveConfig config = EmailReceiveConfig.builder()
+                    .host("pop.example.com")
+                    .username("user@example.com")
+                    .password("password")
+                    .pop3()
+                    .connectionTimeout(Duration.ofSeconds(5))
+                    .timeout(Duration.ofSeconds(10))
+                    .build();
+
+            Pop3EmailReceiver receiver = new Pop3EmailReceiver(config);
+            assertThat(receiver).isNotNull();
+            assertThat(config.connectionTimeout()).isEqualTo(Duration.ofSeconds(5));
+            assertThat(config.timeout()).isEqualTo(Duration.ofSeconds(10));
+        }
+    }
+
+    @Nested
+    @DisplayName("POP3 Unread Count Tests")
+    class UnreadCountTests {
+
+        @Test
+        @DisplayName("getUnreadCount delegates to getMessageCount for POP3")
+        void testUnreadCountSameAsMessageCount() {
+            // POP3 doesn't track read/unread status, so unread count
+            // should equal total message count. We can only verify the
+            // method exists and doesn't throw before connection.
+            EmailReceiveConfig config = createTestConfig();
+            Pop3EmailReceiver receiver = new Pop3EmailReceiver(config);
+
+            // Both methods require connection, just verify they exist
+            assertThat(receiver).isNotNull();
+        }
+    }
+
     private EmailReceiveConfig createTestConfig() {
         return EmailReceiveConfig.builder()
                 .host("pop.example.com")

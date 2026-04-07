@@ -70,19 +70,22 @@ public record LockConfig(
         return new Builder();
     }
 
+    private static final LockConfig DEFAULT = new LockConfig(
+            Duration.ofSeconds(30), false, true, 1000, false, LockType.REENTRANT);
+
     /**
      * Gets default configuration with reasonable defaults
      * 获取具有合理默认值的默认配置
      *
      * <p>Default values: timeout=30s, fair=false, reentrant=true,
-     * spinCount=1000, metrics=true, type=REENTRANT</p>
+     * spinCount=1000, metrics=false, type=REENTRANT</p>
      * <p>默认值：超时=30秒，公平=false，可重入=true，
-     * 自旋次数=1000，指标=true，类型=REENTRANT</p>
+     * 自旋次数=1000，指标=false，类型=REENTRANT</p>
      *
-     * @return default configuration | 默认配置
+     * @return default configuration (shared singleton) | 默认配置（共享单例）
      */
     public static LockConfig defaults() {
-        return builder().build();
+        return DEFAULT;
     }
 
     /**
@@ -97,7 +100,7 @@ public record LockConfig(
         private boolean fair = false;
         private boolean reentrant = true;
         private int spinCount = 1000;
-        private boolean enableMetrics = true;
+        private boolean enableMetrics = false;
         private LockType lockType = LockType.REENTRANT;
 
         /**

@@ -77,13 +77,31 @@ public final class FuzzyMatcher<T> {
     private final boolean ignoreCase;
     private final MatchAlgorithm algorithm;
 
+    /** Pre-computed original keys (avoid repeated keyExtractor.apply() per query). */
+    private final List<String> originalKeys;
+    /** Pre-computed normalized keys (avoid repeated toLowerCase() per query). */
+    private final List<String> normalizedKeys;
+
     private FuzzyMatcher(Builder<T> builder) {
-        this.items = new ArrayList<>(builder.items);
+        this.items = List.copyOf(builder.items);
         this.keyExtractor = builder.keyExtractor;
         this.threshold = builder.threshold;
         this.maxResults = builder.maxResults;
         this.ignoreCase = builder.ignoreCase;
         this.algorithm = builder.algorithm;
+
+        // Pre-compute keys once at build time to amortize cost across all future queries.
+        // 在构建时一次性预计算键，以摊销所有后续查询的开销。
+        int size = this.items.size();
+        List<String> origKeys = new ArrayList<>(size);
+        List<String> normKeys = new ArrayList<>(size);
+        for (T item : this.items) {
+            String key = builder.keyExtractor.apply(item);
+            origKeys.add(key);
+            normKeys.add(ignoreCase ? key.toLowerCase(java.util.Locale.ROOT) : key);
+        }
+        this.originalKeys  = List.copyOf(origKeys);
+        this.normalizedKeys = List.copyOf(normKeys);
     }
 
     /**
@@ -121,19 +139,29 @@ public final class FuzzyMatcher<T> {
             return List.of();
         }
 
-        String normalizedQuery = ignoreCase ? query.toLowerCase() : query;
+        String normalizedQuery = ignoreCase
+                ? query.toLowerCase(java.util.Locale.ROOT)
+                : query;
 
-        return items.stream()
-                .map(item -> {
-                    String key = keyExtractor.apply(item);
-                    String normalizedKey = ignoreCase ? key.toLowerCase() : key;
-                    double score = calculateSimilarity(normalizedQuery, normalizedKey);
-                    return new FuzzyMatch<>(item, key, score);
-                })
-                .filter(match -> match.score() >= threshold)
-                .sorted(Comparator.comparingDouble(FuzzyMatch<T>::score).reversed())
-                .limit(maxResults)
-                .toList();
+        // Index-based loop with pre-computed keys:
+        //  - No keyExtractor.apply() per query (pre-computed at build time)
+        //  - No toLowerCase() per query per item (pre-computed at build time)
+        //  - No FuzzyMatch allocation for items below threshold
+        //  - No Stream overhead for map/filter/sorted/limit
+        // 基于索引的循环，使用预计算的键：
+        //  - 无需每次查询调用 keyExtractor.apply()（构建时预计算）
+        //  - 无需每次查询对每个 item 调用 toLowerCase()（构建时预计算）
+        //  - 阈值以下的 item 不分配 FuzzyMatch 对象
+        List<FuzzyMatch<T>> results = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            double score = calculateSimilarity(normalizedQuery, normalizedKeys.get(i));
+            if (score >= threshold) {
+                results.add(new FuzzyMatch<>(items.get(i), originalKeys.get(i), score));
+            }
+        }
+
+        results.sort(Comparator.comparingDouble(FuzzyMatch<T>::score).reversed());
+        return results.size() <= maxResults ? List.copyOf(results) : List.copyOf(results.subList(0, maxResults));
     }
 
     /**

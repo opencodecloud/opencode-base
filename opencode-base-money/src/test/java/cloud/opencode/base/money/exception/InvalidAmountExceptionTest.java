@@ -1,5 +1,6 @@
 package cloud.opencode.base.money.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,8 @@ class InvalidAmountExceptionTest {
         void testMessageConstructor() {
             InvalidAmountException ex = new InvalidAmountException("Invalid amount");
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid amount");
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.INVALID_AMOUNT);
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid amount");
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.INVALID_AMOUNT);
             assertThat(ex.getInvalidValue()).isNull();
         }
 
@@ -36,7 +37,7 @@ class InvalidAmountExceptionTest {
         void testMessageValueConstructor() {
             InvalidAmountException ex = new InvalidAmountException("Invalid amount", "abc");
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid amount");
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid amount");
             assertThat(ex.getInvalidValue()).isEqualTo("abc");
         }
 
@@ -56,7 +57,7 @@ class InvalidAmountExceptionTest {
             InvalidAmountException ex = new InvalidAmountException(
                 "Invalid amount", MoneyErrorCode.AMOUNT_OVERFLOW);
 
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.AMOUNT_OVERFLOW);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.AMOUNT_OVERFLOW);
         }
     }
 
@@ -79,7 +80,7 @@ class InvalidAmountExceptionTest {
             InvalidAmountException ex = InvalidAmountException.precisionError("100.123", 2);
 
             assertThat(ex.getMessage()).contains("100.123").contains("2");
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.AMOUNT_PRECISION_ERROR);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.AMOUNT_PRECISION_ERROR);
         }
 
         @Test
@@ -88,7 +89,7 @@ class InvalidAmountExceptionTest {
             InvalidAmountException ex = InvalidAmountException.overflow("999999999999");
 
             assertThat(ex.getMessage()).contains("overflow");
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.AMOUNT_OVERFLOW);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.AMOUNT_OVERFLOW);
         }
     }
 
@@ -101,6 +102,13 @@ class InvalidAmountExceptionTest {
         void testExtendsMoneyException() {
             InvalidAmountException ex = new InvalidAmountException("Test");
             assertThat(ex).isInstanceOf(MoneyException.class);
+        }
+
+        @Test
+        @DisplayName("继承OpenException")
+        void testExtendsOpenException() {
+            InvalidAmountException ex = new InvalidAmountException("Test");
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

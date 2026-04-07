@@ -1,5 +1,6 @@
 package cloud.opencode.base.money.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.money.Currency;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,7 +30,7 @@ class CurrencyMismatchExceptionTest {
 
             assertThat(ex.getExpected()).isEqualTo(Currency.CNY);
             assertThat(ex.getActual()).isEqualTo(Currency.USD);
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.CURRENCY_MISMATCH);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.CURRENCY_MISMATCH);
             assertThat(ex.getMessage()).contains("CNY").contains("USD");
         }
 
@@ -39,7 +40,7 @@ class CurrencyMismatchExceptionTest {
             CurrencyMismatchException ex = new CurrencyMismatchException(
                 "Custom message", Currency.EUR, Currency.GBP);
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom message");
             assertThat(ex.getExpected()).isEqualTo(Currency.EUR);
             assertThat(ex.getActual()).isEqualTo(Currency.GBP);
         }
@@ -54,6 +55,13 @@ class CurrencyMismatchExceptionTest {
         void testExtendsMoneyException() {
             CurrencyMismatchException ex = new CurrencyMismatchException(Currency.CNY, Currency.USD);
             assertThat(ex).isInstanceOf(MoneyException.class);
+        }
+
+        @Test
+        @DisplayName("继承OpenException")
+        void testExtendsOpenException() {
+            CurrencyMismatchException ex = new CurrencyMismatchException(Currency.CNY, Currency.USD);
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 

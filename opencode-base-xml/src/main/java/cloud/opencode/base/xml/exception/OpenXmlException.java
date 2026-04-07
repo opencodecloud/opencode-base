@@ -1,5 +1,9 @@
 package cloud.opencode.base.xml.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.io.Serial;
+
 /**
  * XML Exception Base Class - Base exception for all XML operations
  * XML 异常基类 - 所有 XML 操作的基础异常
@@ -10,7 +14,7 @@ package cloud.opencode.base.xml.exception;
  *
  * <p><strong>Exception Hierarchy | 异常继承体系:</strong></p>
  * <pre>
- * RuntimeException
+ * OpenException (OpenCode统一异常基类)
  * └── OpenXmlException (XML异常基类)
  *     ├── XmlParseException      # 解析异常
  *     ├── XmlXPathException      # XPath异常
@@ -26,6 +30,7 @@ package cloud.opencode.base.xml.exception;
  *   <li>Base exception for all XML operations - 所有 XML 操作的基础异常</li>
  *   <li>Line and column location info for parse errors - 解析错误的行号和列号位置信息</li>
  *   <li>Exception hierarchy root for XML module - XML 模块的异常继承体系根</li>
+ *   <li>Inherits error code and component name from OpenException - 继承 OpenException 的错误码和组件名称</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -41,9 +46,14 @@ package cloud.opencode.base.xml.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
-public class OpenXmlException extends RuntimeException {
+public class OpenXmlException extends OpenException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private static final String COMPONENT = "XML";
 
     private final int line;
     private final int column;
@@ -55,7 +65,7 @@ public class OpenXmlException extends RuntimeException {
      * @param message the detail message | 详细消息
      */
     public OpenXmlException(String message) {
-        super(message);
+        super(COMPONENT, null, message, null);
         this.line = -1;
         this.column = -1;
     }
@@ -68,7 +78,7 @@ public class OpenXmlException extends RuntimeException {
      * @param cause   the cause | 原因
      */
     public OpenXmlException(String message, Throwable cause) {
-        super(message, cause);
+        super(COMPONENT, null, message, cause);
         this.line = -1;
         this.column = -1;
     }
@@ -80,7 +90,7 @@ public class OpenXmlException extends RuntimeException {
      * @param cause the cause | 原因
      */
     public OpenXmlException(Throwable cause) {
-        super(cause);
+        super(COMPONENT, null, cause != null ? cause.getMessage() : null, cause);
         this.line = -1;
         this.column = -1;
     }
@@ -94,7 +104,7 @@ public class OpenXmlException extends RuntimeException {
      * @param column  the column number | 列号
      */
     public OpenXmlException(String message, int line, int column) {
-        super(formatMessage(message, line, column));
+        super(COMPONENT, null, formatMessage(message, line, column), null);
         this.line = line;
         this.column = column;
     }
@@ -109,7 +119,7 @@ public class OpenXmlException extends RuntimeException {
      * @param cause   the cause | 原因
      */
     public OpenXmlException(String message, int line, int column, Throwable cause) {
-        super(formatMessage(message, line, column), cause);
+        super(COMPONENT, null, formatMessage(message, line, column), cause);
         this.line = line;
         this.column = column;
     }

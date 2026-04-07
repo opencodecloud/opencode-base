@@ -120,10 +120,10 @@ class OpenIllegalArgumentExceptionTest {
     class InheritanceTests {
 
         @Test
-        @DisplayName("是 OpenException 的子类")
-        void testExtendsOpenException() {
+        @DisplayName("是 IllegalArgumentException 的子类")
+        void testExtendsIllegalArgumentException() {
             OpenIllegalArgumentException ex = new OpenIllegalArgumentException("Test");
-            assertThat(ex).isInstanceOf(OpenException.class);
+            assertThat(ex).isInstanceOf(IllegalArgumentException.class);
         }
     }
 }

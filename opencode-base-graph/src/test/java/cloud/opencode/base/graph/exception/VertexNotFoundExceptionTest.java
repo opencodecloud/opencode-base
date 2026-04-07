@@ -28,7 +28,7 @@ class VertexNotFoundExceptionTest {
 
             assertThat(ex.getMessage()).contains("Vertex not found");
             assertThat(ex.getMessage()).contains("A");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.VERTEX_NOT_FOUND);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.VERTEX_NOT_FOUND);
         }
 
         @Test
@@ -86,8 +86,8 @@ class VertexNotFoundExceptionTest {
         void testErrorCode() {
             VertexNotFoundException ex = new VertexNotFoundException("test");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.VERTEX_NOT_FOUND);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(1001);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.VERTEX_NOT_FOUND);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(1001);
         }
     }
 }

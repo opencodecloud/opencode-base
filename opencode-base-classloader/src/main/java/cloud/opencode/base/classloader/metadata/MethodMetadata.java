@@ -51,6 +51,9 @@ public final class MethodMetadata {
     private final boolean isDefault;
     private final List<AnnotationMetadata> annotations;
     private final List<List<AnnotationMetadata>> parameterAnnotations;
+    private final String genericSignature;
+    private final String genericReturnType;
+    private final List<String> genericParameterTypes;
 
     /**
      * Create method metadata
@@ -74,6 +77,38 @@ public final class MethodMetadata {
                           boolean isSynthetic, boolean isBridge, boolean isDefault,
                           List<AnnotationMetadata> annotations,
                           List<List<AnnotationMetadata>> parameterAnnotations) {
+        this(methodName, returnType, parameterTypes, parameterNames, exceptionTypes,
+                modifiers, isSynthetic, isBridge, isDefault, annotations, parameterAnnotations,
+                null, null, null);
+    }
+
+    /**
+     * Create method metadata with generic type information
+     * 创建带有泛型类型信息的方法元数据
+     *
+     * @param methodName           method name | 方法名
+     * @param returnType           return type | 返回类型
+     * @param parameterTypes       parameter types | 参数类型
+     * @param parameterNames       parameter names | 参数名称
+     * @param exceptionTypes       exception types | 异常类型
+     * @param modifiers            modifier flags | 修饰符标志
+     * @param isSynthetic          is synthetic | 是否合成
+     * @param isBridge             is bridge method | 是否桥接方法
+     * @param isDefault            is default method | 是否默认方法
+     * @param annotations          method annotations | 方法注解
+     * @param parameterAnnotations parameter annotations | 参数注解
+     * @param genericSignature     generic signature | 泛型签名
+     * @param genericReturnType    generic return type | 泛型返回类型
+     * @param genericParameterTypes generic parameter types | 泛型参数类型列表
+     */
+    public MethodMetadata(String methodName, String returnType,
+                          List<String> parameterTypes, List<String> parameterNames,
+                          List<String> exceptionTypes, int modifiers,
+                          boolean isSynthetic, boolean isBridge, boolean isDefault,
+                          List<AnnotationMetadata> annotations,
+                          List<List<AnnotationMetadata>> parameterAnnotations,
+                          String genericSignature, String genericReturnType,
+                          List<String> genericParameterTypes) {
         this.methodName = Objects.requireNonNull(methodName, "Method name must not be null");
         this.returnType = Objects.requireNonNull(returnType, "Return type must not be null");
         this.parameterTypes = parameterTypes != null ? List.copyOf(parameterTypes) : List.of();
@@ -86,6 +121,10 @@ public final class MethodMetadata {
         this.annotations = annotations != null ? List.copyOf(annotations) : List.of();
         this.parameterAnnotations = parameterAnnotations != null ?
                 parameterAnnotations.stream().map(List::copyOf).toList() : List.of();
+        this.genericSignature = genericSignature;
+        this.genericReturnType = genericReturnType;
+        this.genericParameterTypes = genericParameterTypes != null ?
+                List.copyOf(genericParameterTypes) : List.of();
     }
 
     // ==================== Getters ====================
@@ -198,6 +237,36 @@ public final class MethodMetadata {
      */
     public List<List<AnnotationMetadata>> parameterAnnotations() {
         return parameterAnnotations;
+    }
+
+    /**
+     * Get generic signature of the method
+     * 获取方法的泛型签名
+     *
+     * @return generic signature or null if not generic | 泛型签名，非泛型方法返回 null
+     */
+    public String getGenericSignature() {
+        return genericSignature;
+    }
+
+    /**
+     * Get generic return type (e.g. "List&lt;String&gt;" instead of "List")
+     * 获取泛型返回类型（如 "List&lt;String&gt;" 而非 "List"）
+     *
+     * @return generic return type or null | 泛型返回类型或 null
+     */
+    public String getGenericReturnType() {
+        return genericReturnType;
+    }
+
+    /**
+     * Get generic parameter types
+     * 获取泛型参数类型列表
+     *
+     * @return list of generic parameter type strings | 泛型参数类型字符串列表
+     */
+    public List<String> getGenericParameterTypes() {
+        return genericParameterTypes;
     }
 
     // ==================== Modifier Checks | 修饰符检查 ====================

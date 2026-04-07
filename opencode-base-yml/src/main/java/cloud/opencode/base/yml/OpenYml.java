@@ -1,10 +1,14 @@
 package cloud.opencode.base.yml;
 
 import cloud.opencode.base.yml.bind.YmlBinder;
+import cloud.opencode.base.yml.diff.DiffEntry;
+import cloud.opencode.base.yml.diff.YmlDiff;
 import cloud.opencode.base.yml.exception.OpenYmlException;
+import cloud.opencode.base.yml.include.YmlIncludeResolver;
 import cloud.opencode.base.yml.merge.MergeStrategy;
 import cloud.opencode.base.yml.merge.YmlMerger;
 import cloud.opencode.base.yml.placeholder.PlaceholderResolver;
+import cloud.opencode.base.yml.profile.YmlProfile;
 import cloud.opencode.base.yml.spi.YmlProvider;
 import cloud.opencode.base.yml.spi.YmlProviderFactory;
 
@@ -459,5 +463,82 @@ public final class OpenYml {
     public static YmlNode parseTree(String yaml) {
         YmlProvider provider = YmlProviderFactory.getProvider();
         return provider.parseTree(yaml);
+    }
+
+    // ================================
+    // Diff Methods
+    // ================================
+
+    /**
+     * Compares two YAML maps and returns a list of differences.
+     * 比较两个 YAML 映射并返回差异列表。
+     *
+     * @param base  the base map | 基础映射
+     * @param other the other map | 另一个映射
+     * @return list of diff entries | 差异条目列表
+     */
+    public static List<DiffEntry> diff(Map<String, Object> base, Map<String, Object> other) {
+        return YmlDiff.diff(base, other);
+    }
+
+    /**
+     * Compares two YAML documents and returns a list of differences.
+     * 比较两个 YAML 文档并返回差异列表。
+     *
+     * @param base  the base document | 基础文档
+     * @param other the other document | 另一个文档
+     * @return list of diff entries | 差异条目列表
+     */
+    public static List<DiffEntry> diff(YmlDocument base, YmlDocument other) {
+        return YmlDiff.diff(base, other);
+    }
+
+    // ================================
+    // Profile Loading
+    // ================================
+
+    /**
+     * Loads configuration with profile overlays.
+     * 加载带有 Profile 覆盖的配置。
+     *
+     * <p>Loads {@code {basePath}/{name}.yml} as the base, then overlays
+     * {@code {basePath}/{name}-{profile}.yml} for each profile.</p>
+     * <p>加载 {@code {basePath}/{name}.yml} 作为基础，然后为每个 Profile
+     * 覆盖 {@code {basePath}/{name}-{profile}.yml}。</p>
+     *
+     * @param basePath the directory containing config files | 包含配置文件的目录
+     * @param name     the base config file name (without extension) | 基础配置文件名（无扩展名）
+     * @param profiles the profile names to overlay | 要覆盖的 Profile 名称
+     * @return the merged document | 合并后的文档
+     */
+    public static YmlDocument loadProfile(Path basePath, String name, String... profiles) {
+        return YmlProfile.load(basePath, name, profiles);
+    }
+
+    /**
+     * Loads configuration with profile overlays using default name "application".
+     * 使用默认名称 "application" 加载带有 Profile 覆盖的配置。
+     *
+     * @param directory the directory containing config files | 包含配置文件的目录
+     * @param profiles  the profile names to overlay | 要覆盖的 Profile 名称
+     * @return the merged document | 合并后的文档
+     */
+    public static YmlDocument loadDefaultProfile(Path directory, String... profiles) {
+        return YmlProfile.loadDefault(directory, profiles);
+    }
+
+    // ================================
+    // Include Resolution
+    // ================================
+
+    /**
+     * Loads a YAML file with {@code !include} directive resolution.
+     * 加载带有 {@code !include} 指令解析的 YAML 文件。
+     *
+     * @param file the YAML file to load | 要加载的 YAML 文件
+     * @return the resolved YAML data as a map | 解析后的 YAML 数据映射
+     */
+    public static Map<String, Object> loadWithIncludes(Path file) {
+        return YmlIncludeResolver.load(file);
     }
 }

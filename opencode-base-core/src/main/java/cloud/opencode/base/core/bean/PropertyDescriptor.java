@@ -63,6 +63,15 @@ public final class PropertyDescriptor {
         this.readMethod = readMethod;
         this.writeMethod = writeMethod;
         this.field = field;
+        if (this.readMethod != null) {
+            this.readMethod.setAccessible(true);
+        }
+        if (this.writeMethod != null) {
+            this.writeMethod.setAccessible(true);
+        }
+        if (this.field != null) {
+            this.field.setAccessible(true);
+        }
     }
 
     // ==================== Getter ====================
@@ -122,7 +131,6 @@ public final class PropertyDescriptor {
     public Object getValue(Object bean) {
         if (readMethod != null) {
             try {
-                readMethod.setAccessible(true);
                 return readMethod.invoke(bean);
             } catch (Exception e) {
                 throw new OpenException("Failed to get property value: " + name, e);
@@ -130,7 +138,6 @@ public final class PropertyDescriptor {
         }
         if (field != null) {
             try {
-                field.setAccessible(true);
                 return field.get(bean);
             } catch (Exception e) {
                 throw new OpenException("Failed to get field value: " + name, e);
@@ -146,7 +153,6 @@ public final class PropertyDescriptor {
     public void setValue(Object bean, Object value) {
         if (writeMethod != null) {
             try {
-                writeMethod.setAccessible(true);
                 writeMethod.invoke(bean, value);
                 return;
             } catch (Exception e) {
@@ -155,7 +161,6 @@ public final class PropertyDescriptor {
         }
         if (field != null) {
             try {
-                field.setAccessible(true);
                 field.set(bean, value);
                 return;
             } catch (Exception e) {

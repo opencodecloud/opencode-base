@@ -210,6 +210,40 @@ class FieldMetadataTest {
     }
 
     @Nested
+    @DisplayName("Generic Type Tests")
+    class GenericTypeTests {
+
+        @Test
+        @DisplayName("Should store generic type")
+        void shouldStoreGenericType() {
+            FieldMetadata metadata = new FieldMetadata(
+                    "items", "java.util.List", Modifier.PRIVATE, null, List.of(),
+                    "java.util.List<java.lang.String>"
+            );
+
+            assertThat(metadata.getGenericType()).isEqualTo("java.util.List<java.lang.String>");
+        }
+
+        @Test
+        @DisplayName("Should return null for non-generic field")
+        void shouldReturnNullForNonGenericField() {
+            FieldMetadata metadata = new FieldMetadata(
+                    "count", "int", Modifier.PRIVATE, null, List.of()
+            );
+
+            assertThat(metadata.getGenericType()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should default to null with old constructor")
+        void shouldDefaultToNullWithOldConstructor() {
+            FieldMetadata metadata = createSimpleField("field", "java.util.List", Modifier.PRIVATE);
+
+            assertThat(metadata.getGenericType()).isNull();
+        }
+    }
+
+    @Nested
     @DisplayName("Simple Type Name Tests")
     class SimpleTypeNameTests {
 

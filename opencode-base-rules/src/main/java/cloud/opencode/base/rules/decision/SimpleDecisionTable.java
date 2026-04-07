@@ -70,6 +70,26 @@ public class SimpleDecisionTable implements DecisionTable {
         this.hitPolicy = hitPolicy;
         this.inputColumns = List.copyOf(inputColumns);
         this.outputColumns = List.copyOf(outputColumns);
+
+        // Validate that each conditions row has enough columns
+        for (int i = 0; i < inputConditions.size(); i++) {
+            Object[] conditions = inputConditions.get(i);
+            if (conditions.length < inputColumns.size()) {
+                throw new IllegalArgumentException(
+                        "Row " + i + " conditions array length (" + conditions.length
+                        + ") is less than input columns size (" + inputColumns.size() + ")");
+            }
+        }
+        // Validate that each output row has enough columns
+        for (int i = 0; i < outputValues.size(); i++) {
+            Object[] outputs = outputValues.get(i);
+            if (outputs.length < outputColumns.size()) {
+                throw new IllegalArgumentException(
+                        "Row " + i + " output array length (" + outputs.length
+                        + ") is less than output columns size (" + outputColumns.size() + ")");
+            }
+        }
+
         this.inputConditions = new ArrayList<>(inputConditions);
         this.outputValues = new ArrayList<>(outputValues);
     }

@@ -171,8 +171,18 @@ public final class OpenMath {
     }
 
     /**
-     * Calculates the population variance of the given values.
-     * 计算方差
+     * Calculates the population variance of the given values (divides by n).
+     * 计算总体方差（除以 n）
+     *
+     * <p>This computes the population variance, which divides the sum of squared deviations
+     * by the number of values (n). Use {@link #sampleVariance(double...)} for sample variance
+     * with Bessel's correction (divides by n-1).</p>
+     * <p>此方法计算总体方差，以数据个数 n 为分母。如需样本方差（贝塞尔校正，以 n-1 为分母），
+     * 请使用 {@link #sampleVariance(double...)}。</p>
+     *
+     * @param values the values | 数值数组
+     * @return the population variance, or 0 if the array is null or empty
+     *         总体方差，若数组为 null 或空则返回 0
      */
     public static double variance(double... values) {
         if (values == null || values.length == 0) {
@@ -188,11 +198,61 @@ public final class OpenMath {
     }
 
     /**
-     * Calculates the population standard deviation of the given values.
-     * 计算标准差
+     * Calculates the sample variance of the given values using Bessel's correction (divides by n-1).
+     * 计算样本方差（贝塞尔校正，除以 n-1）
+     *
+     * <p>This computes the unbiased sample variance, which divides the sum of squared deviations
+     * by (n-1) instead of n. This is the appropriate estimator when computing variance from a
+     * sample rather than an entire population.</p>
+     * <p>此方法计算无偏样本方差，以 (n-1) 为分母而非 n。当数据为样本而非总体时，
+     * 应使用此方法以获得无偏估计。</p>
+     *
+     * @param values the values (must contain at least 2 elements) | 数值数组（至少需要 2 个元素）
+     * @return the sample variance, or 0 if the array is null or empty;
+     *         returns 0 for a single-element array (no variance)
+     *         样本方差；若数组为 null 或空返回 0；单元素数组返回 0
+     */
+    public static double sampleVariance(double... values) {
+        if (values == null || values.length <= 1) {
+            return 0;
+        }
+        double mean = mean(values);
+        double sumSquares = 0;
+        for (double value : values) {
+            double diff = value - mean;
+            sumSquares += diff * diff;
+        }
+        return sumSquares / (values.length - 1);
+    }
+
+    /**
+     * Calculates the population standard deviation of the given values (uses population variance).
+     * 计算总体标准差（基于总体方差）
+     *
+     * <p>This is the square root of the {@linkplain #variance(double...) population variance}.
+     * Use {@link #sampleStdDev(double...)} for the sample standard deviation.</p>
+     * <p>此方法为 {@linkplain #variance(double...) 总体方差} 的平方根。
+     * 如需样本标准差，请使用 {@link #sampleStdDev(double...)}。</p>
+     *
+     * @param values the values | 数值数组
+     * @return the population standard deviation | 总体标准差
      */
     public static double stdDev(double... values) {
         return Math.sqrt(variance(values));
+    }
+
+    /**
+     * Calculates the sample standard deviation of the given values (uses sample variance with Bessel's correction).
+     * 计算样本标准差（基于样本方差，贝塞尔校正）
+     *
+     * <p>This is the square root of the {@linkplain #sampleVariance(double...) sample variance}.</p>
+     * <p>此方法为 {@linkplain #sampleVariance(double...) 样本方差} 的平方根。</p>
+     *
+     * @param values the values (must contain at least 2 elements) | 数值数组（至少需要 2 个元素）
+     * @return the sample standard deviation | 样本标准差
+     */
+    public static double sampleStdDev(double... values) {
+        return Math.sqrt(sampleVariance(values));
     }
 
     /**
@@ -342,12 +402,23 @@ public final class OpenMath {
     }
 
     /**
-     * Returns the n-th Fibonacci number.
-     * 斐波那契数列
+     * Returns the n-th Fibonacci number (0-indexed: F(0)=0, F(1)=1, F(2)=1, ...).
+     * 返回第 n 个斐波那契数（从 0 开始：F(0)=0, F(1)=1, F(2)=1, ...）。
+     *
+     * <p>Valid range: 0 &le; n &le; 92. For n &gt; 92, the result overflows {@code long}.</p>
+     * <p>有效范围：0 &le; n &le; 92。当 n &gt; 92 时，结果溢出 {@code long}。</p>
+     *
+     * @param n the index (must be in [0, 92]) | 索引（必须在 [0, 92] 范围内）
+     * @return the n-th Fibonacci number | 第 n 个斐波那契数
+     * @throws IllegalArgumentException if n is negative | 如果 n 为负数
+     * @throws ArithmeticException if n &gt; 92 (result overflows long) | 如果 n &gt; 92（结果溢出 long）
      */
     public static long fibonacci(int n) {
         if (n < 0) {
             throw new IllegalArgumentException("n must not be negative");
+        }
+        if (n > 92) {
+            throw new ArithmeticException("Fibonacci(n) overflows long for n > 92");
         }
         if (n <= 1) return n;
         long prev = 0, curr = 1;

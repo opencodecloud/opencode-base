@@ -4,6 +4,9 @@ import cloud.opencode.base.expression.OpenExpressionException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -334,7 +337,14 @@ public final class OperatorEvaluator {
      */
     private static final int MAX_PATTERN_LENGTH = 1000;
     private static final int MAX_PATTERN_CACHE_SIZE = 256;
-    private static final java.util.concurrent.ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    @SuppressWarnings("serial")
+    private static final Map<String, Pattern> PATTERN_CACHE = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Pattern> eldest) {
+                    return size() > MAX_PATTERN_CACHE_SIZE;
+                }
+            });
 
     /**
      * Timeout for regex matching in seconds.
@@ -359,11 +369,11 @@ public final class OperatorEvaluator {
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
-                    // Evict cache outside computeIfAbsent to avoid ConcurrentHashMap contract violation
-                    if (PATTERN_CACHE.size() >= MAX_PATTERN_CACHE_SIZE) {
-                        PATTERN_CACHE.clear();
+                    // LRU cache auto-evicts eldest entry when full
+                    Pattern compiled;
+                    synchronized (PATTERN_CACHE) {
+                        compiled = PATTERN_CACHE.computeIfAbsent(pattern, Pattern::compile);
                     }
-                    Pattern compiled = PATTERN_CACHE.computeIfAbsent(pattern, Pattern::compile);
                     return compiled.matcher(input).matches();
                 } catch (StackOverflowError e) {
                     throw OpenExpressionException.evaluationError("Regex pattern caused stack overflow (possible ReDoS)", e);
@@ -427,14 +437,48 @@ public final class OperatorEvaluator {
             return true;
         }
         if (value instanceof String s) {
-            try {
-                Double.parseDouble(s);
-                return true;
-            } catch (NumberFormatException e) {
+            return looksLikeNumber(s);
+        }
+        return false;
+    }
+
+    /**
+     * Fast numeric check without parsing — avoids Double.parseDouble() allocation.
+     * 快速数值检查，不进行解析 — 避免 Double.parseDouble() 的分配开销。
+     */
+    private static boolean looksLikeNumber(String s) {
+        if (s.isEmpty()) {
+            return false;
+        }
+        int i = 0;
+        int len = s.length();
+        if (s.charAt(0) == '-' || s.charAt(0) == '+') {
+            i++;
+            if (i >= len) {
                 return false;
             }
         }
-        return false;
+        boolean hasDigit = false;
+        boolean hasDot = false;
+        boolean hasE = false;
+        while (i < len) {
+            char c = s.charAt(i);
+            if (c >= '0' && c <= '9') {
+                hasDigit = true;
+            } else if (c == '.' && !hasDot && !hasE) {
+                hasDot = true;
+            } else if ((c == 'e' || c == 'E') && hasDigit && !hasE) {
+                hasE = true;
+                hasDigit = false; // need digit after e
+                if (i + 1 < len && (s.charAt(i + 1) == '+' || s.charAt(i + 1) == '-')) {
+                    i++;
+                }
+            } else {
+                return false;
+            }
+            i++;
+        }
+        return hasDigit;
     }
 
     private static boolean isInteger(Number n) {
@@ -451,7 +495,7 @@ public final class OperatorEvaluator {
         }
         if (value instanceof String s) {
             try {
-                if (s.contains(".")) {
+                if (s.contains(".") || s.indexOf('e') >= 0 || s.indexOf('E') >= 0) {
                     return Double.parseDouble(s);
                 }
                 return Long.parseLong(s);

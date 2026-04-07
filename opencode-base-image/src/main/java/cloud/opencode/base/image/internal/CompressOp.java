@@ -1,5 +1,7 @@
 package cloud.opencode.base.image.internal;
 
+import cloud.opencode.base.image.kernel.PixelOp;
+
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
@@ -125,21 +127,38 @@ public final class CompressOp {
      * @return the compressed image | 压缩后的图片
      */
     public static BufferedImage compressToSize(BufferedImage image, long targetSizeBytes) {
-        float quality = 0.9f;
-        float step = 0.1f;
-
         BufferedImage result = image;
 
         try {
-            byte[] compressed = compressToBytes(image, quality, "jpg");
+            float low = 0.1f;
+            float high = 0.95f;
+            byte[] compressed = compressToBytes(image, high, "jpg");
 
-            // Binary search for optimal quality
-            while (compressed.length > targetSizeBytes && quality > 0.1f) {
-                quality -= step;
-                compressed = compressToBytes(image, quality, "jpg");
+            if (compressed.length <= targetSizeBytes) {
+                // Already fits at high quality
+                result = ImageIO.read(new ByteArrayInputStream(compressed));
+                return result;
             }
 
-            result = ImageIO.read(new ByteArrayInputStream(compressed));
+            // Binary search for optimal quality (max 8 iterations)
+            byte[] best = null;
+            for (int i = 0; i < 8 && (high - low) > 0.02f; i++) {
+                float mid = (low + high) / 2.0f;
+                compressed = compressToBytes(image, mid, "jpg");
+                if (compressed.length <= targetSizeBytes) {
+                    best = compressed;
+                    low = mid; // try higher quality
+                } else {
+                    high = mid; // try lower quality
+                }
+            }
+
+            if (best == null) {
+                // Even lowest quality exceeds target; use last attempt
+                best = compressToBytes(image, low, "jpg");
+            }
+
+            result = ImageIO.read(new ByteArrayInputStream(best));
         } catch (IOException e) {
             // Return original on failure
         }
@@ -203,19 +222,19 @@ public final class CompressOp {
         }
 
         int factor = 256 / (1 << bits);
-        int width = image.getWidth();
-        int height = image.getHeight();
 
-        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        BufferedImage src = PixelOp.ensureArgb(image);
+        int[] srcPixels = PixelOp.getPixels(src);
+        BufferedImage result = PixelOp.createCompatible(src);
+        int[] dstPixels = PixelOp.getPixels(result);
 
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int rgb = image.getRGB(x, y);
-                int r = ((rgb >> 16) & 0xFF) / factor * factor;
-                int g = ((rgb >> 8) & 0xFF) / factor * factor;
-                int b = (rgb & 0xFF) / factor * factor;
-                result.setRGB(x, y, (r << 16) | (g << 8) | b);
-            }
+        for (int i = 0; i < srcPixels.length; i++) {
+            int px = srcPixels[i];
+            int a = (px >> 24) & 0xFF;
+            int r = ((px >> 16) & 0xFF) / factor * factor;
+            int g = ((px >> 8) & 0xFF) / factor * factor;
+            int b = (px & 0xFF) / factor * factor;
+            dstPixels[i] = (a << 24) | (r << 16) | (g << 8) | b;
         }
 
         return result;

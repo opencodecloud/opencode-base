@@ -3,6 +3,7 @@ package cloud.opencode.base.config.validation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Configuration Validation Result
@@ -48,7 +49,7 @@ import java.util.List;
   * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-config V1.0.0
+ * @since JDK 25, opencode-base-config V1.0.3
  */
 public class ValidationResult {
 
@@ -112,6 +113,28 @@ public class ValidationResult {
      */
     public static ValidationResult invalid(List<String> errors) {
         return new ValidationResult(false, new ArrayList<>(errors));
+    }
+
+    /**
+     * Merge multiple validation results into one
+     * 将多个验证结果合并为一个
+     *
+     * <p>Collects all errors from invalid results into a single result.
+     * Returns a valid result if all inputs are valid or the list is empty.</p>
+     * <p>将所有无效结果的错误收集到单个结果中。
+     * 如果所有输入都有效或列表为空,则返回有效结果。</p>
+     *
+     * @param results validation results to merge | 要合并的验证结果
+     * @return merged validation result | 合并的验证结果
+     * @throws NullPointerException if results is null | 如果results为null
+     */
+    public static ValidationResult merge(List<ValidationResult> results) {
+        Objects.requireNonNull(results, "results must not be null");
+        List<String> allErrors = results.stream()
+            .filter(r -> !r.isValid())
+            .flatMap(r -> r.getErrors().stream())
+            .toList();
+        return allErrors.isEmpty() ? valid() : invalid(allErrors);
     }
 
     @Override

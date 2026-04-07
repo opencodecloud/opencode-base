@@ -84,22 +84,22 @@ class YmlProviderFactoryTest {
         @Test
         @DisplayName("getProvider should return provider by name")
         void getProviderShouldReturnProviderByName() {
-            YmlProvider provider = YmlProviderFactory.getProvider("snakeyaml");
+            YmlProvider provider = YmlProviderFactory.getProvider("builtin");
 
             assertThat(provider).isNotNull();
-            assertThat(provider.getName()).isEqualToIgnoringCase("snakeyaml");
+            assertThat(provider.getName()).isEqualToIgnoringCase("builtin");
         }
 
         @Test
         @DisplayName("getProvider should be case insensitive")
         void getProviderShouldBeCaseInsensitive() {
-            YmlProvider provider1 = YmlProviderFactory.getProvider("snakeyaml");
-            YmlProvider provider2 = YmlProviderFactory.getProvider("SNAKEYAML");
-            YmlProvider provider3 = YmlProviderFactory.getProvider("SnakeYaml");
+            YmlProvider provider1 = YmlProviderFactory.getProvider("builtin");
+            YmlProvider provider2 = YmlProviderFactory.getProvider("BUILTIN");
+            YmlProvider provider3 = YmlProviderFactory.getProvider("Builtin");
 
-            assertThat(provider1.getName()).isEqualToIgnoringCase("snakeyaml");
-            assertThat(provider2.getName()).isEqualToIgnoringCase("snakeyaml");
-            assertThat(provider3.getName()).isEqualToIgnoringCase("snakeyaml");
+            assertThat(provider1.getName()).isEqualToIgnoringCase("builtin");
+            assertThat(provider2.getName()).isEqualToIgnoringCase("builtin");
+            assertThat(provider3.getName()).isEqualToIgnoringCase("builtin");
         }
 
         @Test
@@ -162,12 +162,12 @@ class YmlProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("getAvailableProviders should include snakeyaml provider")
-        void getAvailableProvidersShouldIncludeSnakeyaml() {
+        @DisplayName("getAvailableProviders should include builtin provider")
+        void getAvailableProvidersShouldIncludeBuiltin() {
             List<YmlProvider> providers = YmlProviderFactory.getAvailableProviders();
 
             assertThat(providers)
-                .anyMatch(p -> p.getName().equalsIgnoreCase("snakeyaml"));
+                .anyMatch(p -> p.getName().equalsIgnoreCase("builtin"));
         }
     }
 

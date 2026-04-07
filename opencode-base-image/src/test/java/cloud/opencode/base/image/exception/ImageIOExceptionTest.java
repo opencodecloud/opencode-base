@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageIOException 异常测试")
 class ImageIOExceptionTest {
@@ -26,8 +27,8 @@ class ImageIOExceptionTest {
         void testConstructorWithMessage() {
             ImageIOException ex = new ImageIOException("IO error occurred");
 
-            assertThat(ex.getMessage()).isEqualTo("IO error occurred");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.IO_ERROR);
+            assertThat(ex.getRawMessage()).isEqualTo("IO error occurred");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.IO_ERROR);
         }
 
         @Test
@@ -36,9 +37,9 @@ class ImageIOExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             ImageIOException ex = new ImageIOException("IO error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("IO error");
+            assertThat(ex.getRawMessage()).isEqualTo("IO error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.IO_ERROR);
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.IO_ERROR);
         }
 
         @Test
@@ -46,8 +47,8 @@ class ImageIOExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             ImageIOException ex = new ImageIOException("File not found", ImageErrorCode.FILE_NOT_FOUND);
 
-            assertThat(ex.getMessage()).isEqualTo("File not found");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.FILE_NOT_FOUND);
+            assertThat(ex.getRawMessage()).isEqualTo("File not found");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.FILE_NOT_FOUND);
         }
 
         @Test
@@ -56,9 +57,9 @@ class ImageIOExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             ImageIOException ex = new ImageIOException("Read failed", cause, ImageErrorCode.READ_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("Read failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Read failed");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.READ_FAILED);
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.READ_FAILED);
         }
     }
 
@@ -72,6 +73,22 @@ class ImageIOExceptionTest {
             ImageIOException ex = new ImageIOException("Test");
 
             assertThat(ex).isInstanceOf(ImageException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageIOException ex = new ImageIOException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageIOException ex = new ImageIOException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
 
         @Test

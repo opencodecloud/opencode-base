@@ -1,6 +1,7 @@
 package cloud.opencode.base.image.internal;
 
 import cloud.opencode.base.image.ImageFormat;
+import cloud.opencode.base.image.kernel.PixelOp;
 
 import java.awt.*;
 import java.awt.color.ColorSpace;
@@ -92,28 +93,23 @@ public final class ConvertOp {
      * @return the sepia image | 棕褐色图片
      */
     public static BufferedImage sepia(BufferedImage image) {
-        int width = image.getWidth();
-        int height = image.getHeight();
+        BufferedImage src = PixelOp.ensureArgb(image);
+        int[] srcPixels = PixelOp.getPixels(src);
+        BufferedImage result = PixelOp.createCompatible(src);
+        int[] dstPixels = PixelOp.getPixels(result);
 
-        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int i = 0; i < srcPixels.length; i++) {
+            int px = srcPixels[i];
+            int a = (px >> 24) & 0xFF;
+            int r = (px >> 16) & 0xFF;
+            int g = (px >> 8) & 0xFF;
+            int b = px & 0xFF;
 
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int rgb = image.getRGB(x, y);
-                int r = (rgb >> 16) & 0xFF;
-                int g = (rgb >> 8) & 0xFF;
-                int b = rgb & 0xFF;
+            int tr = Math.min(255, (int) (0.393 * r + 0.769 * g + 0.189 * b));
+            int tg = Math.min(255, (int) (0.349 * r + 0.686 * g + 0.168 * b));
+            int tb = Math.min(255, (int) (0.272 * r + 0.534 * g + 0.131 * b));
 
-                int tr = (int) (0.393 * r + 0.769 * g + 0.189 * b);
-                int tg = (int) (0.349 * r + 0.686 * g + 0.168 * b);
-                int tb = (int) (0.272 * r + 0.534 * g + 0.131 * b);
-
-                r = Math.min(255, tr);
-                g = Math.min(255, tg);
-                b = Math.min(255, tb);
-
-                result.setRGB(x, y, (r << 16) | (g << 8) | b);
-            }
+            dstPixels[i] = (a << 24) | (tr << 16) | (tg << 8) | tb;
         }
 
         return result;
@@ -127,20 +123,18 @@ public final class ConvertOp {
      * @return the inverted image | 反转后的图片
      */
     public static BufferedImage invert(BufferedImage image) {
-        int width = image.getWidth();
-        int height = image.getHeight();
+        BufferedImage src = PixelOp.ensureArgb(image);
+        int[] srcPixels = PixelOp.getPixels(src);
+        BufferedImage result = PixelOp.createCompatible(src);
+        int[] dstPixels = PixelOp.getPixels(result);
 
-        BufferedImage result = new BufferedImage(width, height, getTargetType(image));
-
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int rgb = image.getRGB(x, y);
-                int a = (rgb >> 24) & 0xFF;
-                int r = 255 - ((rgb >> 16) & 0xFF);
-                int g = 255 - ((rgb >> 8) & 0xFF);
-                int b = 255 - (rgb & 0xFF);
-                result.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
-            }
+        for (int i = 0; i < srcPixels.length; i++) {
+            int px = srcPixels[i];
+            int a = (px >> 24) & 0xFF;
+            int r = 255 - ((px >> 16) & 0xFF);
+            int g = 255 - ((px >> 8) & 0xFF);
+            int b = 255 - (px & 0xFF);
+            dstPixels[i] = (a << 24) | (r << 16) | (g << 8) | b;
         }
 
         return result;
@@ -155,21 +149,20 @@ public final class ConvertOp {
      * @return the adjusted image | 调整后的图片
      */
     public static BufferedImage adjustBrightness(BufferedImage image, float factor) {
-        int width = image.getWidth();
-        int height = image.getHeight();
         int adjustment = (int) (factor * 255);
 
-        BufferedImage result = new BufferedImage(width, height, getTargetType(image));
+        BufferedImage src = PixelOp.ensureArgb(image);
+        int[] srcPixels = PixelOp.getPixels(src);
+        BufferedImage result = PixelOp.createCompatible(src);
+        int[] dstPixels = PixelOp.getPixels(result);
 
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int rgb = image.getRGB(x, y);
-                int a = (rgb >> 24) & 0xFF;
-                int r = clamp(((rgb >> 16) & 0xFF) + adjustment);
-                int g = clamp(((rgb >> 8) & 0xFF) + adjustment);
-                int b = clamp((rgb & 0xFF) + adjustment);
-                result.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
-            }
+        for (int i = 0; i < srcPixels.length; i++) {
+            int px = srcPixels[i];
+            int a = (px >> 24) & 0xFF;
+            int r = clamp(((px >> 16) & 0xFF) + adjustment);
+            int g = clamp(((px >> 8) & 0xFF) + adjustment);
+            int b = clamp((px & 0xFF) + adjustment);
+            dstPixels[i] = (a << 24) | (r << 16) | (g << 8) | b;
         }
 
         return result;
@@ -184,20 +177,18 @@ public final class ConvertOp {
      * @return the adjusted image | 调整后的图片
      */
     public static BufferedImage adjustContrast(BufferedImage image, float factor) {
-        int width = image.getWidth();
-        int height = image.getHeight();
+        BufferedImage src = PixelOp.ensureArgb(image);
+        int[] srcPixels = PixelOp.getPixels(src);
+        BufferedImage result = PixelOp.createCompatible(src);
+        int[] dstPixels = PixelOp.getPixels(result);
 
-        BufferedImage result = new BufferedImage(width, height, getTargetType(image));
-
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int rgb = image.getRGB(x, y);
-                int a = (rgb >> 24) & 0xFF;
-                int r = clamp((int) ((((rgb >> 16) & 0xFF) - 128) * factor + 128));
-                int g = clamp((int) ((((rgb >> 8) & 0xFF) - 128) * factor + 128));
-                int b = clamp((int) (((rgb & 0xFF) - 128) * factor + 128));
-                result.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
-            }
+        for (int i = 0; i < srcPixels.length; i++) {
+            int px = srcPixels[i];
+            int a = (px >> 24) & 0xFF;
+            int r = clamp((int) ((((px >> 16) & 0xFF) - 128) * factor + 128));
+            int g = clamp((int) ((((px >> 8) & 0xFF) - 128) * factor + 128));
+            int b = clamp((int) (((px & 0xFF) - 128) * factor + 128));
+            dstPixels[i] = (a << 24) | (r << 16) | (g << 8) | b;
         }
 
         return result;

@@ -2,7 +2,7 @@
 
 **地理工具库，适用于 Java 25+**
 
-`opencode-base-geo` 提供全面的地理操作，包括坐标转换（WGS84/GCJ02/BD09）、距离计算（Haversine/Vincenty）、地理围栏检查、GeoHash 编解码以及带安全特性的坐标验证。
+`opencode-base-geo` 提供全面的地理操作，包括坐标转换（WGS84/GCJ02/BD09）、距离计算（Haversine/Vincenty）、地理围栏检查、GeoHash 编解码、折线编解码、轨迹简化、WKT 互操作以及带安全特性的坐标验证。
 
 ## 功能特性
 
@@ -10,16 +10,30 @@
 - **距离计算**：Haversine（快速，误差约 0.5%）和 Vincenty（精确，误差约 0.5mm）
 - **坐标转换**：WGS84、GCJ02（国测局）、BD09（百度）双向转换
 - **地理围栏**：圆形、多边形、矩形和跨日期线围栏包含检查
-- **GeoHash**：编码、解码、邻居查找和边界框计算
+- **GeoHash**：编码、解码、邻居查找、近邻搜索和精度级别枚举
+- **边界框**：一等不可变类型，支持包含/相交/合并/扩展操作
 - **方位角与目标点**：计算两点间方位角和从起点出发的目标点
 
 ### 高级功能
+- **折线编解码**：Google Encoded Polyline 格式编解码，用于 GPS 轨迹高效传输
+- **轨迹简化**：Ramer-Douglas-Peucker 算法减少 GPS 轨迹冗余点
+- **WKT 支持**：轻量级 Well-Known Text 解析和序列化（POINT/LINESTRING/POLYGON）
+- **GeoHash 搜索**：基于近邻的 hash 搜索，解决边界格子遗漏问题
 - **坐标验证**：范围检查、NaN/Infinity 检测
 - **区域服务**：层次化区域管理（省/市/区）
 - **坐标脱敏**：隐私保护的坐标模糊化
-- **安全围栏服务**：限流和审计的围栏操作
+- **安全围栏服务**：带时间戳验证和速度检查的围栏操作
 - **位置欺骗检测**：检测可疑坐标模式
 - **中国范围检查**：快速判断坐标是否在中国境内
+
+### 几何工具
+- **质心计算**：坐标集合的地理中心（向量平均法）
+- **路径插值**：两个坐标之间大圆路径上的任意点
+- **点到线段距离**：点到线段的最短距离
+- **点到折线距离**：点到折线的最短距离
+- **罗盘方向**：方位角转 16 方位罗盘方向
+- **路径总距离**：坐标路径的累计距离
+- **多边形面积/周长**：球面面积和周长计算
 
 ## 快速开始
 
@@ -28,7 +42,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-geo</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -52,6 +66,24 @@ double precise = OpenGeo.distancePrecise(beijing, shanghai);
 Coordinate gcj02 = OpenGeo.wgs84ToGcj02(116.4074, 39.9042);
 Coordinate bd09 = OpenGeo.gcj02ToBd09(gcj02.longitude(), gcj02.latitude());
 Coordinate wgs84 = OpenGeo.bd09ToWgs84(bd09.longitude(), bd09.latitude());
+```
+
+### 边界框
+
+```java
+// 从坐标集合创建
+BoundingBox bbox = BoundingBox.fromCoordinates(coordinateList);
+
+// 从中心点和半径创建
+BoundingBox search = BoundingBox.fromCenter(beijing, 5000);  // 5公里半径
+
+// 操作
+boolean contains = bbox.contains(point);
+boolean overlaps = bbox.intersects(otherBox);
+BoundingBox merged = bbox.union(otherBox);
+BoundingBox expanded = bbox.expand(1000);  // 扩展1公里
+Coordinate center = bbox.center();
+Set<String> hashes = bbox.toGeoHashes(6);  // GeoHash覆盖
 ```
 
 ### 地理围栏
@@ -85,25 +117,102 @@ Coordinate decoded = OpenGeo.fromGeoHash("wx4g0bm6");
 // 邻居
 List<String> neighbors = OpenGeo.geoHashNeighbors("wx4g0bm6");
 
-// 边界框
-double[] bbox = OpenGeo.geoHashBoundingBox("wx4g0bm6");
+// 命名精度级别
+GeoHashPrecision precision = GeoHashPrecision.CITY;  // 精度5，约5公里
+int value = precision.getValue();  // 5
+
+// 根据搜索半径自动选择精度
+GeoHashPrecision auto = GeoHashPrecision.forRadius(2.0);  // NEIGHBORHOOD (6)
+
+// 近邻搜索（解决边界格子遗漏问题）
+Set<String> hashes = OpenGeo.geoHashSearch(39.9042, 116.4074, 5000);  // 5公里半径
+Set<String> hashes2 = OpenGeo.geoHashSearch(39.9042, 116.4074, 5000, 6);  // 指定精度
 ```
 
-### 导航
+### 折线编解码
+
+```java
+// 将 GPS 轨迹编码为 Google Encoded Polyline
+List<Coordinate> track = List.of(
+    Coordinate.wgs84(-120.2, 38.5),
+    Coordinate.wgs84(-120.95, 40.7),
+    Coordinate.wgs84(-126.453, 43.252)
+);
+String encoded = OpenGeo.encodePolyline(track);
+
+// 解码还原
+List<Coordinate> decoded = OpenGeo.decodePolyline(encoded);
+```
+
+### 轨迹简化
+
+```java
+// 使用 Ramer-Douglas-Peucker 简化 GPS 轨迹
+List<Coordinate> simplified = OpenGeo.simplifyTrack(gpsTrack, 50);  // 50米容差
+
+// 轨迹总距离
+double totalDist = OpenGeo.trackDistance(gpsTrack);
+```
+
+### WKT（Well-Known Text）互操作
+
+```java
+import cloud.opencode.base.geo.wkt.WktCodec;
+
+// 从 PostGIS 解析
+Coordinate point = WktCodec.parsePoint("POINT(116.4074 39.9042)");
+List<Coordinate> line = WktCodec.parseLineString("LINESTRING(116.0 39.0, 117.0 40.0)");
+
+// 解析多边形
+List<List<Coordinate>> rings = WktCodec.parsePolygon(
+    "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))");
+
+// 序列化为数据库格式
+String wkt = WktCodec.toWkt(beijing);  // "POINT(116.4074 39.9042)"
+String lineWkt = WktCodec.lineStringToWkt(coordinates);
+String polyWkt = WktCodec.polygonToWkt(exteriorRing);
+```
+
+### 坐标脱敏���隐私保护）
+
+```java
+import cloud.opencode.base.geo.security.CoordinateMasker;
+
+// 在500米范围内随机偏移
+Coordinate masked = CoordinateMasker.mask(location, 500);
+
+// 降低精度到约100米（3位小数）
+Coordinate reduced = CoordinateMasker.reducePrecision(location, 3);
+
+// ���齐到GeoHash网格（约1.2公里）
+Coordinate gridAligned = CoordinateMasker.maskByGeoHash(location, 6);
+
+// 便捷方法：城市级（约5公里）、街区级（约1公里）、街区块级（约150米）
+Coordinate city = CoordinateMasker.maskToCity(location);
+Coordinate neighborhood = CoordinateMasker.maskToNeighborhood(location);
+Coordinate block = CoordinateMasker.maskToBlock(location);
+```
+
+### 导航与几何
 
 ```java
 // 两点间方位角
-double bearing = OpenGeo.bearing(beijing, shanghai);  // 度数，0=北
+double bearing = OpenGeo.bearing(beijing, shanghai);
+String direction = OpenGeo.compassDirection(bearing);  // "SE"、"NNW" 等
 
 // 从起点计算目标点
-Coordinate dest = OpenGeo.destination(beijing, 100000, 135.0);  // 100公里，方位角135°
+Coordinate dest = OpenGeo.destination(beijing, 100000, 135.0);
 
-// 中点
+// 中点与插值
 Coordinate mid = OpenGeo.midpoint(beijing, shanghai);
+Coordinate quarter = OpenGeo.interpolate(beijing, shanghai, 0.25);
 
-// 验证坐标
-boolean valid = OpenGeo.isValidCoordinate(116.4074, 39.9042);  // true
-boolean inChina = OpenGeo.isInChina(116.4074, 39.9042);        // true
+// 多点质心
+Coordinate center = OpenGeo.centroid(points);
+
+// 点到线段距离
+double dist = OpenGeo.distanceToSegment(point, segStart, segEnd);
+double dist2 = OpenGeo.distanceToPolyline(point, polyline);
 ```
 
 ## 类参考
@@ -111,11 +220,12 @@ boolean inChina = OpenGeo.isInChina(116.4074, 39.9042);        // true
 ### 根包 (`cloud.opencode.base.geo`)
 | 类 | 说明 |
 |---|------|
-| `OpenGeo` | 主门面类，提供距离、转换、围栏和 GeoHash 的静态方法 |
+| `OpenGeo` | 主门面类，提供所有地理操作的静态方法 |
 | `Coordinate` | 表示地理坐标点的不可变记录（经度、纬度、坐标系） |
 | `CoordinateSystem` | 支持的坐标系枚举（WGS84、GCJ02、BD09） |
 | `CoordinateUtil` | 底层坐标工具方法 |
-| `GeoUtil` | 通用地理计算工具 |
+| `GeoUtil` | 通用地理计算工具（质心、距离、插值、罗盘） |
+| `BoundingBox` | 不可变边界框记录，支持丰富的空间操作 |
 
 ### 距离包 (`cloud.opencode.base.geo.distance`)
 | 类 | 说明 |
@@ -137,9 +247,23 @@ boolean inChina = OpenGeo.isInChina(116.4074, 39.9042);        // true
 ### GeoHash 包 (`cloud.opencode.base.geo.geohash`)
 | 类 | 说明 |
 |---|------|
-| `GeoHash` | GeoHash 值对象，支持编解码操作 |
+| `GeoHash` | GeoHash 接口，支持编解码操作 |
 | `GeoHashEncoder` | GeoHash 编码算法实现 |
 | `GeoHashUtil` | GeoHash 编码、解码和邻居查找工具方法 |
+| `GeoHashPrecision` | 命名精度级别（CONTINENT 到 DOOR），含人类可读描述 |
+| `GeoHashSearch` | 基于近邻的 GeoHash 搜索，解决边界格子遗漏问题 |
+
+### 折线包 (`cloud.opencode.base.geo.polyline`)
+| 类 | 说明 |
+|---|------|
+| `PolylineCodec` | Google Encoded Polyline 格式编解码器 |
+| `TrackSimplifier` | Ramer-Douglas-Peucker 轨迹简化算法 |
+
+### WKT 包 (`cloud.opencode.base.geo.wkt`)
+| 类 | 说明 |
+|---|------|
+| `WktCodec` | 轻量级 WKT（Well-Known Text）解析器和序列化器 |
+| `WktType` | 支持的 WKT 几何类型枚举（POINT、LINESTRING、POLYGON） |
 
 ### 转换包 (`cloud.opencode.base.geo.transform`)
 | 类 | 说明 |
@@ -160,7 +284,7 @@ boolean inChina = OpenGeo.isInChina(116.4074, 39.9042);        // true
 | 类 | 说明 |
 |---|------|
 | `CoordinateMasker` | 隐私保护的坐标模糊化工具 |
-| `SecureGeoFenceService` | 限流和审计的地理围栏操作 |
+| `SecureGeoFenceService` | 带时间戳验证和速度检查的地理围栏操作 |
 
 ### 验证包 (`cloud.opencode.base.geo.validation`)
 | 类 | 说明 |
@@ -170,7 +294,7 @@ boolean inChina = OpenGeo.isInChina(116.4074, 39.9042);        // true
 ### 异常包 (`cloud.opencode.base.geo.exception`)
 | 类 | 说明 |
 |---|------|
-| `GeoException` | 地理操作的基础异常 |
+| `GeoException` | 地理操作的基础异常（继承自 `OpenException`） |
 | `CoordinateException` | 坐标错误的基础异常 |
 | `CoordinateOutOfRangeException` | 坐标值超出有效范围 |
 | `CoordinateTransformException` | 坐标转换失败 |

@@ -6,8 +6,10 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -16,8 +18,10 @@ import java.util.concurrent.atomic.LongAdder;
  * 反射缓存 - 反射结果的集中缓存
  *
  * <p>Provides high-performance caching for reflection operations to avoid
- * repeated reflection lookups.</p>
- * <p>为反射操作提供高性能缓存，避免重复的反射查找。</p>
+ * repeated reflection lookups. Uses weak-key caching for Class-keyed entries
+ * to prevent ClassLoader memory leaks in dynamic classloading environments.</p>
+ * <p>为反射操作提供高性能缓存，避免重复的反射查找。
+ * 对 Class 键使用弱引用缓存，防止动态类加载环境中的 ClassLoader 内存泄漏。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
@@ -27,6 +31,7 @@ import java.util.concurrent.atomic.LongAdder;
  *   <li>TypeToken caching - 类型令牌缓存</li>
  *   <li>Thread-safe operations - 线程安全操作</li>
  *   <li>Cache statistics - 缓存统计</li>
+ *   <li>GC-aware: Class entries are released when ClassLoader is collected - GC感知: 当ClassLoader回收时自动释放</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -46,8 +51,9 @@ import java.util.concurrent.atomic.LongAdder;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: Yes (uses ConcurrentHashMap and LongAdder) - 线程安全: 是（使用ConcurrentHashMap和LongAdder）</li>
+ *   <li>Thread-safe: Yes (uses synchronized WeakHashMap and ConcurrentHashMap) - 线程安全: 是</li>
  *   <li>Null-safe: Yes (null inputs are ignored) - 空值安全: 是（null输入被忽略）</li>
+ *   <li>GC-safe: Class-keyed caches use weak keys to prevent ClassLoader leaks - GC安全: Class键使用弱引用</li>
  * </ul>
  *
  * @author Leon Soo
@@ -58,26 +64,29 @@ import java.util.concurrent.atomic.LongAdder;
 public final class ReflectCache {
 
     /**
-     * Field cache
-     * 字段缓存
+     * Field cache (weak keys for GC-awareness)
+     * 字段缓存（弱键，GC感知）
      */
-    private static final Map<Class<?>, Field[]> FIELD_CACHE = new ConcurrentHashMap<>(256);
+    private static final Map<Class<?>, Field[]> FIELD_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>(256));
 
     /**
-     * Method cache
-     * 方法缓存
+     * Method cache (weak keys for GC-awareness)
+     * 方法缓存（弱键，GC感知）
      */
-    private static final Map<Class<?>, Method[]> METHOD_CACHE = new ConcurrentHashMap<>(256);
+    private static final Map<Class<?>, Method[]> METHOD_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>(256));
 
     /**
-     * Constructor cache
-     * 构造器缓存
+     * Constructor cache (weak keys for GC-awareness)
+     * 构造器缓存（弱键，GC感知）
      */
-    private static final Map<Class<?>, Constructor<?>[]> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>(256);
+    private static final Map<Class<?>, Constructor<?>[]> CONSTRUCTOR_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>(256));
 
     /**
-     * TypeToken cache
-     * 类型令牌缓存
+     * TypeToken cache (Type keys are not Class-loader-sensitive)
+     * 类型令牌缓存（Type键不受ClassLoader影响）
      */
     private static final Map<Type, TypeToken<?>> TYPE_TOKEN_CACHE = new ConcurrentHashMap<>(256);
 
@@ -101,7 +110,7 @@ public final class ReflectCache {
         Field[] fields = FIELD_CACHE.get(clazz);
         if (fields != null) {
             hits.increment();
-            return Optional.of(fields);
+            return Optional.of(fields.clone());
         }
         misses.increment();
         return Optional.empty();
@@ -133,7 +142,7 @@ public final class ReflectCache {
         Method[] methods = METHOD_CACHE.get(clazz);
         if (methods != null) {
             hits.increment();
-            return Optional.of(methods);
+            return Optional.of(methods.clone());
         }
         misses.increment();
         return Optional.empty();
@@ -165,7 +174,7 @@ public final class ReflectCache {
         Constructor<?>[] constructors = CONSTRUCTOR_CACHE.get(clazz);
         if (constructors != null) {
             hits.increment();
-            return Optional.of(constructors);
+            return Optional.of(constructors.clone());
         }
         misses.increment();
         return Optional.empty();

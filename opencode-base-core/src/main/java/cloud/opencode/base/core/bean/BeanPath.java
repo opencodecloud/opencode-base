@@ -376,6 +376,9 @@ public final class BeanPath {
 
     @SuppressWarnings("unchecked")
     private static Object getIndexValue(Object obj, int index) {
+        if (index < 0) {
+            return null;
+        }
         if (obj.getClass().isArray()) {
             int length = Array.getLength(obj);
             return index < length ? Array.get(obj, index) : null;

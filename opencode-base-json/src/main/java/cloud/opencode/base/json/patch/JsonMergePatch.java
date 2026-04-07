@@ -2,6 +2,7 @@
 package cloud.opencode.base.json.patch;
 
 import cloud.opencode.base.json.JsonNode;
+import cloud.opencode.base.json.exception.OpenJsonProcessingException;
 
 import java.util.Objects;
 
@@ -221,17 +222,27 @@ public final class JsonMergePatch {
         return deepCopyStatic(node);
     }
 
+    private static final int MAX_COPY_DEPTH = 512;
+
     private static JsonNode deepCopyStatic(JsonNode node) {
+        return deepCopyStatic(node, 0);
+    }
+
+    private static JsonNode deepCopyStatic(JsonNode node, int depth) {
+        if (depth > MAX_COPY_DEPTH) {
+            throw OpenJsonProcessingException.pathError(
+                    "Deep copy nesting depth exceeds maximum of " + MAX_COPY_DEPTH);
+        }
         if (node.isObject()) {
             JsonNode.ObjectNode copy = JsonNode.object();
             for (String key : node.keys()) {
-                copy.put(key, deepCopyStatic(node.get(key)));
+                copy.put(key, deepCopyStatic(node.get(key), depth + 1));
             }
             return copy;
         } else if (node.isArray()) {
             JsonNode.ArrayNode copy = JsonNode.array();
             for (int i = 0; i < node.size(); i++) {
-                copy.add(deepCopyStatic(node.get(i)));
+                copy.add(deepCopyStatic(node.get(i), depth + 1));
             }
             return copy;
         }

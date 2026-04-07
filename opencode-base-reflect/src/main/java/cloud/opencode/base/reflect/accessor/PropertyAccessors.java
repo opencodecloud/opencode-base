@@ -16,7 +16,7 @@ import java.util.*;
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
- *   <li>Multiple access strategies (Field, Bean, MethodHandle, VarHandle) - 多种访问策略</li>
+ *   <li>Multiple access strategies (Field, Bean, MethodHandle, VarHandle, Lambda) - 多种访问策略</li>
  *   <li>Auto-strategy selection - 自动策略选择</li>
  *   <li>Bulk accessor creation - 批量访问器创建</li>
  * </ul>
@@ -72,6 +72,11 @@ public final class PropertyAccessors {
          */
         VAR_HANDLE,
         /**
+         * Use LambdaMetafactory (fastest after warmup)
+         * 使用LambdaMetafactory（预热后最快）
+         */
+        LAMBDA,
+        /**
          * Auto-select best strategy
          * 自动选择最佳策略
          */
@@ -107,6 +112,7 @@ public final class PropertyAccessors {
             case BEAN -> BeanAccessor.of(clazz, propertyName);
             case METHOD_HANDLE -> MethodHandleAccessor.of(clazz, propertyName);
             case VAR_HANDLE -> VarHandleAccessor.of(clazz, propertyName);
+            case LAMBDA -> LambdaAccessor.of(clazz, propertyName);
             case AUTO -> createAuto(clazz, propertyName);
         };
     }
@@ -228,7 +234,16 @@ public final class PropertyAccessors {
     }
 
     private static <T> PropertyAccessor<T> createAuto(Class<T> clazz, String propertyName) {
-        // Try bean accessor first (preferred for public API)
+        // Try LambdaAccessor first (fastest after warmup)
+        try {
+            LambdaAccessor<T> lambdaAccessor = LambdaAccessor.of(clazz, propertyName);
+            if (lambdaAccessor.isReadable() || lambdaAccessor.isWritable()) {
+                return lambdaAccessor;
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Try bean accessor (preferred for public API)
         try {
             BeanAccessor<T> beanAccessor = BeanAccessor.of(clazz, propertyName);
             if (beanAccessor.isReadable() || beanAccessor.isWritable()) {

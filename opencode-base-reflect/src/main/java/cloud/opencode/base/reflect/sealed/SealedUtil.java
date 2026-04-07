@@ -113,7 +113,8 @@ public final class SealedUtil {
      */
     public static Class<?>[] getPermittedSubclasses(Class<?> sealedClass) {
         requireSealed(sealedClass);
-        return PERMITTED_CACHE.computeIfAbsent(sealedClass, Class::getPermittedSubclasses);
+        return PERMITTED_CACHE.computeIfAbsent(sealedClass,
+                c -> c.getPermittedSubclasses().clone()).clone();
     }
 
     /**

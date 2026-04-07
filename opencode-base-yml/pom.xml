@@ -7,7 +7,7 @@
     <parent>
         <groupId>cloud.opencode.base</groupId>
         <artifactId>opencode-base-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.3</version>
     </parent>
 
     <artifactId>opencode-base-yml</artifactId>
@@ -19,14 +19,6 @@
         <dependency>
             <groupId>cloud.opencode.base</groupId>
             <artifactId>opencode-base-core</artifactId>
-        </dependency>
-
-        <!-- Optional SnakeYAML dependency -->
-        <dependency>
-            <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
-            <version>2.2</version>
-            <optional>true</optional>
         </dependency>
 
         <!-- Test dependencies -->

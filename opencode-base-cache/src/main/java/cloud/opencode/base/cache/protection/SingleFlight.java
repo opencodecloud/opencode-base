@@ -56,8 +56,14 @@ public class SingleFlight<K, V> {
     private final ConcurrentHashMap<K, CompletableFuture<V>> flights = new ConcurrentHashMap<>();
 
     /**
-     * Execute loader, coalescing concurrent requests for the same key
-     * 执行加载器，合并相同键的并发请求
+     * Execute loader, coalescing concurrent requests for the same key.
+     * 执行加载器，合并相同键的并发请求。
+     *
+     * <p><strong>Warning | 警告:</strong> This method blocks indefinitely until the loader
+     * completes. If the loader hangs, all waiting threads will block permanently.
+     * Consider using {@link #execute(Object, Function, Duration)} with a timeout instead.</p>
+     * <p>此方法会无限期阻塞直到加载器完成。如果加载器挂起，所有等待线程将永久阻塞。
+     * 建议使用带超时的 {@link #execute(Object, Function, Duration)} 版本。</p>
      *
      * @param key    the key | 键
      * @param loader the loader function | 加载函数

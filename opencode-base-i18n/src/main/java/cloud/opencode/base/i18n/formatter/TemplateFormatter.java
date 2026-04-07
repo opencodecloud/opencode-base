@@ -70,6 +70,7 @@ public class TemplateFormatter implements MessageFormatter {
 
     private static final Pattern EXPR_PATTERN = Pattern.compile("\\$\\{([^}]+)}");
     private static final Pattern TYPE_PATTERN = Pattern.compile("([^:]+)(?::([^:]+))?(?::(.+))?");
+    private static final int MAX_CACHE_SIZE = 1024;
 
     private final Map<String, DateTimeFormatter> dateFormatCache = new ConcurrentHashMap<>();
     private final Map<String, java.text.DecimalFormat> numberFormatCache = new ConcurrentHashMap<>();
@@ -178,16 +179,17 @@ public class TemplateFormatter implements MessageFormatter {
             return NumberFormat.getInstance(locale).format(number);
         }
 
-        String cacheKey = pattern + "_" + locale.toString();
-        java.text.DecimalFormat df = numberFormatCache.computeIfAbsent(cacheKey, k -> {
-            java.text.DecimalFormat format = (java.text.DecimalFormat) NumberFormat.getInstance(locale);
-            format.applyPattern(pattern);
-            return format;
-        });
-
-        synchronized (df) {
-            return df.format(number);
+        String cacheKey = pattern + '\0' + locale.toLanguageTag();
+        java.text.DecimalFormat df = numberFormatCache.get(cacheKey);
+        if (df == null) {
+            df = (java.text.DecimalFormat) NumberFormat.getInstance(locale);
+            df.applyPattern(pattern);
+            if (numberFormatCache.size() < MAX_CACHE_SIZE) {
+                numberFormatCache.putIfAbsent(cacheKey, df);
+            }
         }
+
+        return ((java.text.DecimalFormat) df.clone()).format(number);
     }
 
     private String formatDate(Object value, String pattern, Locale locale) {
@@ -200,9 +202,14 @@ public class TemplateFormatter implements MessageFormatter {
             if (pattern == null || pattern.isEmpty()) {
                 formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", locale);
             } else {
-                String cacheKey = pattern + "_" + locale.toString();
-                formatter = dateFormatCache.computeIfAbsent(cacheKey,
-                        k -> DateTimeFormatter.ofPattern(pattern, locale));
+                String cacheKey = pattern + '\0' + locale.toLanguageTag();
+                formatter = dateFormatCache.get(cacheKey);
+                if (formatter == null) {
+                    formatter = DateTimeFormatter.ofPattern(pattern, locale);
+                    if (dateFormatCache.size() < MAX_CACHE_SIZE) {
+                        dateFormatCache.putIfAbsent(cacheKey, formatter);
+                    }
+                }
             }
             return formatter.format(temporal);
         }
@@ -230,9 +237,14 @@ public class TemplateFormatter implements MessageFormatter {
             if (pattern == null || pattern.isEmpty()) {
                 formatter = DateTimeFormatter.ofPattern("HH:mm:ss", locale);
             } else {
-                String cacheKey = "time_" + pattern + "_" + locale.toString();
-                formatter = dateFormatCache.computeIfAbsent(cacheKey,
-                        k -> DateTimeFormatter.ofPattern(pattern, locale));
+                String cacheKey = "time\0" + pattern + '\0' + locale.toLanguageTag();
+                formatter = dateFormatCache.get(cacheKey);
+                if (formatter == null) {
+                    formatter = DateTimeFormatter.ofPattern(pattern, locale);
+                    if (dateFormatCache.size() < MAX_CACHE_SIZE) {
+                        dateFormatCache.putIfAbsent(cacheKey, formatter);
+                    }
+                }
             }
             return formatter.format(temporal);
         }

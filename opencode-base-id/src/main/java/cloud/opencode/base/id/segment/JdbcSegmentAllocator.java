@@ -170,7 +170,7 @@ public final class JdbcSegmentAllocator implements SegmentAllocator {
              PreparedStatement ps = conn.prepareStatement(createTableSql)) {
             ps.execute();
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to create table: " + tableName, e);
+            throw OpenIdGenerationException.tableInitFailed(tableName, e);
         }
     }
 

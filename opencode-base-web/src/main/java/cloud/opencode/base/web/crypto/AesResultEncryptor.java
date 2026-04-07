@@ -1,30 +1,33 @@
 package cloud.opencode.base.web.crypto;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.security.SecureRandom;
-import java.util.Arrays;
+import cloud.opencode.base.crypto.OpenDigest;
+import cloud.opencode.base.crypto.kdf.Hkdf;
+import cloud.opencode.base.crypto.key.KeyGenerator;
+import cloud.opencode.base.crypto.mac.HmacSha256;
+import cloud.opencode.base.crypto.symmetric.AesGcmCipher;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * AES Result Encryptor
  * AES响应加密器
  *
- * <p>AES-GCM encryption for result data.</p>
- * <p>使用AES-GCM加密响应数据。</p>
+ * <p>AES-GCM encryption with HMAC-SHA256 signature for result data.</p>
+ * <p>使用AES-GCM加密和HMAC-SHA256签名保护响应数据。</p>
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Algorithm: AES-GCM - 算法: AES-GCM</li>
+ *   <li>Encryption: AES-256-GCM (via opencode-base-crypto) - 加密: AES-256-GCM</li>
+ *   <li>Signature: HMAC-SHA256 (via opencode-base-crypto) - 签名: HMAC-SHA256</li>
  *   <li>Key size: 256 bits - 密钥长度: 256位</li>
- *   <li>IV size: 12 bytes - IV长度: 12字节</li>
- *   <li>Tag size: 128 bits - 标签长度: 128位</li>
+ *   <li>Separate encryption and signing keys - 加密密钥与签名密钥独立派生</li>
  * </ul>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>AES-256-GCM encryption for result data - AES-256-GCM响应数据加密</li>
- *   <li>Random IV per encryption - 每次加密使用随机IV</li>
+ *   <li>HMAC-SHA256 signature covering all plaintext fields - HMAC-SHA256签名覆盖所有明文字段</li>
+ *   <li>Signature verification before decryption - 解密前先验签</li>
  *   <li>SHA-256 key derivation from string - 从字符串SHA-256密钥派生</li>
  *   <li>Random key generation support - 随机密钥生成支持</li>
  * </ul>
@@ -43,12 +46,9 @@ import java.util.Arrays;
 public class AesResultEncryptor extends AbstractResultEncryptor {
 
     private static final String ALGORITHM = "AES-GCM";
-    private static final String CIPHER_ALGORITHM = "AES/GCM/NoPadding";
-    private static final int GCM_IV_LENGTH = 12;
-    private static final int GCM_TAG_LENGTH = 128;
 
-    private final SecretKeySpec secretKey;
-    private final SecureRandom secureRandom;
+    private final AesGcmCipher cipher;
+    private final HmacSha256 hmac;
 
     /**
      * Create AES encryptor with key
@@ -60,8 +60,8 @@ public class AesResultEncryptor extends AbstractResultEncryptor {
         if (key == null || key.length != 32) {
             throw OpenCryptoException.invalidKey("Key must be 32 bytes for AES-256");
         }
-        this.secretKey = new SecretKeySpec(key, "AES");
-        this.secureRandom = new SecureRandom();
+        this.cipher = AesGcmCipher.aes256Gcm().setKey(key);
+        this.hmac = HmacSha256.of(deriveHmacKey(key));
     }
 
     /**
@@ -74,10 +74,9 @@ public class AesResultEncryptor extends AbstractResultEncryptor {
         if (keyString == null || keyString.isBlank()) {
             throw OpenCryptoException.invalidKey("Key string cannot be empty");
         }
-        // Hash the string to get a 32-byte key
         byte[] keyBytes = hashToKey(keyString);
-        this.secretKey = new SecretKeySpec(keyBytes, "AES");
-        this.secureRandom = new SecureRandom();
+        this.cipher = AesGcmCipher.aes256Gcm().setKey(keyBytes);
+        this.hmac = HmacSha256.of(deriveHmacKey(keyBytes));
     }
 
     @Override
@@ -87,41 +86,33 @@ public class AesResultEncryptor extends AbstractResultEncryptor {
 
     @Override
     protected byte[] doEncrypt(byte[] data) throws Exception {
-        Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
-
-        // Generate random IV
-        byte[] iv = new byte[GCM_IV_LENGTH];
-        secureRandom.nextBytes(iv);
-
-        GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
-
-        byte[] encrypted = cipher.doFinal(data);
-
-        // Prepend IV to encrypted data
-        byte[] result = new byte[iv.length + encrypted.length];
-        System.arraycopy(iv, 0, result, 0, iv.length);
-        System.arraycopy(encrypted, 0, result, iv.length, encrypted.length);
-
-        return result;
+        return cipher.encrypt(data);
     }
 
     @Override
     protected byte[] doDecrypt(byte[] data) throws Exception {
-        if (data.length < GCM_IV_LENGTH) {
-            throw OpenCryptoException.decryptionFailed("Invalid encrypted data length");
-        }
+        return cipher.decrypt(data);
+    }
 
-        Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
+    @Override
+    protected byte[] doSign(byte[] data) throws Exception {
+        return hmac.compute(data);
+    }
 
-        // Extract IV from data
-        byte[] iv = Arrays.copyOfRange(data, 0, GCM_IV_LENGTH);
-        byte[] encrypted = Arrays.copyOfRange(data, GCM_IV_LENGTH, data.length);
-
-        GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
-
-        return cipher.doFinal(encrypted);
+    /**
+     * Derive HMAC key from encryption key using HKDF
+     * 使用HKDF从加密密钥派生HMAC密钥
+     *
+     * <p>Uses HKDF-SHA256 with info="hmac" to derive a separate 32-byte key for HMAC,
+     * ensuring encryption and signing use independent keys.</p>
+     * <p>使用HKDF-SHA256（info="hmac"）派生独立的32字节HMAC密钥，
+     * 确保加密和签名使用不同的密钥。</p>
+     *
+     * @param encryptionKey the encryption key | 加密密钥
+     * @return the derived HMAC key | 派生的HMAC密钥
+     */
+    private byte[] deriveHmacKey(byte[] encryptionKey) {
+        return Hkdf.sha256().deriveKey(encryptionKey, "hmac".getBytes(StandardCharsets.UTF_8), 32);
     }
 
     /**
@@ -132,12 +123,7 @@ public class AesResultEncryptor extends AbstractResultEncryptor {
      * @return the 32-byte key | 32字节密钥
      */
     private byte[] hashToKey(String keyString) {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            return digest.digest(keyString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            throw OpenCryptoException.invalidKey("Failed to hash key: " + e.getMessage());
-        }
+        return OpenDigest.sha256().digest(keyString);
     }
 
     /**
@@ -147,8 +133,7 @@ public class AesResultEncryptor extends AbstractResultEncryptor {
      * @return the encryptor and generated key | 加密器和生成的密钥
      */
     public static KeyAndEncryptor withRandomKey() {
-        byte[] key = new byte[32];
-        new SecureRandom().nextBytes(key);
+        byte[] key = KeyGenerator.generateAesKey(256).getEncoded();
         return new KeyAndEncryptor(key, new AesResultEncryptor(key));
     }
 

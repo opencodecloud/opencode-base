@@ -135,6 +135,16 @@ public final class MessageDigestHashFunction extends AbstractHashFunction {
     }
 
     /**
+     * Creates a SHA-384 function (384-bit)
+     * 创建 SHA-384 函数（384位）
+     *
+     * @return hash function | 哈希函数
+     */
+    public static MessageDigestHashFunction sha384() {
+        return new MessageDigestHashFunction("SHA-384", 384);
+    }
+
+    /**
      * Creates a hash function for a custom algorithm
      * 为自定义算法创建哈希函数
      *
@@ -154,6 +164,11 @@ public final class MessageDigestHashFunction extends AbstractHashFunction {
 
     @Override
     public HashCode hashBytes(byte[] input, int offset, int length) {
+        java.util.Objects.requireNonNull(input, "input");
+        if (offset < 0 || length < 0 || length > input.length - offset) {
+            throw OpenHashException.invalidInput(
+                    "offset=" + offset + ", length=" + length + ", array.length=" + input.length);
+        }
         try {
             MessageDigest md = MessageDigest.getInstance(algorithm);
             md.update(input, offset, length);

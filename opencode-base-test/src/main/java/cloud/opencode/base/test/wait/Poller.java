@@ -100,10 +100,10 @@ public final class Poller {
      * @param condition the condition | 条件
      */
     public void until(BooleanSupplier condition) {
-        long startTime = System.currentTimeMillis();
-        long timeoutMillis = timeout.toMillis();
+        long startNanos = System.nanoTime();
+        long timeoutNanos = timeout.toNanos();
 
-        while (System.currentTimeMillis() - startTime < timeoutMillis) {
+        while (System.nanoTime() - startNanos < timeoutNanos) {
             try {
                 if (condition.getAsBoolean()) {
                     return;
@@ -130,11 +130,11 @@ public final class Poller {
      * @return the value | 值
      */
     public <T> T until(Supplier<T> supplier, Predicate<T> predicate) {
-        long startTime = System.currentTimeMillis();
-        long timeoutMillis = timeout.toMillis();
+        long startNanos = System.nanoTime();
+        long timeoutNanos = timeout.toNanos();
         T lastValue = null;
 
-        while (System.currentTimeMillis() - startTime < timeoutMillis) {
+        while (System.nanoTime() - startNanos < timeoutNanos) {
             try {
                 lastValue = supplier.get();
                 if (predicate.test(lastValue)) {

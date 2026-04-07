@@ -117,6 +117,12 @@ public final class Doubles {
     }
 
     public static double constrainToRange(double value, double min, double max) {
+        if (Double.isNaN(value) || Double.isNaN(min) || Double.isNaN(max)) {
+            throw new IllegalArgumentException("value, min, and max must not be NaN");
+        }
+        if (min > max) {
+            throw new IllegalArgumentException("min (" + min + ") > max (" + max + ")");
+        }
         return Math.max(min, Math.min(max, value));
     }
 

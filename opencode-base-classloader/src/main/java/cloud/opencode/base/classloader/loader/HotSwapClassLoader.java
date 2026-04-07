@@ -6,6 +6,9 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -21,14 +24,20 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>Reload modified classes - 重新加载修改的类</li>
  *   <li>Version tracking - 版本跟踪</li>
  *   <li>Class unloading - 类卸载</li>
+ *   <li>Version rollback - 版本回退</li>
+ *   <li>Hot-swap event notification - 热替换事件通知</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
  * HotSwapClassLoader loader = HotSwapClassLoader.create();
+ * loader.addListener((name, oldV, newV) ->
+ *     System.out.println(name + ": v" + oldV + " -> v" + newV));
  * Class<?> v1 = loader.loadClass("MyClass", bytecodeV1);
  * // After modification
- * Class<?> v2 = loader.reloadClass("MyClass", classFile);
+ * Class<?> v2 = loader.loadClass("MyClass", bytecodeV2);
+ * // Rollback to v1
+ * Optional<Class<?>> rolled = loader.rollback("MyClass");
  * }</pre>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -45,9 +54,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
 
+    private static final int DEFAULT_MAX_HISTORY_VERSIONS = 5;
+
     private final ConcurrentHashMap<String, ClassInfo> classInfoMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicInteger> versionMap = new ConcurrentHashMap<>();
-    private volatile boolean closed = false;
+    private final ConcurrentHashMap<String, Deque<ClassInfo>> historyMap = new ConcurrentHashMap<>();
+    private final CopyOnWriteArrayList<HotSwapListener> listeners = new CopyOnWriteArrayList<>();
+    private final int maxHistoryVersions;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     private record ClassInfo(Class<?> clazz, byte[] bytecode, int version, ClassLoader definingLoader) {}
 
@@ -56,7 +70,7 @@ public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
      * 使用默认父加载器创建热替换类加载器
      */
     public HotSwapClassLoader() {
-        this(Thread.currentThread().getContextClassLoader());
+        this(Thread.currentThread().getContextClassLoader(), DEFAULT_MAX_HISTORY_VERSIONS);
     }
 
     /**
@@ -66,7 +80,22 @@ public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
      * @param parent parent classloader | 父类加载器
      */
     public HotSwapClassLoader(ClassLoader parent) {
+        this(parent, DEFAULT_MAX_HISTORY_VERSIONS);
+    }
+
+    /**
+     * Create HotSwap classloader with specified parent and max history versions
+     * 使用指定父加载器和最大历史版本数创建热替换类加载器
+     *
+     * @param parent             parent classloader | 父类加载器
+     * @param maxHistoryVersions max history versions to keep | 保留的最大历史版本数
+     */
+    public HotSwapClassLoader(ClassLoader parent, int maxHistoryVersions) {
         super(parent);
+        if (maxHistoryVersions < 0) {
+            throw new IllegalArgumentException("maxHistoryVersions must be non-negative");
+        }
+        this.maxHistoryVersions = maxHistoryVersions;
     }
 
     /**
@@ -90,6 +119,29 @@ public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
         return new HotSwapClassLoader(parent);
     }
 
+    /**
+     * Create HotSwap classloader with default parent and specified max history versions
+     * 使用默认父加载器和指定最大历史版本数创建热替换类加载器
+     *
+     * @param maxHistoryVersions max history versions to keep | 保留的最大历史版本数
+     * @return new HotSwapClassLoader | 新的热替换类加载器
+     */
+    public static HotSwapClassLoader create(int maxHistoryVersions) {
+        return new HotSwapClassLoader(Thread.currentThread().getContextClassLoader(), maxHistoryVersions);
+    }
+
+    /**
+     * Create HotSwap classloader with specified parent and max history versions
+     * 使用指定父加载器和最大历史版本数创建热替换类加载器
+     *
+     * @param parent             parent classloader | 父类加载器
+     * @param maxHistoryVersions max history versions to keep | 保留的最大历史版本数
+     * @return new HotSwapClassLoader | 新的热替换类加载器
+     */
+    public static HotSwapClassLoader create(ClassLoader parent, int maxHistoryVersions) {
+        return new HotSwapClassLoader(parent, maxHistoryVersions);
+    }
+
     // ==================== Class Loading | 类加载 ====================
 
     /**
@@ -105,15 +157,41 @@ public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
         Objects.requireNonNull(name, "Class name must not be null");
         Objects.requireNonNull(bytecode, "Bytecode must not be null");
 
-        int version = versionMap.computeIfAbsent(name, k -> new AtomicInteger(0)).incrementAndGet();
-        // Use a disposable child classloader for each definition to allow reloading
-        // the same class name. JVM does not allow defineClass() for the same name
-        // on the same ClassLoader instance.
+        // Use compute() to atomically read current info, push history, and store new version.
+        // This prevents concurrent loadClass calls for the same name from corrupting history.
         byte[] bytecodeCopy = bytecode.clone();
-        SingleClassLoader child = new SingleClassLoader(this, name, bytecodeCopy);
-        Class<?> clazz = child.defineClassFromBytecode();
-        classInfoMap.put(name, new ClassInfo(clazz, bytecodeCopy, version, child));
-        return clazz;
+        int[] versions = new int[2]; // [0]=oldVersion, [1]=newVersion
+
+        ClassInfo newInfo = classInfoMap.compute(name, (n, currentInfo) -> {
+            if (currentInfo != null) {
+                versions[0] = currentInfo.version();
+                Deque<ClassInfo> history = historyMap.computeIfAbsent(n, k -> new ConcurrentLinkedDeque<>());
+                history.addLast(currentInfo);
+                while (history.size() > maxHistoryVersions) {
+                    history.removeFirst();
+                }
+            }
+
+            int version = versionMap.computeIfAbsent(n, k -> new AtomicInteger(0)).incrementAndGet();
+            versions[1] = version;
+            // Use a disposable child classloader for each definition to allow reloading
+            // the same class name. JVM does not allow defineClass() for the same name
+            // on the same ClassLoader instance.
+            SingleClassLoader child = new SingleClassLoader(HotSwapClassLoader.this, n, bytecodeCopy);
+            Class<?> clazz = child.defineClassFromBytecode();
+            return new ClassInfo(clazz, bytecodeCopy, version, child);
+        });
+
+        // Notify listeners outside the compute (exceptions must not affect loading)
+        for (HotSwapListener listener : listeners) {
+            try {
+                listener.onSwap(name, versions[0], versions[1]);
+            } catch (Exception ignored) {
+                // Listener exceptions must not affect class loading
+            }
+        }
+
+        return newInfo.clazz();
     }
 
     /**
@@ -204,6 +282,101 @@ public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
         return info != null ? Optional.of(info.bytecode().clone()) : Optional.empty();
     }
 
+    // ==================== Rollback | 版本回退 ====================
+
+    /**
+     * Rollback to previous version of a class
+     * 回退到类的上一个版本
+     *
+     * @param className class name | 类名
+     * @return the previous version class, or empty if no history | 上一个版本的类，无历史返回 empty
+     */
+    public Optional<Class<?>> rollback(String className) {
+        checkNotClosed();
+        Objects.requireNonNull(className, "Class name must not be null");
+
+        // Use compute() to atomically swap current with previous from history.
+        // This prevents concurrent rollback/loadClass from corrupting state.
+        int[] versions = new int[2]; // [0]=oldVersion, [1]=restoredVersion
+        Class<?>[] result = new Class<?>[1];
+
+        classInfoMap.compute(className, (name, currentInfo) -> {
+            Deque<ClassInfo> history = historyMap.get(name);
+            if (history == null || history.isEmpty()) {
+                return currentInfo; // no change
+            }
+
+            ClassInfo previous = history.removeLast();
+            versions[0] = currentInfo != null ? currentInfo.version() : 0;
+            versions[1] = previous.version();
+            result[0] = previous.clazz();
+
+            versionMap.computeIfAbsent(name, k -> new AtomicInteger(0)).set(previous.version());
+            return previous;
+        });
+
+        if (result[0] == null) {
+            return Optional.empty();
+        }
+
+        // Notify listeners about rollback (outside compute)
+        for (HotSwapListener listener : listeners) {
+            try {
+                listener.onSwap(className, versions[0], versions[1]);
+            } catch (Exception ignored) {
+                // Listener exceptions must not affect rollback
+            }
+        }
+
+        return Optional.of(result[0]);
+    }
+
+    /**
+     * Get version history count for a class
+     * 获取类的历史版本数量
+     *
+     * @param className class name | 类名
+     * @return history count | 历史版本数量
+     */
+    public int getHistoryCount(String className) {
+        Deque<ClassInfo> history = historyMap.get(className);
+        return history != null ? history.size() : 0;
+    }
+
+    // ==================== Listeners | 事件监听 ====================
+
+    /**
+     * Add hot-swap event listener
+     * 添加热替换事件监听器
+     *
+     * @param listener listener to add | 要添加的监听器
+     */
+    public void addListener(HotSwapListener listener) {
+        Objects.requireNonNull(listener, "Listener must not be null");
+        listeners.add(listener);
+    }
+
+    /**
+     * Remove hot-swap event listener
+     * 移除热替换事件监听器
+     *
+     * @param listener listener to remove | 要移除的监听器
+     */
+    public void removeListener(HotSwapListener listener) {
+        Objects.requireNonNull(listener, "Listener must not be null");
+        listeners.remove(listener);
+    }
+
+    /**
+     * Get max history versions setting
+     * 获取最大历史版本设置
+     *
+     * @return max history versions | 最大历史版本数
+     */
+    public int getMaxHistoryVersions() {
+        return maxHistoryVersions;
+    }
+
     // ==================== Class Management | 类管理 ====================
 
     /**
@@ -226,16 +399,18 @@ public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
         checkNotClosed();
         classInfoMap.clear();
         versionMap.clear();
+        historyMap.clear();
     }
 
     // ==================== Lifecycle | 生命周期 ====================
 
     @Override
     public void close() {
-        if (!closed) {
-            closed = true;
+        if (closed.compareAndSet(false, true)) {
             classInfoMap.clear();
             versionMap.clear();
+            historyMap.clear();
+            listeners.clear();
         }
     }
 
@@ -246,11 +421,11 @@ public class HotSwapClassLoader extends ClassLoader implements AutoCloseable {
      * @return true if closed | 已关闭返回 true
      */
     public boolean isClosed() {
-        return closed;
+        return closed.get();
     }
 
     private void checkNotClosed() {
-        if (closed) {
+        if (closed.get()) {
             throw OpenClassLoaderException.classLoaderClosed();
         }
     }

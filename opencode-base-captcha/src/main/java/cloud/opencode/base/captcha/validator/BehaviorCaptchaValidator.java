@@ -2,6 +2,10 @@ package cloud.opencode.base.captcha.validator;
 
 import cloud.opencode.base.captcha.ValidationResult;
 import cloud.opencode.base.captcha.security.BehaviorAnalyzer;
+import cloud.opencode.base.captcha.security.CaptchaSecurity;
+import cloud.opencode.base.captcha.security.TrajectoryAnalyzer;
+import cloud.opencode.base.captcha.security.TrajectoryAnalyzer.TrajectoryResult;
+import cloud.opencode.base.captcha.security.TrajectoryData;
 import cloud.opencode.base.captcha.store.CaptchaStore;
 
 import java.time.Duration;
@@ -60,6 +64,7 @@ public final class BehaviorCaptchaValidator implements CaptchaValidator {
 
     private final CaptchaStore store;
     private final BehaviorAnalyzer analyzer;
+    private final TrajectoryAnalyzer trajectoryAnalyzer = new TrajectoryAnalyzer();
     private final Map<String, CreationRecord> creationRecords = new ConcurrentHashMap<>();
 
     /**
@@ -91,7 +96,16 @@ public final class BehaviorCaptchaValidator implements CaptchaValidator {
      * @param captchaId the CAPTCHA ID | 验证码 ID
      * @param clientId  the client identifier | 客户端标识符
      */
+    /** Maximum number of tracked creation records to prevent unbounded growth (OOM). | 最大跟踪创建记录数，防止无限制增长（OOM）。 */
+    private static final int MAX_CREATION_RECORDS = 100_000;
+
     public void recordCreation(String captchaId, String clientId) {
+        if (creationRecords.size() >= MAX_CREATION_RECORDS) {
+            clearOldRecords();
+        }
+        if (creationRecords.size() >= MAX_CREATION_RECORDS) {
+            return;
+        }
         creationRecords.put(captchaId, new CreationRecord(clientId, Instant.now()));
     }
 
@@ -154,8 +168,8 @@ public final class BehaviorCaptchaValidator implements CaptchaValidator {
 
         String stored = storedAnswer.get();
         boolean matches = caseSensitive
-            ? stored.equals(answer)
-            : stored.equalsIgnoreCase(answer);
+            ? CaptchaSecurity.constantTimeEquals(stored, answer)
+            : CaptchaSecurity.constantTimeEquals(stored.toLowerCase(), answer.toLowerCase());
 
         // Record result in analyzer
         if (record != null) {
@@ -206,6 +220,64 @@ public final class BehaviorCaptchaValidator implements CaptchaValidator {
     }
 
     /**
+     * Validates with trajectory data for enhanced bot detection.
+     * 使用轨迹数据进行增强机器人检测验证。
+     *
+     * <p>When trajectory data is provided, it is analyzed first. If the trajectory
+     * indicates bot-like behavior, the validation is rejected immediately.</p>
+     * <p>当提供轨迹数据时，首先进行轨迹分析。如果轨迹表明机器人行为，验证将立即被拒绝。</p>
+     *
+     * @param id         the CAPTCHA ID | 验证码 ID
+     * @param answer     the provided answer | 提供的答案
+     * @param clientId   the client identifier | 客户端标识符
+     * @param trajectory the trajectory data, may be null | 轨迹数据，可以为 null
+     * @return the validation result | 验证结果
+     *
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    public ValidationResult validate(String id, String answer, String clientId,
+                                      TrajectoryData trajectory) {
+        return validate(id, answer, clientId, trajectory, false);
+    }
+
+    /**
+     * Validates with trajectory data and case sensitivity option.
+     * 使用轨迹数据和大小写敏感选项进行验证。
+     *
+     * <p>When trajectory data is provided, it is analyzed first. If the trajectory
+     * indicates bot-like behavior (any result other than {@code HUMAN} or
+     * {@code INSUFFICIENT_DATA}), the validation is rejected with a suspicious
+     * behavior result.</p>
+     * <p>当提供轨迹数据时，首先进行轨迹分析。如果轨迹表明机器人行为
+     * （任何非 {@code HUMAN} 或 {@code INSUFFICIENT_DATA} 的结果），
+     * 验证将以可疑行为结果被拒绝。</p>
+     *
+     * @param id            the CAPTCHA ID | 验证码 ID
+     * @param answer        the provided answer | 提供的答案
+     * @param clientId      the client identifier | 客户端标识符
+     * @param trajectory    the trajectory data, may be null | 轨迹数据，可以为 null
+     * @param caseSensitive whether case sensitive | 是否区分大小写
+     * @return the validation result | 验证结果
+     *
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    public ValidationResult validate(String id, String answer, String clientId,
+                                      TrajectoryData trajectory, boolean caseSensitive) {
+        // Analyze trajectory if provided
+        if (trajectory != null) {
+            TrajectoryResult trajectoryResult = trajectoryAnalyzer.analyze(trajectory);
+            if (trajectoryResult != TrajectoryResult.HUMAN
+                && trajectoryResult != TrajectoryResult.INSUFFICIENT_DATA) {
+                store.remove(id);
+                return ValidationResult.suspiciousBehavior();
+            }
+        }
+
+        // Delegate to existing validation
+        return validate(id, answer, clientId, caseSensitive);
+    }
+
+    /**
      * Gets the behavior analyzer.
      * 获取行为分析器。
      *
@@ -213,6 +285,18 @@ public final class BehaviorCaptchaValidator implements CaptchaValidator {
      */
     public BehaviorAnalyzer getAnalyzer() {
         return analyzer;
+    }
+
+    /**
+     * Gets the trajectory analyzer.
+     * 获取轨迹分析器。
+     *
+     * @return the trajectory analyzer | 轨迹分析器
+     *
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    public TrajectoryAnalyzer getTrajectoryAnalyzer() {
+        return trajectoryAnalyzer;
     }
 
     /**

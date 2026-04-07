@@ -67,37 +67,11 @@ public record PolygonFence(List<Coordinate> vertices) implements GeoFence {
         double py = point.latitude();
         int n = vertices.size();
 
-        // First check if point is on the boundary (vertices or edges)
-        // This handles the edge cases where ray-casting can be ambiguous
-        if (isOnBoundary(px, py, n)) {
-            return true;
-        }
-
-        // Ray casting algorithm for interior points
-        boolean inside = false;
-
-        for (int i = 0, j = n - 1; i < n; j = i++) {
-            double xi = vertices.get(i).longitude();
-            double yi = vertices.get(i).latitude();
-            double xj = vertices.get(j).longitude();
-            double yj = vertices.get(j).latitude();
-
-            if (((yi > py) != (yj > py))
-                && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
-                inside = !inside;
-            }
-        }
-
-        return inside;
-    }
-
-    /**
-     * Check if point is on the polygon boundary (vertices or edges)
-     * 检查点是否在多边形边界上（顶点或边）
-     */
-    private boolean isOnBoundary(double px, double py, int n) {
         // Tolerance for floating point comparison (~1mm at equator)
         final double EPSILON = 1e-8;
+
+        // Single-pass: ray casting + boundary check combined
+        boolean inside = false;
 
         for (int i = 0, j = n - 1; i < n; j = i++) {
             double xi = vertices.get(i).longitude();
@@ -110,13 +84,19 @@ public record PolygonFence(List<Coordinate> vertices) implements GeoFence {
                 return true;
             }
 
-            // Check if point is on edge (between vertices i and j)
+            // Check if point is on edge
             if (isOnEdge(px, py, xi, yi, xj, yj, EPSILON)) {
                 return true;
             }
+
+            // Ray casting
+            if (((yi > py) != (yj > py))
+                && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+                inside = !inside;
+            }
         }
 
-        return false;
+        return inside;
     }
 
     /**

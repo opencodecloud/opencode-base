@@ -8,12 +8,18 @@
 
 ### Core Features
 - **String Operations**: Padding, truncation, case conversion, reverse, shuffle, wrap/unwrap
+- **Null-safe Checks**: `isBlank()`, `isEmpty()`, `isNotBlank()`, `isNotEmpty()` (V1.0.3)
+- **Batch Matching**: `containsAny()`, `startsWithAny()`, `endsWithAny()`, ignore-case variants (V1.0.3)
+- **Single-pass Multi-replace**: `replaceEach()` — one scan, no recursive replacement (V1.0.3)
+- **SLF4J-style Format**: `format("{} has {} items", name, count)` (V1.0.3)
 - **Naming Conversion**: camelCase, PascalCase, snake_case, kebab-case, SCREAMING_SNAKE_CASE
 - **Template Engine**: Variable interpolation, if/for/include nodes, custom filters
-- **Similarity Algorithms**: Levenshtein distance, Jaccard similarity, Cosine similarity
+- **Similarity Algorithms**: Levenshtein distance (+ bounded), Jaccard, Cosine, Jaro-Winkler
 - **Fuzzy Matching**: Aho-Corasick multi-pattern matching, fuzzy search with scoring
 
 ### Advanced Features
+- **Grapheme Cluster Operations**: Emoji-safe length, substring, reverse, display width (V1.0.3)
+- **URL Slug Generation**: NFD normalization, accent stripping, configurable separator (V1.0.3)
 - **Data Desensitization**: Annotation-driven masking for phone, email, ID card, bank card, etc.
 - **Jackson Integration**: Custom serializer for transparent JSON desensitization
 - **Regex Utilities**: Precompiled patterns, common validation (email, phone, IP, URL)
@@ -31,7 +37,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-string</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -39,6 +45,8 @@
 
 ```java
 import cloud.opencode.base.string.*;
+import cloud.opencode.base.string.similarity.LevenshteinDistance;
+import cloud.opencode.base.string.unicode.OpenGrapheme;
 
 // Padding and truncation
 String padded = OpenString.padLeft("42", 5, '0');     // "00042"
@@ -55,12 +63,42 @@ String snake = OpenNaming.toSnakeCase("userName");     // "user_name"
 // Template engine
 String result = OpenTemplate.render("Hello, ${name}!", Map.of("name", "World"));
 
+// SLF4J-style format (V1.0.3)
+String msg = OpenString.format("{} has {} items", "Alice", 3); // "Alice has 3 items"
+
+// Null-safe checks (V1.0.3)
+boolean blank = OpenString.isBlank(null);    // true
+boolean has = OpenString.containsAny("abc", "x", "b"); // true
+
+// Single-pass multi-replace (V1.0.3)
+String replaced = OpenString.replaceEach("aabbcc",
+    new String[]{"aa", "bb"}, new String[]{"11", "22"}); // "1122cc"
+
+// Grapheme-aware operations (V1.0.3)
+int len = OpenGrapheme.length("a👨‍👩‍👧‍👦b");    // 3 (not 11)
+String rev = OpenGrapheme.reverse("a👨‍👩‍👧‍👦b"); // "b👨‍👩‍👧‍👦a"
+int width = OpenGrapheme.displayWidth("Hi你好");  // 6
+
+// Split and join (V1.0.3)
+List<String> parts = OpenString.split("a,b,c", ",");        // ["a", "b", "c"]
+String joined = OpenString.joinSkipBlanks(", ", "a", "", "b"); // "a, b"
+
+// Abbreviation (V1.0.3)
+String abbr = OpenString.abbreviate("Hello World Test String", 15); // "Hello World..."
+
+// URL slug generation (V1.0.3)
+String slug = OpenSlug.toSlug("Hello World!");    // "hello-world"
+
 // Similarity
 double score = OpenSimilarity.levenshtein("kitten", "sitting");
 
+// Bounded Levenshtein distance (V1.0.3) — early exit if distance > threshold
+int dist = LevenshteinDistance.boundedDistance("kitten", "sitting", 5); // 3
+int far  = LevenshteinDistance.boundedDistance("abc", "xyz", 1);       // -1 (exceeded)
+
 // Desensitization
 String masked = OpenMask.maskPhone("13812345678");     // "138****5678"
-String email = OpenMask.maskEmail("test@example.com"); // "t***@example.com"
+String email = OpenMask.maskEmail("test@example.com"); // "t***t@example.com"
 ```
 
 ## Class Reference
@@ -68,8 +106,9 @@ String email = OpenMask.maskEmail("test@example.com"); // "t***@example.com"
 ### Root Package (`cloud.opencode.base.string`)
 | Class | Description |
 |-------|-------------|
-| `OpenString` | Core string operations facade: padding, truncation, case conversion, extraction, cleaning, validation |
+| `OpenString` | Core string operations facade: padding, truncation, case conversion, extraction, cleaning, validation, null-safe checks, batch matching, replaceEach, SLF4J format, split/join |
 | `OpenNaming` | Naming convention conversion: camelCase, snake_case, kebab-case, PascalCase |
+| `OpenSlug` | URL-friendly slug generation with accent stripping and configurable separator |
 | `OpenTemplate` | Simple template rendering with variable substitution |
 
 ### Abbreviation (`string.abbr`)
@@ -209,6 +248,7 @@ String email = OpenMask.maskEmail("test@example.com"); // "t***@example.com"
 | `OpenChinese` | Chinese character detection and conversion |
 | `OpenFullWidth` | Full-width/half-width character conversion |
 | `OpenUnicode` | Unicode character utilities |
+| `OpenGrapheme` | Grapheme cluster operations: emoji-safe length, substring, reverse, display width |
 
 ## Requirements
 

@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 @DisplayName("FeatureNotFoundException 测试")
 class FeatureNotFoundExceptionTest {
@@ -26,9 +26,9 @@ class FeatureNotFoundExceptionTest {
         void testConstructor() {
             FeatureNotFoundException ex = new FeatureNotFoundException("my-feature");
 
-            assertThat(ex.getMessage()).isEqualTo("Feature not found: my-feature");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (1001) Feature not found: my-feature");
             assertThat(ex.getFeatureKey()).isEqualTo("my-feature");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.NOT_FOUND);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.NOT_FOUND);
         }
     }
 

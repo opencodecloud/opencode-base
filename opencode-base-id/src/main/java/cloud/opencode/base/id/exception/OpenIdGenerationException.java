@@ -3,8 +3,8 @@ package cloud.opencode.base.id.exception;
 import cloud.opencode.base.core.exception.OpenException;
 
 /**
- * ID Generation Exception
- * ID生成异常
+ * ID Generation Exception - Unified exception for all ID generation failures
+ * ID生成异常 - 所有ID生成失败的统一异常
  *
  * <p>Exception thrown when ID generation fails due to various reasons
  * such as clock backward, segment exhaustion, or invalid parameters.</p>
@@ -14,7 +14,20 @@ import cloud.opencode.base.core.exception.OpenException;
  * <ul>
  *   <li>Generator type tracking - 生成器类型追踪</li>
  *   <li>Business tag support - 业务标识支持</li>
+ *   <li>Structured error codes - 结构化错误码</li>
  *   <li>Factory methods for common errors - 常见错误的工厂方法</li>
+ * </ul>
+ *
+ * <p><strong>Error Codes | 错误码:</strong></p>
+ * <ul>
+ *   <li>{@link #ERR_CLOCK_BACKWARD} - Clock moved backwards | 时钟回拨</li>
+ *   <li>{@link #ERR_INVALID_PARAMETER} - Invalid configuration parameter | 参数无效</li>
+ *   <li>{@link #ERR_SEGMENT_EXHAUSTED} - ID segment exhausted | 号段耗尽</li>
+ *   <li>{@link #ERR_SEGMENT_FAILED} - Segment allocation failed | 号段分配失败</li>
+ *   <li>{@link #ERR_INVALID_FORMAT} - Invalid ID format | ID格式无效</li>
+ *   <li>{@link #ERR_SEQUENCE_OVERFLOW} - Sequence counter overflow | 序列号溢出</li>
+ *   <li>{@link #ERR_INVALID_PREFIX} - Invalid typed ID prefix | 无效前缀</li>
+ *   <li>{@link #ERR_TABLE_INIT_FAILED} - Database table init failed | 数据库表初始化失败</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -22,9 +35,13 @@ import cloud.opencode.base.core.exception.OpenException;
  * try {
  *     long id = generator.generate();
  * } catch (OpenIdGenerationException e) {
- *     log.error("ID generation failed: type={}, bizTag={}",
- *         e.generatorType(), e.bizTag());
+ *     log.error("ID generation failed: type={}, bizTag={}, code={}",
+ *         e.generatorType(), e.bizTag(), e.getErrorCode());
  * }
+ *
+ * // Using factory methods
+ * throw OpenIdGenerationException.clockBackward(lastTs, currentTs);
+ * throw OpenIdGenerationException.invalidPrefix("MyPrefix");
  * }</pre>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -41,6 +58,27 @@ import cloud.opencode.base.core.exception.OpenException;
 public class OpenIdGenerationException extends OpenException {
 
     private static final String COMPONENT = "id";
+
+    // ==================== Error Codes | 错误码 ====================
+
+    /** Clock moved backwards | 时钟回拨 */
+    public static final String ERR_CLOCK_BACKWARD    = "CLOCK_BACKWARD";
+    /** Invalid configuration parameter | 参数无效 */
+    public static final String ERR_INVALID_PARAMETER = "INVALID_PARAMETER";
+    /** ID segment exhausted | 号段耗尽 */
+    public static final String ERR_SEGMENT_EXHAUSTED = "SEGMENT_EXHAUSTED";
+    /** Segment allocation failed | 号段分配失败 */
+    public static final String ERR_SEGMENT_FAILED    = "SEGMENT_ALLOCATION_FAILED";
+    /** Invalid ID format | ID格式无效 */
+    public static final String ERR_INVALID_FORMAT    = "INVALID_ID_FORMAT";
+    /** Sequence counter overflow | 序列号溢出 */
+    public static final String ERR_SEQUENCE_OVERFLOW = "SEQUENCE_OVERFLOW";
+    /** Invalid typed ID prefix | 无效前缀 */
+    public static final String ERR_INVALID_PREFIX    = "INVALID_PREFIX";
+    /** Database table initialization failed | 数据库表初始化失败 */
+    public static final String ERR_TABLE_INIT_FAILED = "TABLE_INIT_FAILED";
+
+    // ==================== Fields | 字段 ====================
 
     /**
      * Generator type
@@ -110,6 +148,17 @@ public class OpenIdGenerationException extends OpenException {
         this.bizTag = bizTag;
     }
 
+    /**
+     * Private full-args constructor used by factory methods
+     * 工厂方法使用的私有全参构造方法
+     */
+    private OpenIdGenerationException(String errorCode, String generatorType, String bizTag,
+                                      String message, Throwable cause) {
+        super(COMPONENT, errorCode, message, cause);
+        this.generatorType = generatorType;
+        this.bizTag = bizTag;
+    }
+
     // ==================== Accessors | 访问方法 ====================
 
     /**
@@ -143,9 +192,9 @@ public class OpenIdGenerationException extends OpenException {
      * @return exception | 异常
      */
     public static OpenIdGenerationException clockBackward(long lastTimestamp, long currentTimestamp) {
-        return new OpenIdGenerationException("snowflake", null,
+        return new OpenIdGenerationException(ERR_CLOCK_BACKWARD, "snowflake", null,
                 String.format("Clock moved backwards. Last timestamp: %d, current: %d, diff: %d ms",
-                        lastTimestamp, currentTimestamp, lastTimestamp - currentTimestamp));
+                        lastTimestamp, currentTimestamp, lastTimestamp - currentTimestamp), null);
     }
 
     /**
@@ -158,8 +207,8 @@ public class OpenIdGenerationException extends OpenException {
      * @return exception | 异常
      */
     public static OpenIdGenerationException invalidParameter(String param, long value, String range) {
-        return new OpenIdGenerationException(null, null,
-                String.format("Invalid parameter '%s': %d, valid range: %s", param, value, range));
+        return new OpenIdGenerationException(ERR_INVALID_PARAMETER, null, null,
+                String.format("Invalid parameter '%s': %d, valid range: %s", param, value, range), null);
     }
 
     /**
@@ -170,8 +219,8 @@ public class OpenIdGenerationException extends OpenException {
      * @return exception | 异常
      */
     public static OpenIdGenerationException segmentExhausted(String bizTag) {
-        return new OpenIdGenerationException("segment", bizTag,
-                String.format("Segment exhausted for bizTag: %s", bizTag));
+        return new OpenIdGenerationException(ERR_SEGMENT_EXHAUSTED, "segment", bizTag,
+                String.format("Segment exhausted for bizTag: %s", bizTag), null);
     }
 
     /**
@@ -183,7 +232,7 @@ public class OpenIdGenerationException extends OpenException {
      * @return exception | 异常
      */
     public static OpenIdGenerationException segmentAllocationFailed(String bizTag, Throwable cause) {
-        return new OpenIdGenerationException("segment", bizTag,
+        return new OpenIdGenerationException(ERR_SEGMENT_FAILED, "segment", bizTag,
                 String.format("Failed to allocate segment for bizTag: %s", bizTag), cause);
     }
 
@@ -196,8 +245,8 @@ public class OpenIdGenerationException extends OpenException {
      * @return exception | 异常
      */
     public static OpenIdGenerationException invalidIdFormat(String generatorType, String id) {
-        return new OpenIdGenerationException(generatorType, null,
-                String.format("Invalid ID format for %s: %s", generatorType, id));
+        return new OpenIdGenerationException(ERR_INVALID_FORMAT, generatorType, null,
+                String.format("Invalid ID format for %s: %s", generatorType, id), null);
     }
 
     /**
@@ -208,7 +257,32 @@ public class OpenIdGenerationException extends OpenException {
      * @return exception | 异常
      */
     public static OpenIdGenerationException sequenceOverflow(long maxSequence) {
-        return new OpenIdGenerationException("snowflake", null,
-                String.format("Sequence overflow, max sequence: %d", maxSequence));
+        return new OpenIdGenerationException(ERR_SEQUENCE_OVERFLOW, "snowflake", null,
+                String.format("Sequence overflow, max sequence: %d", maxSequence), null);
+    }
+
+    /**
+     * Creates an invalid prefix exception for typed/prefixed IDs
+     * 创建类型化ID的无效前缀异常
+     *
+     * @param prefix the invalid prefix | 无效的前缀
+     * @return exception | 异常
+     */
+    public static OpenIdGenerationException invalidPrefix(String prefix) {
+        return new OpenIdGenerationException(ERR_INVALID_PREFIX, "TypedId", null,
+                String.format("Invalid prefix: '%s' — prefix must match [a-z][a-z0-9_]{0,30}", prefix), null);
+    }
+
+    /**
+     * Creates a table initialization failed exception
+     * 创建数据库表初始化失败异常
+     *
+     * @param tableName the table name | 表名
+     * @param cause     the underlying cause | 底层原因
+     * @return exception | 异常
+     */
+    public static OpenIdGenerationException tableInitFailed(String tableName, Throwable cause) {
+        return new OpenIdGenerationException(ERR_TABLE_INIT_FAILED, "segment", null,
+                String.format("Failed to initialize table: %s", tableName), cause);
     }
 }

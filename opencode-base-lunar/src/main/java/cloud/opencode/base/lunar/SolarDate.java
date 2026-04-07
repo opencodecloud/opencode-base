@@ -4,6 +4,7 @@ import cloud.opencode.base.lunar.internal.LunarCalculator;
 import cloud.opencode.base.lunar.zodiac.Constellation;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 /**
  * Solar Date
@@ -43,6 +44,25 @@ import java.time.LocalDate;
  */
 public record SolarDate(int year, int month, int day) {
 
+    public SolarDate {
+        // Eagerly validate by constructing LocalDate
+        LocalDate.of(year, month, day);
+    }
+
+    /**
+     * Create solar date from year, month, and day
+     * 通过年月日创建公历日期
+     *
+     * @param year the year | 年
+     * @param month the month (1-12) | 月（1-12）
+     * @param day the day | 日
+     * @return the solar date | 公历日期
+     * @since V1.0.3
+     */
+    public static SolarDate of(int year, int month, int day) {
+        return new SolarDate(year, month, day);
+    }
+
     /**
      * Create solar date from LocalDate
      * 从LocalDate创建公历日期
@@ -51,6 +71,7 @@ public record SolarDate(int year, int month, int day) {
      * @return the solar date | 公历日期
      */
     public static SolarDate of(LocalDate date) {
+        Objects.requireNonNull(date, "date must not be null");
         return new SolarDate(date.getYear(), date.getMonthValue(), date.getDayOfMonth());
     }
 

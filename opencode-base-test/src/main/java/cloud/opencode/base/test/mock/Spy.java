@@ -2,8 +2,8 @@ package cloud.opencode.base.test.mock;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Spy
@@ -37,7 +37,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class Spy {
 
-    private final List<Invocation> invocations = new CopyOnWriteArrayList<>();
+    private final List<Invocation> invocations = Collections.synchronizedList(new ArrayList<>());
 
     /**
      * Record an invocation

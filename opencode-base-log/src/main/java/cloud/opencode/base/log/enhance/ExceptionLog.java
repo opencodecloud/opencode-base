@@ -23,7 +23,10 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -131,9 +134,9 @@ public final class ExceptionLog {
      */
     public static void errorOnce(String message, Throwable throwable) {
         String signature = getExceptionSignature(throwable);
-        // Prevent unbounded growth: clear if too large
+        // Prevent unbounded growth: evict oldest batch instead of clearing all
         if (LOGGED_EXCEPTIONS.size() > MAX_TRACKED_EXCEPTIONS) {
-            LOGGED_EXCEPTIONS.clear();
+            evictOldest(LOGGED_EXCEPTIONS, MAX_TRACKED_EXCEPTIONS / 10);
         }
         if (LOGGED_EXCEPTIONS.add(signature)) {
             error(message, throwable);
@@ -151,9 +154,9 @@ public final class ExceptionLog {
     public static void errorRateLimited(String message, Throwable throwable, Duration interval) {
         String signature = getExceptionSignature(throwable);
         long now = System.currentTimeMillis();
-        // Prevent unbounded growth: clear if too large
+        // Prevent unbounded growth: evict oldest batch instead of clearing all
         if (LAST_LOG_TIMES.size() > MAX_TRACKED_EXCEPTIONS) {
-            LAST_LOG_TIMES.clear();
+            evictOldestTimes(LAST_LOG_TIMES, MAX_TRACKED_EXCEPTIONS / 10);
         }
         AtomicLong lastTime = LAST_LOG_TIMES.computeIfAbsent(signature, _ -> new AtomicLong(0));
         long last = lastTime.get();
@@ -193,8 +196,10 @@ public final class ExceptionLog {
         if (throwable == null) {
             return null;
         }
+        // Use visited set to detect arbitrary cycles (not just self-reference)
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         Throwable cause = throwable;
-        while (cause.getCause() != null && cause.getCause() != cause) {
+        while (cause.getCause() != null && visited.add(cause)) {
             cause = cause.getCause();
         }
         return cause;
@@ -334,6 +339,34 @@ public final class ExceptionLog {
         }
 
         return sb.toString();
+    }
+
+    // ==================== Eviction Helpers | 淘汰帮助方法 ====================
+
+    /**
+     * Evicts a batch of entries from a Set to prevent unbounded growth.
+     * 从 Set 中批量淘汰条目以防止无限增长。
+     */
+    private static void evictOldest(Set<String> set, int count) {
+        var iterator = set.iterator();
+        for (int i = 0; i < count && iterator.hasNext(); i++) {
+            iterator.next();
+            iterator.remove();
+        }
+    }
+
+    /**
+     * Evicts entries with the oldest timestamps from a rate-limit map.
+     * 从限速映射中淘汰最旧时间戳的条目。
+     */
+    private static void evictOldestTimes(ConcurrentHashMap<String, AtomicLong> map, int count) {
+        map.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue(
+                        java.util.Comparator.comparingLong(AtomicLong::get)))
+                .limit(count)
+                .map(Map.Entry::getKey)
+                .toList()
+                .forEach(map::remove);
     }
 
     // ==================== Utility Methods | 工具方法 ====================

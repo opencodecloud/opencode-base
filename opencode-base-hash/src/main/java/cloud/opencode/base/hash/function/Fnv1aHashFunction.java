@@ -89,6 +89,11 @@ public final class Fnv1aHashFunction extends AbstractHashFunction {
 
     @Override
     public HashCode hashBytes(byte[] input, int offset, int length) {
+        java.util.Objects.requireNonNull(input, "input");
+        if (offset < 0 || length < 0 || length > input.length - offset) {
+            throw cloud.opencode.base.hash.exception.OpenHashException.invalidInput(
+                    "offset=" + offset + ", length=" + length + ", array.length=" + input.length);
+        }
         if (is64Bit) {
             return HashCode.fromLong(hash64(input, offset, length));
         } else {

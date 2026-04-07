@@ -1,5 +1,6 @@
 package cloud.opencode.base.feature;
 
+import cloud.opencode.base.feature.lifecycle.FeatureLifecycle;
 import cloud.opencode.base.feature.strategy.AlwaysOffStrategy;
 import cloud.opencode.base.feature.strategy.AlwaysOnStrategy;
 import cloud.opencode.base.feature.strategy.PercentageStrategy;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
@@ -20,7 +22,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 @DisplayName("Feature 测试")
 class FeatureTest {
@@ -203,6 +205,73 @@ class FeatureTest {
             assertThat(feature.createdAt()).isBetween(before, after);
             assertThat(feature.updatedAt()).isBetween(before, after);
         }
+
+        @Test
+        @DisplayName("设置功能组")
+        void testBuilderWithGroup() {
+            Feature feature = Feature.builder("key")
+                    .group("payment")
+                    .build();
+
+            assertThat(feature.group()).isEqualTo("payment");
+        }
+
+        @Test
+        @DisplayName("设置过期时间")
+        void testBuilderWithExpiresAt() {
+            Instant expiresAt = Instant.now().plus(Duration.ofHours(1));
+            Feature feature = Feature.builder("key")
+                    .expiresAt(expiresAt)
+                    .build();
+
+            assertThat(feature.expiresAt()).isEqualTo(expiresAt);
+        }
+
+        @Test
+        @DisplayName("设置过期持续时间")
+        void testBuilderWithExpiresAfter() {
+            Instant before = Instant.now().plus(Duration.ofHours(1));
+            Feature feature = Feature.builder("key")
+                    .expiresAfter(Duration.ofHours(1))
+                    .build();
+            Instant after = Instant.now().plus(Duration.ofHours(1));
+
+            assertThat(feature.expiresAt()).isBetween(before, after);
+        }
+
+        @Test
+        @DisplayName("设置生命周期状态")
+        void testBuilderWithLifecycle() {
+            Feature feature = Feature.builder("key")
+                    .lifecycle(FeatureLifecycle.DEPRECATED)
+                    .build();
+
+            assertThat(feature.lifecycle()).isEqualTo(FeatureLifecycle.DEPRECATED);
+        }
+
+        @Test
+        @DisplayName("默认生命周期状态为ACTIVE")
+        void testBuilderDefaultLifecycle() {
+            Feature feature = Feature.builder("key").build();
+
+            assertThat(feature.lifecycle()).isEqualTo(FeatureLifecycle.ACTIVE);
+        }
+
+        @Test
+        @DisplayName("默认group为null")
+        void testBuilderDefaultGroup() {
+            Feature feature = Feature.builder("key").build();
+
+            assertThat(feature.group()).isNull();
+        }
+
+        @Test
+        @DisplayName("默认expiresAt为null")
+        void testBuilderDefaultExpiresAt() {
+            Feature feature = Feature.builder("key").build();
+
+            assertThat(feature.expiresAt()).isNull();
+        }
     }
 
     @Nested
@@ -258,6 +327,127 @@ class FeatureTest {
 
             assertThat(feature.isEnabled(FeatureContext.ofUser("user1"))).isTrue();
             assertThat(feature.isEnabled(FeatureContext.ofUser("user2"))).isFalse();
+        }
+
+        @Test
+        @DisplayName("过期功能返回false")
+        void testIsEnabledExpiredFeature() {
+            Feature feature = Feature.builder("key")
+                    .alwaysOn()
+                    .expiresAt(Instant.now().minus(Duration.ofHours(1)))
+                    .build();
+
+            assertThat(feature.isEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("DEPRECATED生命周期返回false")
+        void testIsEnabledDeprecatedLifecycle() {
+            Feature feature = Feature.builder("key")
+                    .alwaysOn()
+                    .lifecycle(FeatureLifecycle.DEPRECATED)
+                    .build();
+
+            assertThat(feature.isEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("ARCHIVED生命周期返回false")
+        void testIsEnabledArchivedLifecycle() {
+            Feature feature = Feature.builder("key")
+                    .alwaysOn()
+                    .lifecycle(FeatureLifecycle.ARCHIVED)
+                    .build();
+
+            assertThat(feature.isEnabled()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("isExpired() 测试")
+    class IsExpiredTests {
+
+        @Test
+        @DisplayName("未设置过期时间不过期")
+        void testNotExpiredWhenNull() {
+            Feature feature = Feature.builder("key").build();
+
+            assertThat(feature.isExpired()).isFalse();
+        }
+
+        @Test
+        @DisplayName("未来时间未过期")
+        void testNotExpiredFuture() {
+            Feature feature = Feature.builder("key")
+                    .expiresAt(Instant.now().plus(Duration.ofHours(1)))
+                    .build();
+
+            assertThat(feature.isExpired()).isFalse();
+        }
+
+        @Test
+        @DisplayName("过去时间已过期")
+        void testExpiredPast() {
+            Feature feature = Feature.builder("key")
+                    .expiresAt(Instant.now().minus(Duration.ofHours(1)))
+                    .build();
+
+            assertThat(feature.isExpired()).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("isUsable() 测试")
+    class IsUsableTests {
+
+        @Test
+        @DisplayName("null生命周期可用")
+        void testUsableWhenNull() {
+            Instant now = Instant.now();
+            Feature feature = new Feature("key", "name", null, true, null,
+                    Map.of(), null, null, null, now, now);
+
+            assertThat(feature.isUsable()).isTrue();
+        }
+
+        @Test
+        @DisplayName("CREATED可用")
+        void testUsableCreated() {
+            Feature feature = Feature.builder("key")
+                    .lifecycle(FeatureLifecycle.CREATED)
+                    .build();
+
+            assertThat(feature.isUsable()).isTrue();
+        }
+
+        @Test
+        @DisplayName("ACTIVE可用")
+        void testUsableActive() {
+            Feature feature = Feature.builder("key")
+                    .lifecycle(FeatureLifecycle.ACTIVE)
+                    .build();
+
+            assertThat(feature.isUsable()).isTrue();
+        }
+
+        @Test
+        @DisplayName("DEPRECATED不可用")
+        void testNotUsableDeprecated() {
+            Feature feature = Feature.builder("key")
+                    .lifecycle(FeatureLifecycle.DEPRECATED)
+                    .build();
+
+            assertThat(feature.isUsable()).isFalse();
+        }
+
+        @Test
+        @DisplayName("ARCHIVED不可用")
+        void testNotUsableArchived() {
+            Feature feature = Feature.builder("key")
+                    .lifecycle(FeatureLifecycle.ARCHIVED)
+                    .build();
+
+            assertThat(feature.isUsable()).isFalse();
         }
     }
 
@@ -335,6 +525,22 @@ class FeatureTest {
 
             assertThat(updated.updatedAt()).isAfter(original.updatedAt());
         }
+
+        @Test
+        @DisplayName("保留新字段")
+        void testWithStrategyPreservesNewFields() {
+            Feature original = Feature.builder("key")
+                    .group("test-group")
+                    .expiresAt(Instant.now().plus(Duration.ofHours(1)))
+                    .lifecycle(FeatureLifecycle.CREATED)
+                    .build();
+
+            Feature updated = original.withStrategy(AlwaysOnStrategy.INSTANCE);
+
+            assertThat(updated.group()).isEqualTo(original.group());
+            assertThat(updated.expiresAt()).isEqualTo(original.expiresAt());
+            assertThat(updated.lifecycle()).isEqualTo(original.lifecycle());
+        }
     }
 
     @Nested
@@ -345,10 +551,14 @@ class FeatureTest {
         @DisplayName("所有record组件可访问")
         void testRecordComponents() {
             Instant now = Instant.now();
+            Instant expiresAt = now.plus(Duration.ofHours(1));
             Feature feature = new Feature(
                     "key", "name", "desc", true,
                     AlwaysOnStrategy.INSTANCE,
                     Map.of("k", "v"),
+                    "test-group",
+                    expiresAt,
+                    FeatureLifecycle.ACTIVE,
                     now, now
             );
 
@@ -358,6 +568,9 @@ class FeatureTest {
             assertThat(feature.defaultEnabled()).isTrue();
             assertThat(feature.strategy()).isEqualTo(AlwaysOnStrategy.INSTANCE);
             assertThat(feature.metadata()).containsEntry("k", "v");
+            assertThat(feature.group()).isEqualTo("test-group");
+            assertThat(feature.expiresAt()).isEqualTo(expiresAt);
+            assertThat(feature.lifecycle()).isEqualTo(FeatureLifecycle.ACTIVE);
             assertThat(feature.createdAt()).isEqualTo(now);
             assertThat(feature.updatedAt()).isEqualTo(now);
         }

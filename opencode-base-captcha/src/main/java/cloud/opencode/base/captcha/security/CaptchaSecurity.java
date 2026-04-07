@@ -1,5 +1,6 @@
 package cloud.opencode.base.captcha.security;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -79,10 +80,24 @@ public final class CaptchaSecurity {
      * @return the hashed answer | 哈希后的答案
      */
     public static String hashAnswer(String answer, String salt) {
+        return hashAnswer(answer, salt, false);
+    }
+
+    /**
+     * Hashes an answer for secure storage.
+     * 对答案进行哈希以安全存储。
+     *
+     * @param answer        the answer | 答案
+     * @param salt          the salt | 盐
+     * @param caseSensitive whether to preserve case | 是否保留大小写
+     * @return the hashed answer | 哈希后的答案
+     */
+    public static String hashAnswer(String answer, String salt, boolean caseSensitive) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update(salt.getBytes());
-            byte[] hash = md.digest(answer.toLowerCase().getBytes());
+            md.update(salt.getBytes(StandardCharsets.UTF_8));
+            String normalized = caseSensitive ? answer : answer.toLowerCase();
+            byte[] hash = md.digest(normalized.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 not available", e);
@@ -99,7 +114,21 @@ public final class CaptchaSecurity {
      * @return true if matches | 如果匹配返回 true
      */
     public static boolean verifyHashedAnswer(String answer, String hashedAnswer, String salt) {
-        String computed = hashAnswer(answer, salt);
+        return verifyHashedAnswer(answer, hashedAnswer, salt, false);
+    }
+
+    /**
+     * Verifies a hashed answer with case sensitivity control.
+     * 验证哈希后的答案，支持大小写敏感控制。
+     *
+     * @param answer        the answer to verify | 要验证的答案
+     * @param hashedAnswer  the hashed answer | 哈希后的答案
+     * @param salt          the salt | 盐
+     * @param caseSensitive whether to preserve case | 是否保留大小写
+     * @return true if matches | 如果匹配返回 true
+     */
+    public static boolean verifyHashedAnswer(String answer, String hashedAnswer, String salt, boolean caseSensitive) {
+        String computed = hashAnswer(answer, salt, caseSensitive);
         return constantTimeEquals(computed, hashedAnswer);
     }
 
@@ -115,12 +144,14 @@ public final class CaptchaSecurity {
         if (a == null || b == null) {
             return a == b;
         }
-        if (a.length() != b.length()) {
-            return false;
-        }
-        int result = 0;
-        for (int i = 0; i < a.length(); i++) {
-            result |= a.charAt(i) ^ b.charAt(i);
+        int lenA = a.length();
+        int lenB = b.length();
+        int maxLen = Math.max(lenA, lenB);
+        int result = lenA ^ lenB;
+        for (int i = 0; i < maxLen; i++) {
+            char ca = i < lenA ? a.charAt(i) : 0;
+            char cb = i < lenB ? b.charAt(i) : 0;
+            result |= ca ^ cb;
         }
         return result == 0;
     }

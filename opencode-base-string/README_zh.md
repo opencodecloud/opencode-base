@@ -8,12 +8,18 @@
 
 ### 核心功能
 - **字符串操作**：填充、截断、大小写转换、反转、打乱、包围/拆包
+- **空值安全检查**：`isBlank()`、`isEmpty()`、`isNotBlank()`、`isNotEmpty()`（V1.0.3）
+- **批量匹配**：`containsAny()`、`startsWithAny()`、`endsWithAny()`、忽略大小写变体（V1.0.3）
+- **单趟多模式替换**：`replaceEach()` — 一次扫描，不递归替换（V1.0.3）
+- **SLF4J 风格格式化**：`format("{} has {} items", name, count)`（V1.0.3）
 - **命名转换**：camelCase、PascalCase、snake_case、kebab-case、SCREAMING_SNAKE_CASE
 - **模板引擎**：变量插值、if/for/include 节点、自定义过滤器
-- **相似度算法**：Levenshtein 距离、Jaccard 相似度、余弦相似度
+- **相似度算法**：Levenshtein 距离（+有界计算）、Jaccard、余弦、Jaro-Winkler
 - **模糊匹配**：Aho-Corasick 多模式匹配、带评分的模糊搜索
 
 ### 高级功能
+- **字素簇操作**：emoji安全的长度、子串、反转、显示宽度计算（V1.0.3）
+- **URL 别名生成**：NFD标准化、去除变音符号、可配置分隔符（V1.0.3）
 - **数据脱敏**：注解驱动的手机号、邮箱、身份证、银行卡等掩码处理
 - **Jackson 集成**：自定义序列化器实现 JSON 透明脱敏
 - **正则工具**：预编译模式、常用验证（邮箱、手机号、IP、URL）
@@ -31,7 +37,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-string</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -39,6 +45,8 @@
 
 ```java
 import cloud.opencode.base.string.*;
+import cloud.opencode.base.string.similarity.LevenshteinDistance;
+import cloud.opencode.base.string.unicode.OpenGrapheme;
 
 // 填充和截断
 String padded = OpenString.padLeft("42", 5, '0');     // "00042"
@@ -55,12 +63,42 @@ String snake = OpenNaming.toSnakeCase("userName");     // "user_name"
 // 模板引擎
 String result = OpenTemplate.render("Hello, ${name}!", Map.of("name", "World"));
 
+// SLF4J 风格格式化 (V1.0.3)
+String msg = OpenString.format("{} has {} items", "Alice", 3); // "Alice has 3 items"
+
+// 空值安全检查 (V1.0.3)
+boolean blank = OpenString.isBlank(null);    // true
+boolean has = OpenString.containsAny("abc", "x", "b"); // true
+
+// 单趟多模式替换 (V1.0.3)
+String replaced = OpenString.replaceEach("aabbcc",
+    new String[]{"aa", "bb"}, new String[]{"11", "22"}); // "1122cc"
+
+// 字素簇操作 (V1.0.3)
+int len = OpenGrapheme.length("a👨‍👩‍👧‍👦b");    // 3（而非11）
+String rev = OpenGrapheme.reverse("a👨‍👩‍👧‍👦b"); // "b👨‍👩‍👧‍👦a"
+int width = OpenGrapheme.displayWidth("Hi你好");  // 6
+
+// 分割与连接 (V1.0.3)
+List<String> parts = OpenString.split("a,b,c", ",");        // ["a", "b", "c"]
+String joined = OpenString.joinSkipBlanks(", ", "a", "", "b"); // "a, b"
+
+// 简写 (V1.0.3)
+String abbr = OpenString.abbreviate("Hello World Test String", 15); // "Hello World..."
+
+// URL 别名生成 (V1.0.3)
+String slug = OpenSlug.toSlug("Hello World!");    // "hello-world"
+
 // 相似度计算
 double score = OpenSimilarity.levenshtein("kitten", "sitting");
 
+// 有界 Levenshtein 距离 (V1.0.3) — 超过阈值提前退出
+int dist = LevenshteinDistance.boundedDistance("kitten", "sitting", 5); // 3
+int far  = LevenshteinDistance.boundedDistance("abc", "xyz", 1);       // -1（超出阈值）
+
 // 数据脱敏
 String masked = OpenMask.maskPhone("13812345678");     // "138****5678"
-String email = OpenMask.maskEmail("test@example.com"); // "t***@example.com"
+String email = OpenMask.maskEmail("test@example.com"); // "t***t@example.com"
 ```
 
 ## 类参考
@@ -68,8 +106,9 @@ String email = OpenMask.maskEmail("test@example.com"); // "t***@example.com"
 ### 根包 (`cloud.opencode.base.string`)
 | 类 | 说明 |
 |----|------|
-| `OpenString` | 核心字符串操作门面：填充、截断、大小写转换、提取、清理、验证 |
+| `OpenString` | 核心字符串操作门面：填充、截断、大小写转换、提取、清理、验证、空值安全检查、批量匹配、replaceEach、SLF4J格式化、split/join |
 | `OpenNaming` | 命名约定转换：camelCase、snake_case、kebab-case、PascalCase |
+| `OpenSlug` | URL友好别名生成，支持去除变音符号和自定义分隔符 |
 | `OpenTemplate` | 简单模板渲染，支持变量替换 |
 
 ### 缩写 (`string.abbr`)
@@ -209,6 +248,7 @@ String email = OpenMask.maskEmail("test@example.com"); // "t***@example.com"
 | `OpenChinese` | 中文字符检测和转换 |
 | `OpenFullWidth` | 全角/半角字符转换 |
 | `OpenUnicode` | Unicode 字符工具 |
+| `OpenGrapheme` | 字素簇操作：emoji安全的长度、子串、反转、显示宽度 |
 
 ## 环境要求
 

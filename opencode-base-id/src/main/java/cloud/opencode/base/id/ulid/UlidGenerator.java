@@ -5,8 +5,8 @@ import cloud.opencode.base.id.IdGenerator;
 import java.security.SecureRandom;
 
 /**
- * ULID Generator
- * ULID生成器
+ * ULID Generator - Universally Unique Lexicographically Sortable Identifier
+ * ULID生成器 - 通用唯一字典序可排序标识符
  *
  * <p>Generates Universally Unique Lexicographically Sortable Identifiers.
  * ULID is a 128-bit identifier encoded as 26 characters using Crockford's Base32.</p>
@@ -26,14 +26,20 @@ import java.security.SecureRandom;
  *   <li>Lexicographically sortable - 字典序可排序</li>
  *   <li>Case insensitive - 大小写不敏感</li>
  *   <li>URL safe - URL安全</li>
- *   <li>Monotonic within same millisecond - 同毫秒内单调递增</li>
+ *   <li>Monotonic within same millisecond (configurable) - 同毫秒内单调递增（可配置）</li>
+ *   <li>Non-monotonic mode via {@link UlidConfig} - 通过UlidConfig配置非单调模式</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
+ * // Monotonic (default)
  * UlidGenerator gen = UlidGenerator.create();
  * String ulid = gen.generate();
  * // -> "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+ *
+ * // Non-monotonic
+ * UlidGenerator gen2 = UlidGenerator.create(UlidConfig.nonMonotonic());
+ * String ulid2 = gen2.generate();
  *
  * // Validate
  * boolean valid = UlidGenerator.isValid(ulid);
@@ -44,7 +50,8 @@ import java.security.SecureRandom;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: Yes - 线程安全: 是</li>
+ *   <li>Thread-safe: Yes (synchronized) - 线程安全: 是（同步）</li>
+ *   <li>Entropy: SecureRandom - 熵源: SecureRandom</li>
  * </ul>
  *
  * @author Leon Soo
@@ -81,22 +88,60 @@ public final class UlidGenerator implements IdGenerator<String> {
     }
 
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final UlidGenerator INSTANCE = new UlidGenerator();
+    private static final UlidGenerator INSTANCE = new UlidGenerator(true);
 
+    private final boolean monotonic;
     private volatile long lastTimestamp = 0;
     private final byte[] lastRandomness = new byte[10];
 
-    private UlidGenerator() {
+    /**
+     * Private constructor
+     * 私有构造方法
+     *
+     * @param monotonic whether to use monotonic mode | 是否使用单调模式
+     */
+    private UlidGenerator(boolean monotonic) {
+        this.monotonic = monotonic;
     }
 
     /**
-     * Creates a ULID generator
-     * 创建ULID生成器
+     * Creates a default monotonic ULID generator (singleton)
+     * 创建默认单调ULID生成器（单例）
      *
-     * @return generator | 生成器
+     * @return monotonic generator | 单调生成器
      */
     public static UlidGenerator create() {
         return INSTANCE;
+    }
+
+    /**
+     * Creates a ULID generator with explicit configuration
+     * 使用显式配置创建ULID生成器
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>
+     * UlidGenerator.create(UlidConfig.defaultConfig())    // monotonic singleton
+     * UlidGenerator.create(UlidConfig.nonMonotonic())     // new non-monotonic instance
+     * </pre>
+     *
+     * @param config the ULID configuration | ULID配置
+     * @return generator | 生成器
+     */
+    public static UlidGenerator create(UlidConfig config) {
+        if (config == null || config.monotonic()) {
+            return INSTANCE;
+        }
+        return new UlidGenerator(false);
+    }
+
+    /**
+     * Returns whether this generator uses monotonic mode
+     * 返回此生成器是否使用单调模式
+     *
+     * @return true if monotonic | 如果是单调模式返回true
+     */
+    public boolean isMonotonic() {
+        return monotonic;
     }
 
     @Override
@@ -110,11 +155,11 @@ public final class UlidGenerator implements IdGenerator<String> {
      *
      * @param timestamp the timestamp in milliseconds | 时间戳（毫秒）
      * @return ULID string (26 characters) | ULID字符串（26字符）
-     * @throws IllegalStateException if randomness overflows within same millisecond
      */
     public synchronized String generate(long timestamp) {
-        if (timestamp == lastTimestamp) {
-            // Increment randomness for monotonicity
+        if (monotonic && timestamp == lastTimestamp) {
+            // Monotonic mode: increment randomness for monotonicity within same ms
+            // 单调模式：在同一毫秒内递增随机数保证单调性
             if (!incrementRandomness()) {
                 // Overflow: wait for next millisecond
                 while (timestamp == lastTimestamp) {
@@ -124,6 +169,8 @@ public final class UlidGenerator implements IdGenerator<String> {
                 RANDOM.nextBytes(lastRandomness);
             }
         } else {
+            // Non-monotonic mode or new millisecond: always fresh random bytes
+            // 非单调模式或新毫秒：总是生成新的随机字节
             lastTimestamp = timestamp;
             RANDOM.nextBytes(lastRandomness);
         }
@@ -143,7 +190,7 @@ public final class UlidGenerator implements IdGenerator<String> {
      */
     public synchronized byte[] generateBytes() {
         long timestamp = System.currentTimeMillis();
-        if (timestamp == lastTimestamp) {
+        if (monotonic && timestamp == lastTimestamp) {
             if (!incrementRandomness()) {
                 // Overflow: wait for next millisecond
                 while (timestamp == lastTimestamp) {

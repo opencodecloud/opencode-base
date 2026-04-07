@@ -136,7 +136,7 @@ public final class AesCipher implements SymmetricCipher {
         if (iv != null && iv.length != BLOCK_SIZE) {
             throw new OpenCryptoException("AES IV must be " + BLOCK_SIZE + " bytes");
         }
-        this.iv = iv;
+        this.iv = iv != null ? iv.clone() : null;
         return this;
     }
 

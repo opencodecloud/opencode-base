@@ -55,6 +55,7 @@ public final class BuiltinJsonReader implements JsonReader {
 
     private static final int MAX_DEPTH = 512;
     private static final int BUFFER_SIZE = 4096;
+    private static final int MAX_STRING_LENGTH = 20_000_000; // 20MB defense-in-depth limit
 
     /**
      * Scope within the JSON structure.
@@ -69,7 +70,8 @@ public final class BuiltinJsonReader implements JsonReader {
 
     private final Deque<Scope> stack = new ArrayDeque<>();
     private final Deque<String> pathNames = new ArrayDeque<>();
-    private final Deque<Integer> pathIndices = new ArrayDeque<>();
+    private int[] pathIndicesArr = new int[32];
+    private int pathIndicesTop = -1;
 
     private boolean lenient;
     private int line = 1;
@@ -79,6 +81,7 @@ public final class BuiltinJsonReader implements JsonReader {
     private String peekedString;
     private Number peekedNumber;
     private boolean closed;
+    private final StringBuilder reusableSb = new StringBuilder(64);
 
     /**
      * Creates a new reader from the given character source.
@@ -322,7 +325,7 @@ public final class BuiltinJsonReader implements JsonReader {
         var sb = new StringBuilder("$");
         var scopeIt = stack.descendingIterator();
         var nameIt = pathNames.descendingIterator();
-        var idxIt = pathIndices.descendingIterator();
+        int idxPos = 0;
         // skip DOCUMENT scope
         if (scopeIt.hasNext()) {
             scopeIt.next();
@@ -336,8 +339,8 @@ public final class BuiltinJsonReader implements JsonReader {
                     }
                 }
                 case EMPTY_ARRAY, NONEMPTY_ARRAY -> {
-                    if (idxIt.hasNext()) {
-                        sb.append('[').append(idxIt.next()).append(']');
+                    if (idxPos <= pathIndicesTop) {
+                        sb.append('[').append(pathIndicesArr[idxPos++]).append(']');
                     }
                 }
                 default -> { /* document scope */ }
@@ -396,7 +399,7 @@ public final class BuiltinJsonReader implements JsonReader {
             case EMPTY_ARRAY -> {
                 stack.pop();
                 stack.push(Scope.NONEMPTY_ARRAY);
-                pathIndices.push(0);
+                pushPathIndex(0);
                 int c = nextNonWhitespace();
                 if (c == ']') {
                     return JsonToken.END_ARRAY;
@@ -411,9 +414,8 @@ public final class BuiltinJsonReader implements JsonReader {
                 }
                 if (c == ',') {
                     // increment array index
-                    if (!pathIndices.isEmpty()) {
-                        int idx = pathIndices.pop();
-                        pathIndices.push(idx + 1);
+                    if (pathIndicesTop >= 0) {
+                        pathIndicesArr[pathIndicesTop]++;
                     }
                     return peekValue();
                 }
@@ -537,11 +539,15 @@ public final class BuiltinJsonReader implements JsonReader {
      * 读取引号字符串，处理转义序列。
      */
     private String readString(char quote) {
-        var sb = new StringBuilder();
+        reusableSb.setLength(0);
+        var sb = reusableSb;
         while (true) {
             int c = readChar();
             if (c == -1) throw syntaxError("unterminated string");
             if (c == quote) return sb.toString();
+            if (sb.length() >= MAX_STRING_LENGTH) {
+                throw syntaxError("string length exceeds maximum of " + MAX_STRING_LENGTH);
+            }
             if (c == '\\') {
                 int esc = readChar();
                 switch (esc) {
@@ -552,13 +558,41 @@ public final class BuiltinJsonReader implements JsonReader {
                     case 'r' -> sb.append('\r');
                     case 't' -> sb.append('\t');
                     case 'u' -> {
-                        char[] hex = new char[4];
+                        int codeUnit = 0;
                         for (int i = 0; i < 4; i++) {
                             int h = readChar();
                             if (h == -1) throw syntaxError("unterminated unicode escape");
-                            hex[i] = (char) h;
+                            int digit = Character.digit((char) h, 16);
+                            if (digit == -1) throw syntaxError("invalid hex digit in unicode escape: " + (char) h);
+                            codeUnit = (codeUnit << 4) | digit;
                         }
-                        sb.append((char) Integer.parseInt(new String(hex), 16));
+                        if (Character.isHighSurrogate((char) codeUnit)) {
+                            int next1 = readChar();
+                            int next2 = readChar();
+                            if (next1 == '\\' && next2 == 'u') {
+                                int lowSurrogate = 0;
+                                for (int i = 0; i < 4; i++) {
+                                    int h = readChar();
+                                    if (h == -1) throw syntaxError("unterminated unicode escape in surrogate pair");
+                                    int digit = Character.digit((char) h, 16);
+                                    if (digit == -1) throw syntaxError("invalid hex digit in surrogate pair: " + (char) h);
+                                    lowSurrogate = (lowSurrogate << 4) | digit;
+                                }
+                                if (Character.isLowSurrogate((char) lowSurrogate)) {
+                                    int codePoint = Character.toCodePoint((char) codeUnit, (char) lowSurrogate);
+                                    sb.append(Character.toChars(codePoint));
+                                } else {
+                                    sb.append((char) codeUnit);
+                                    sb.append((char) lowSurrogate);
+                                }
+                            } else {
+                                sb.append((char) codeUnit);
+                                if (next2 != -1) pushBack();
+                                if (next1 != -1) pushBack();
+                            }
+                        } else {
+                            sb.append((char) codeUnit);
+                        }
                     }
                     case '\'' -> {
                         if (lenient) sb.append('\'');
@@ -569,6 +603,8 @@ public final class BuiltinJsonReader implements JsonReader {
                         else throw syntaxError("invalid escape: \\" + (char) esc);
                     }
                 }
+            } else if (c < 0x20 && !lenient) {
+                throw syntaxError("unescaped control character: 0x" + Integer.toHexString(c));
             } else {
                 sb.append((char) c);
             }
@@ -764,7 +800,10 @@ public final class BuiltinJsonReader implements JsonReader {
     }
 
     private void popScope() {
-        stack.pop();
+        Scope exiting = stack.pop();
+        if (exiting == Scope.NONEMPTY_ARRAY || exiting == Scope.EMPTY_ARRAY) {
+            popPathIndex();
+        }
         if (!pathNames.isEmpty() && !stack.isEmpty()) {
             Scope parent = stack.peek();
             if (parent == Scope.NONEMPTY_OBJECT || parent == Scope.EMPTY_OBJECT || parent == Scope.DANGLING_NAME) {
@@ -776,9 +815,21 @@ public final class BuiltinJsonReader implements JsonReader {
     }
 
     private void advanceIndex() {
-        if (!pathIndices.isEmpty()) {
+        if (pathIndicesTop >= 0) {
             // index incremented on comma in doPeek
         }
+    }
+
+    private void pushPathIndex(int value) {
+        pathIndicesTop++;
+        if (pathIndicesTop >= pathIndicesArr.length) {
+            pathIndicesArr = java.util.Arrays.copyOf(pathIndicesArr, pathIndicesArr.length * 2);
+        }
+        pathIndicesArr[pathIndicesTop] = value;
+    }
+
+    private void popPathIndex() {
+        if (pathIndicesTop >= 0) pathIndicesTop--;
     }
 
     // ==================== Helpers ====================

@@ -75,7 +75,10 @@ public class EmailRateLimiter {
      * @return true if allowed | 允许返回true
      */
     public boolean allowSend(String recipient) {
-        RateLimitInfo info = limits.computeIfAbsent(recipient, k -> new RateLimitInfo());
+        // Normalize email to lowercase for consistent rate limiting
+        String normalizedRecipient = recipient != null
+                ? recipient.toLowerCase(java.util.Locale.ROOT) : recipient;
+        RateLimitInfo info = limits.computeIfAbsent(normalizedRecipient, k -> new RateLimitInfo());
 
         synchronized (info) {
             info.cleanup();
@@ -109,7 +112,10 @@ public class EmailRateLimiter {
      * @return the remaining quota | 剩余配额
      */
     public RateLimitQuota getQuota(String recipient) {
-        RateLimitInfo info = limits.get(recipient);
+        // Normalize email to lowercase for consistent rate limiting
+        String normalizedRecipient = recipient != null
+                ? recipient.toLowerCase(java.util.Locale.ROOT) : recipient;
+        RateLimitInfo info = limits.get(normalizedRecipient);
         if (info == null) {
             return new RateLimitQuota(maxPerMinute, maxPerHour, maxPerDay);
         }
@@ -130,7 +136,10 @@ public class EmailRateLimiter {
      * @param recipient the recipient email | 收件人邮箱
      */
     public void reset(String recipient) {
-        limits.remove(recipient);
+        // Normalize email to lowercase for consistent rate limiting
+        String normalizedRecipient = recipient != null
+                ? recipient.toLowerCase(java.util.Locale.ROOT) : recipient;
+        limits.remove(normalizedRecipient);
     }
 
     /**

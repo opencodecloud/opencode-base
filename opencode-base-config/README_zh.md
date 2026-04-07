@@ -24,9 +24,18 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-config</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
+
+## v1.0.3 新特性
+
+- **松绑定（Relaxed Binding）** — `database.max-pool-size` 自动匹配 `DATABASE_MAX_POOL_SIZE`、`database.maxPoolSize` 等。通过 `ConfigBuilder.enableRelaxedBinding()` 启用。
+- **ConfigDump** — 导出全部生效配置，敏感值自动掩码（`***`）。默认模式：password、secret、token、key、credential、auth、bearer。
+- **ConfigDiff** — 对比两个配置快照，返回 `List<ConfigChangeEvent>`，支持格式化输出。
+- **POJO @DefaultValue** — `@DefaultValue` 从 Record 扩展到 POJO 字段，`ConfigBinder` 支持。
+- **验证汇总** — `ValidationResult.merge()` 将所有验证错误收集到一份报告中。
+- **安全加固** — SSRF DNS 重绑定防护（IP 固定）、敏感值从 toString/异常中脱敏、PlaceholderResolver 深度限制。
 
 ## API 概览
 
@@ -37,10 +46,13 @@
 | `Config` | 核心配置接口（get、getAs、getOrDefault、subscribe） |
 | `OpenConfig` | 全局配置管理器门面 |
 | `ConfigBuilder` | 流式构建器，用于创建 Config 实例 |
-| `ConfigChangeEvent` | 配置变更事件记录（key、oldValue、newValue、type） |
+| `RelaxedKeyResolver` **[v1.0.3]** | 松绑定解析：归一化、变体生成、跨命名约定解析 |
+| `ConfigDump` **[v1.0.3]** | 配置导出与敏感值掩码 |
+| `ConfigDiff` **[v1.0.3]** | 配置快照差异对比 |
+| `ConfigChangeEvent` | 配置变更事件记录（key、changeType、timestamp） |
 | `ConfigChangeType` | 变更类型枚举（ADDED、MODIFIED、REMOVED） |
 | `ConfigListener` | 配置变更监听器接口 |
-| `OpenConfigException` | 配置异常 |
+| `OpenConfigException` | 配置异常（值已脱敏） |
 
 ### 配置源
 
@@ -74,10 +86,11 @@
 
 | 类名 | 说明 |
 |------|------|
-| `ConfigBinder` | 将配置绑定到 JavaBean 实例 |
-| `RecordConfigBinder` | 将配置绑定到 Record 实例 |
+| `ConfigBinder` | 将配置绑定到 JavaBean 实例（支持 @DefaultValue） |
+| `RecordConfigBinder` | 将配置绑定到 Record 实例（支持 @DefaultValue） |
 | `ConfigProperties` | 配置前缀绑定注解 |
 | `NestedConfig` | 嵌套配置对象注解 |
+| `DefaultValue` **[v1.0.3]** | Record 组件和 POJO 字段的默认值注解 |
 
 ### 验证
 
@@ -176,6 +189,47 @@ Config profileConfig = MultiProfileConfig.builder()
     .profileSource("prod", new PropertiesConfigSource("app-prod.properties"))
     .activeProfile("dev")
     .build();
+```
+
+### v1.0.3 新功能示例
+
+```java
+import cloud.opencode.base.config.*;
+import cloud.opencode.base.config.bind.DefaultValue;
+
+// ---- 松绑定 ----
+Config config = OpenConfig.builder()
+    .addEnvironmentVariables()             // DATABASE_MAX_POOL_SIZE=10
+    .enableRelaxedBinding()
+    .build();
+int poolSize = config.getInt("database.max-pool-size"); // 匹配环境变量 → 10
+
+// ---- 配置导出（调试用，敏感值掩码） ----
+Map<String, String> dump = ConfigDump.dump(config);
+// db.password → "***", app.name → "myapp"
+System.out.println(ConfigDump.dumpToString(config));
+
+// ---- 配置差异对比 ----
+Config before = OpenConfig.builder().addProperties(Map.of("a", "1", "b", "2")).build();
+Config after  = OpenConfig.builder().addProperties(Map.of("a", "1", "b", "3", "c", "4")).build();
+List<ConfigChangeEvent> changes = ConfigDiff.diff(before, after);
+System.out.println(ConfigDiff.format(changes));
+// ~ b: 2 -> 3
+// + c = 4
+
+// ---- POJO @DefaultValue ----
+public class ServerConfig {
+    @DefaultValue("8080") int port;
+    @DefaultValue("localhost") String host;
+}
+ServerConfig server = config.bind("server", ServerConfig.class);
+// 未配置 server.port 时 port=8080
+
+// ---- 验证汇总（一次性报告所有缺失） ----
+Config validated = OpenConfig.builder()
+    .addProperties(Map.of("app.name", "myapp"))
+    .required("db.url", "db.user", "app.port")
+    .build(); // 抛出: "Missing required keys: [db.url, db.user, app.port]"
 ```
 
 ## 环境要求

@@ -216,4 +216,17 @@ public class OpenHashException extends OpenException {
         return new OpenHashException(null, "hash",
                 "Hasher has already been used; create a new one");
     }
+
+    /**
+     * Creates an HMAC computation failed exception
+     * 创建HMAC计算失败异常
+     *
+     * @param algorithm algorithm name | 算法名称
+     * @param cause     underlying cause | 底层原因
+     * @return exception instance | 异常实例
+     */
+    public static OpenHashException hmacFailed(String algorithm, Throwable cause) {
+        return new OpenHashException(algorithm, "hmac",
+                String.format("HMAC computation failed for algorithm: %s", algorithm), cause);
+    }
 }

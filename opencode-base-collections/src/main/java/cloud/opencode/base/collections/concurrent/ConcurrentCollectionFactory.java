@@ -254,6 +254,19 @@ public final class ConcurrentCollectionFactory {
         return new LinkedBlockingDeque<>(capacity);
     }
 
+    // ==================== Stack 工厂方法 | Stack Factory Methods ====================
+
+    /**
+     * Creates a new lock-free concurrent stack.
+     * 创建新的无锁并发栈。
+     *
+     * @param <E> element type | 元素类型
+     * @return new LockFreeStack | 新 LockFreeStack
+     */
+    public static <E> LockFreeStack<E> newLockFreeStack() {
+        return new LockFreeStack<>();
+    }
+
     // ==================== List 工厂方法 | List Factory Methods ====================
 
     /**

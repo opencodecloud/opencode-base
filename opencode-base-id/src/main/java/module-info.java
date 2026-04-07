@@ -3,10 +3,12 @@
  * OpenCode ID生成模块
  *
  * <p>Provides distributed ID generation algorithms including
- * Snowflake, UUID, ULID, TSID, KSUID, NanoID, and Segment mode.</p>
- * <p>提供分布式ID生成算法，包括Snowflake、UUID、ULID、TSID、KSUID、NanoID和号段模式。</p>
+ * Snowflake, UUID, ULID, TSID, KSUID, NanoID, Segment mode,
+ * Prefixed/TypedId, and JavaScript-safe Snowflake.</p>
+ * <p>提供分布式ID生成算法，包括Snowflake、UUID、ULID、TSID、KSUID、NanoID、
+ * 号段模式、带前缀/类型化ID以及JavaScript安全雪花ID。</p>
  *
- * @since JDK 25, opencode-base-id V1.0.0
+ * @since JDK 25, opencode-base-id V1.0.3
  */
 module cloud.opencode.base.id {
 
@@ -27,4 +29,5 @@ module cloud.opencode.base.id {
     exports cloud.opencode.base.id.nanoid;
     exports cloud.opencode.base.id.segment;
     exports cloud.opencode.base.id.simple;
+    exports cloud.opencode.base.id.prefixed;
 }

@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,8 @@ class GeoHashEncodeExceptionTest {
         void testMessageOnlyConstructor() {
             GeoHashEncodeException ex = new GeoHashEncodeException("Encode failed");
 
-            assertThat(ex.getMessage()).isEqualTo("Encode failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Encode failed");
+            assertThat(ex.getMessage()).contains("Encode failed");
         }
 
         @Test
@@ -35,7 +37,8 @@ class GeoHashEncodeExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             GeoHashEncodeException ex = new GeoHashEncodeException("Encode failed", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Encode failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Encode failed");
+            assertThat(ex.getMessage()).contains("Encode failed");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -58,6 +61,14 @@ class GeoHashEncodeExceptionTest {
             GeoHashEncodeException ex = new GeoHashEncodeException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            GeoHashEncodeException ex = new GeoHashEncodeException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

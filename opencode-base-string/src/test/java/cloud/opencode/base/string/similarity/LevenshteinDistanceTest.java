@@ -112,6 +112,75 @@ class LevenshteinDistanceTest {
     }
 
     @Nested
+    @DisplayName("boundedDistance Tests")
+    class BoundedDistance {
+
+        @Test
+        @DisplayName("Should return distance when within threshold")
+        void shouldReturnDistanceWhenWithinThreshold() {
+            assertThat(LevenshteinDistance.boundedDistance("kitten", "sitting", 3)).isEqualTo(3);
+            assertThat(LevenshteinDistance.boundedDistance("cat", "bat", 1)).isEqualTo(1);
+            assertThat(LevenshteinDistance.boundedDistance("flaw", "lawn", 2)).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("Should return -1 when exceeding threshold")
+        void shouldReturnNegativeOneWhenExceedingThreshold() {
+            assertThat(LevenshteinDistance.boundedDistance("kitten", "sitting", 2)).isEqualTo(-1);
+            assertThat(LevenshteinDistance.boundedDistance("abc", "xyz", 2)).isEqualTo(-1);
+        }
+
+        @Test
+        @DisplayName("Should return 0 for equal strings")
+        void shouldReturnZeroForEqualStrings() {
+            assertThat(LevenshteinDistance.boundedDistance("hello", "hello", 0)).isZero();
+            assertThat(LevenshteinDistance.boundedDistance("hello", "hello", 5)).isZero();
+        }
+
+        @Test
+        @DisplayName("Should handle empty strings")
+        void shouldHandleEmptyStrings() {
+            assertThat(LevenshteinDistance.boundedDistance("", "", 0)).isZero();
+            assertThat(LevenshteinDistance.boundedDistance("", "abc", 3)).isEqualTo(3);
+            assertThat(LevenshteinDistance.boundedDistance("", "abc", 2)).isEqualTo(-1);
+            assertThat(LevenshteinDistance.boundedDistance("abc", "", 3)).isEqualTo(3);
+            assertThat(LevenshteinDistance.boundedDistance("abc", "", 2)).isEqualTo(-1);
+        }
+
+        @Test
+        @DisplayName("Should throw for null strings")
+        void shouldThrowForNullStrings() {
+            assertThatThrownBy(() -> LevenshteinDistance.boundedDistance(null, "hello", 1))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> LevenshteinDistance.boundedDistance("hello", null, 1))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("Should throw for negative threshold")
+        void shouldThrowForNegativeThreshold() {
+            assertThatThrownBy(() -> LevenshteinDistance.boundedDistance("a", "b", -1))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("Should match unbounded result when threshold is large enough")
+        void shouldMatchUnboundedResult() {
+            String s1 = "algorithm";
+            String s2 = "altruistic";
+            int unbounded = LevenshteinDistance.calculate(s1, s2);
+            assertThat(LevenshteinDistance.boundedDistance(s1, s2, unbounded)).isEqualTo(unbounded);
+            assertThat(LevenshteinDistance.boundedDistance(s1, s2, unbounded - 1)).isEqualTo(-1);
+        }
+
+        @Test
+        @DisplayName("Should return -1 early when length difference exceeds threshold")
+        void shouldReturnEarlyForLengthDifference() {
+            assertThat(LevenshteinDistance.boundedDistance("a", "abcde", 3)).isEqualTo(-1);
+        }
+    }
+
+    @Nested
     @DisplayName("Utility Class Tests")
     class UtilityClassTests {
 

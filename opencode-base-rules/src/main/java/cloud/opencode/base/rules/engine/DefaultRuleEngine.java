@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Default Rule Engine Implementation
@@ -61,6 +62,9 @@ public class DefaultRuleEngine implements RuleEngine {
     private final Map<String, List<Rule>> groupIndex = new ConcurrentHashMap<>();
     private final List<RuleListener> listeners = new CopyOnWriteArrayList<>();
     private volatile ConflictResolver conflictResolver = PriorityConflictResolver.INSTANCE;
+    private volatile Predicate<RuleContext> haltCondition;
+    private volatile List<Rule> cachedAllRules;
+    private final Map<String, List<Rule>> cachedGroupRules = new ConcurrentHashMap<>();
 
     @Override
     public RuleEngine register(Rule... rules) {
@@ -68,6 +72,7 @@ public class DefaultRuleEngine implements RuleEngine {
             this.rules.put(rule.getName(), rule);
             addToGroupIndex(rule);
         }
+        invalidateCache();
         return this;
     }
 
@@ -77,6 +82,7 @@ public class DefaultRuleEngine implements RuleEngine {
             this.rules.put(rule.getName(), rule);
             addToGroupIndex(rule);
         }
+        invalidateCache();
         return this;
     }
 
@@ -85,6 +91,7 @@ public class DefaultRuleEngine implements RuleEngine {
         Rule removed = rules.remove(ruleName);
         if (removed != null) {
             removeFromGroupIndex(removed);
+            invalidateCache();
         }
         return this;
     }
@@ -112,16 +119,17 @@ public class DefaultRuleEngine implements RuleEngine {
     private RuleResult doFire(RuleContext context, String group, boolean firstOnly, boolean untilHalt) {
         long startTime = System.nanoTime();
         RuleResult.Builder resultBuilder = RuleResult.successBuilder();
+        Predicate<RuleContext> halt = this.haltCondition;
 
         notifyStart(context);
 
         try {
-            List<Rule> applicableRules = getApplicableRules(group);
-            List<Rule> orderedRules = conflictResolver.resolve(applicableRules);
+            List<Rule> orderedRules = getResolvedRules(group);
 
             int maxIterations = untilHalt ? 1000 : 1;
             int iteration = 0;
             boolean anyFired;
+            boolean halted = false;
 
             do {
                 anyFired = false;
@@ -149,6 +157,18 @@ public class DefaultRuleEngine implements RuleEngine {
                             if (firstOnly) {
                                 break;
                             }
+
+                            // Check terminal rule
+                            if (rule.isTerminal()) {
+                                halted = true;
+                                break;
+                            }
+
+                            // Check halt condition
+                            if (halt != null && halt.test(context)) {
+                                halted = true;
+                                break;
+                            }
                         } else {
                             resultBuilder.skipped(rule.getName());
                         }
@@ -158,7 +178,7 @@ public class DefaultRuleEngine implements RuleEngine {
                     }
                 }
 
-                if (firstOnly && resultBuilder.build().hasFired()) {
+                if (halted || (firstOnly && anyFired)) {
                     break;
                 }
             } while (untilHalt && anyFired && iteration < maxIterations);
@@ -182,11 +202,25 @@ public class DefaultRuleEngine implements RuleEngine {
         return result;
     }
 
+    private List<Rule> getResolvedRules(String group) {
+        if (group == null) {
+            List<Rule> cached = cachedAllRules;
+            if (cached != null) return cached;
+            cached = conflictResolver.resolve(new ArrayList<>(rules.values()));
+            cachedAllRules = cached;
+            return cached;
+        }
+        return cachedGroupRules.computeIfAbsent(group, g -> {
+            List<Rule> indexed = groupIndex.get(g);
+            if (indexed == null || indexed.isEmpty()) return List.of();
+            return conflictResolver.resolve(new ArrayList<>(indexed));
+        });
+    }
+
     private List<Rule> getApplicableRules(String group) {
         if (group == null) {
             return new ArrayList<>(rules.values());
         }
-        // O(1) group lookup via secondary index
         List<Rule> indexed = groupIndex.get(group);
         return indexed != null ? new ArrayList<>(indexed) : new ArrayList<>();
     }
@@ -231,13 +265,30 @@ public class DefaultRuleEngine implements RuleEngine {
     @Override
     public RuleEngine setConflictResolver(ConflictResolver resolver) {
         this.conflictResolver = resolver;
+        invalidateCache();
         return this;
+    }
+
+    /**
+     * Sets the halt condition for the engine
+     * 设置引擎的停止条件
+     *
+     * @param haltCondition the halt condition predicate | 停止条件谓词
+     */
+    public void setHaltCondition(Predicate<RuleContext> haltCondition) {
+        this.haltCondition = haltCondition;
     }
 
     @Override
     public void clear() {
         rules.clear();
         groupIndex.clear();
+        invalidateCache();
+    }
+
+    private void invalidateCache() {
+        cachedAllRules = null;
+        cachedGroupRules.clear();
     }
 
     // Group index maintenance
@@ -245,7 +296,11 @@ public class DefaultRuleEngine implements RuleEngine {
     private void addToGroupIndex(Rule rule) {
         String group = rule.getGroup();
         if (group != null) {
-            groupIndex.computeIfAbsent(group, _ -> new CopyOnWriteArrayList<>()).add(rule);
+            groupIndex.compute(group, (_, list) -> {
+                if (list == null) list = new CopyOnWriteArrayList<>();
+                list.add(rule);
+                return list;
+            });
         }
     }
 
@@ -262,6 +317,7 @@ public class DefaultRuleEngine implements RuleEngine {
     // Listener notification methods
 
     private void notifyListeners(Consumer<RuleListener> action, String methodName) {
+        if (listeners.isEmpty()) return;
         for (RuleListener listener : listeners) {
             try {
                 action.accept(listener);

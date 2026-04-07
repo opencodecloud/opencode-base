@@ -3,7 +3,12 @@ package cloud.opencode.base.classloader.scanner;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -293,6 +298,162 @@ class ClassScannerTest {
 
             // Empty package may or may not have classes
             assertThat(classes).isNotNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("Cache Tests")
+    class CacheTests {
+
+        @Test
+        @DisplayName("Should write cache file on first scan")
+        void shouldWriteCacheOnFirstScan(@TempDir Path tempDir) {
+            ClassScanner scanner = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir)
+                    .cacheKey("v1");
+
+            Set<Class<?>> classes = scanner.scan();
+
+            assertThat(classes).isNotEmpty();
+
+            // Verify cache file was created
+            Path cacheFile = tempDir.resolve(TEST_PACKAGE + "-v1.json");
+            assertThat(cacheFile).exists();
+        }
+
+        @Test
+        @DisplayName("Should load from cache on second scan")
+        void shouldLoadFromCacheOnSecondScan(@TempDir Path tempDir) {
+            // First scan — writes cache
+            ClassScanner scanner1 = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir)
+                    .cacheKey("v1");
+            Set<Class<?>> first = scanner1.scan();
+
+            // Second scan — should load from cache
+            ClassScanner scanner2 = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir)
+                    .cacheKey("v1");
+            Set<Class<?>> second = scanner2.scan();
+
+            assertThat(second).isNotEmpty();
+            assertThat(second.stream().map(Class::getName).toList())
+                    .containsExactlyInAnyOrderElementsOf(
+                            first.stream().map(Class::getName).toList()
+                    );
+        }
+
+        @Test
+        @DisplayName("Should invalidate cache when classpath hash changes")
+        void shouldInvalidateCacheOnHashChange(@TempDir Path tempDir) throws IOException {
+            // First scan — writes cache
+            ClassScanner scanner1 = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir)
+                    .cacheKey("v1");
+            scanner1.scan();
+
+            Path cacheFile = tempDir.resolve(TEST_PACKAGE + "-v1.json");
+            assertThat(cacheFile).exists();
+
+            // Tamper with the cached classpathHash to simulate classpath change
+            String json = Files.readString(cacheFile, StandardCharsets.UTF_8);
+            String tampered = json.replace(
+                    json.substring(json.indexOf("\"classpathHash\": \"") + 18,
+                            json.indexOf("\"", json.indexOf("\"classpathHash\": \"") + 18)),
+                    "invalid_hash_000"
+            );
+            Files.writeString(cacheFile, tampered, StandardCharsets.UTF_8);
+
+            // Second scan — cache should be invalid, should rescan
+            ClassScanner scanner2 = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir)
+                    .cacheKey("v1");
+            Set<Class<?>> result = scanner2.scan();
+
+            assertThat(result).isNotEmpty();
+
+            // Cache file should be overwritten with correct hash
+            String updatedJson = Files.readString(cacheFile, StandardCharsets.UTF_8);
+            assertThat(updatedJson).doesNotContain("invalid_hash_000");
+        }
+
+        @Test
+        @DisplayName("Should not create cache when not configured")
+        void shouldNotCreateCacheWhenNotConfigured(@TempDir Path tempDir) {
+            // No cacheDir/cacheKey configured
+            ClassScanner scanner = ClassScanner.of(TEST_PACKAGE);
+            Set<Class<?>> classes = scanner.scan();
+
+            assertThat(classes).isNotEmpty();
+
+            // No cache files should be created anywhere
+            assertThat(tempDir.toFile().listFiles()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should not create cache with only cacheDir configured")
+        void shouldNotCreateCacheWithOnlyCacheDir(@TempDir Path tempDir) {
+            ClassScanner scanner = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir);
+
+            Set<Class<?>> classes = scanner.scan();
+
+            assertThat(classes).isNotEmpty();
+            assertThat(tempDir.toFile().listFiles()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should not create cache with only cacheKey configured")
+        void shouldNotCreateCacheWithOnlyCacheKey(@TempDir Path tempDir) {
+            ClassScanner scanner = ClassScanner.of(TEST_PACKAGE)
+                    .cacheKey("v1");
+
+            Set<Class<?>> classes = scanner.scan();
+
+            assertThat(classes).isNotEmpty();
+            // tempDir wasn't configured as cacheDir, so no files there
+            assertThat(tempDir.toFile().listFiles()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should cache classNameStream results")
+        void shouldCacheClassNameStream(@TempDir Path tempDir) {
+            ClassScanner scanner = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir)
+                    .cacheKey("v1");
+
+            long count = scanner.classNameStream().count();
+
+            assertThat(count).isGreaterThan(0);
+
+            Path cacheFile = tempDir.resolve(TEST_PACKAGE + "-v1.json");
+            assertThat(cacheFile).exists();
+        }
+
+        @Test
+        @DisplayName("Should handle corrupt cache file gracefully")
+        void shouldHandleCorruptCacheGracefully(@TempDir Path tempDir) throws IOException {
+            Path cacheFile = tempDir.resolve(TEST_PACKAGE + "-v1.json");
+            Files.writeString(cacheFile, "not valid json at all!!!", StandardCharsets.UTF_8);
+
+            ClassScanner scanner = ClassScanner.of(TEST_PACKAGE)
+                    .cacheDir(tempDir)
+                    .cacheKey("v1");
+
+            // Should not throw — should fall back to normal scan
+            Set<Class<?>> classes = scanner.scan();
+
+            assertThat(classes).isNotEmpty();
+        }
+
+        @Test
+        @DisplayName("Should use different cache files for different cacheKeys")
+        void shouldUseDifferentCacheFiles(@TempDir Path tempDir) {
+            ClassScanner.of(TEST_PACKAGE).cacheDir(tempDir).cacheKey("v1").scan();
+            ClassScanner.of(TEST_PACKAGE).cacheDir(tempDir).cacheKey("v2").scan();
+
+            assertThat(tempDir.resolve(TEST_PACKAGE + "-v1.json")).exists();
+            assertThat(tempDir.resolve(TEST_PACKAGE + "-v2.json")).exists();
         }
     }
 }

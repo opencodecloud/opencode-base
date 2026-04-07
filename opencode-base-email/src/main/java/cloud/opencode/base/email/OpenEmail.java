@@ -343,12 +343,20 @@ public final class OpenEmail {
             );
         }
 
-        // Check per-recipient rate limit (for first recipient)
-        if (email.to() != null && !email.to().isEmpty()) {
-            String firstRecipient = email.to().getFirst();
-            if (!rateLimiter.allowSend(firstRecipient)) {
+        // Check per-recipient rate limit for all recipients (to, cc, bcc)
+        checkRecipientRateLimit(email.to(), email);
+        checkRecipientRateLimit(email.cc(), email);
+        checkRecipientRateLimit(email.bcc(), email);
+    }
+
+    private static void checkRecipientRateLimit(List<String> recipients, Email email) {
+        if (recipients == null || recipients.isEmpty()) {
+            return;
+        }
+        for (String recipient : recipients) {
+            if (!rateLimiter.allowSend(recipient)) {
                 throw new EmailSendException(
-                        "Rate limit exceeded for recipient: " + firstRecipient,
+                        "Rate limit exceeded for recipient: " + recipient,
                         email,
                         EmailErrorCode.RATE_LIMITED
                 );
@@ -417,6 +425,73 @@ public final class OpenEmail {
                 .subject(subject)
                 .text(content)
                 .build());
+    }
+
+    /**
+     * Send multiple emails using a single SMTP connection (batch mode)
+     * 使用单个SMTP连接批量发送邮件
+     *
+     * <p>More efficient than sending individually when sending to multiple recipients.</p>
+     * <p>当发送给多个收件人时，比逐个发送更高效。</p>
+     *
+     * @param emails the emails to send | 要发送的邮件列表
+     * @return the batch result | 批量结果
+     */
+    public static BatchSendResult sendBatch(List<Email> emails) {
+        checkConfigured();
+        if (!(defaultSender instanceof SmtpEmailSender smtpSender)) {
+            // Fallback: send individually for non-SMTP senders
+            java.time.Instant startedAt = java.time.Instant.now();
+            List<BatchSendResult.ItemResult> results = new java.util.ArrayList<>();
+            for (Email email : emails) {
+                try {
+                    checkRateLimit(email);
+                    SendResult sr = defaultSender.sendWithResult(email);
+                    results.add(BatchSendResult.ItemResult.success(email, sr.messageId()));
+                } catch (Exception e) {
+                    results.add(BatchSendResult.ItemResult.failure(email, e));
+                }
+            }
+            return new BatchSendResult(List.copyOf(results), startedAt,
+                    java.time.Duration.between(startedAt, java.time.Instant.now()));
+        }
+        // Apply rate limiting per email; rate-limited emails are excluded from batch
+        List<Email> allowed = new java.util.ArrayList<>(emails.size());
+        List<BatchSendResult.ItemResult> rateLimited = new java.util.ArrayList<>();
+        for (Email email : emails) {
+            try {
+                checkRateLimit(email);
+                allowed.add(email);
+            } catch (Exception e) {
+                rateLimited.add(BatchSendResult.ItemResult.failure(email, e));
+            }
+        }
+        if (allowed.isEmpty()) {
+            return new BatchSendResult(List.copyOf(rateLimited),
+                    java.time.Instant.now(), java.time.Duration.ZERO);
+        }
+        BatchSendResult smtpResult = smtpSender.sendBatch(allowed);
+        if (rateLimited.isEmpty()) {
+            return smtpResult;
+        }
+        // Merge rate-limited failures with SMTP results
+        List<BatchSendResult.ItemResult> merged = new java.util.ArrayList<>(rateLimited);
+        merged.addAll(smtpResult.results());
+        return new BatchSendResult(List.copyOf(merged), smtpResult.startedAt(), smtpResult.duration());
+    }
+
+    /**
+     * Test SMTP connection with current configuration
+     * 使用当前配置测试SMTP连接
+     *
+     * @return the test result | 测试结果
+     */
+    public static ConnectionTestResult testConnection() {
+        checkConfigured();
+        if (!(defaultSender instanceof SmtpEmailSender smtpSender)) {
+            return ConnectionTestResult.success("Non-SMTP sender configured", java.time.Duration.ZERO);
+        }
+        return smtpSender.testConnection();
     }
 
     // ==================== Async Send Methods ====================
@@ -863,6 +938,20 @@ public final class OpenEmail {
 
     // ==================== Internal Methods ====================
 
+    /**
+     * Close a resource quietly, ignoring exceptions
+     * 安静地关闭资源，忽略异常
+     */
+    private static void closeQuietly(AutoCloseable resource) {
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (Exception ignored) {
+                // intentionally ignored
+            }
+        }
+    }
+
     private static EmailSender getSender() {
         checkConfigured();
         return defaultSender;
@@ -910,27 +999,8 @@ public final class OpenEmail {
     public static void shutdown() {
         LOCK.lock();
         try {
-            // Shutdown sender resources
-            if (asyncSender != null) {
-                asyncSender.close();
-                asyncSender = null;
-            }
-            if (defaultSender != null) {
-                defaultSender.close();
-                defaultSender = null;
-            }
-            defaultConfig = null;
-
-            // Shutdown receiver resources
-            if (asyncReceiver != null) {
-                asyncReceiver.close();
-                asyncReceiver = null;
-            }
-            if (defaultReceiver != null) {
-                defaultReceiver.close();
-                defaultReceiver = null;
-            }
-            defaultReceiveConfig = null;
+            closeSenderResources();
+            closeReceiverResources();
         } finally {
             LOCK.unlock();
         }
@@ -943,15 +1013,7 @@ public final class OpenEmail {
     public static void shutdownSender() {
         LOCK.lock();
         try {
-            if (asyncSender != null) {
-                asyncSender.close();
-                asyncSender = null;
-            }
-            if (defaultSender != null) {
-                defaultSender.close();
-                defaultSender = null;
-            }
-            defaultConfig = null;
+            closeSenderResources();
         } finally {
             LOCK.unlock();
         }
@@ -964,17 +1026,27 @@ public final class OpenEmail {
     public static void shutdownReceiver() {
         LOCK.lock();
         try {
-            if (asyncReceiver != null) {
-                asyncReceiver.close();
-                asyncReceiver = null;
-            }
-            if (defaultReceiver != null) {
-                defaultReceiver.close();
-                defaultReceiver = null;
-            }
-            defaultReceiveConfig = null;
+            closeReceiverResources();
         } finally {
             LOCK.unlock();
         }
+    }
+
+    private static void closeSenderResources() {
+        closeQuietly(asyncSender);
+        asyncSender = null;
+        if (defaultSender != null) {
+            closeQuietly(defaultSender::close);
+        }
+        defaultSender = null;
+        defaultConfig = null;
+    }
+
+    private static void closeReceiverResources() {
+        closeQuietly(asyncReceiver);
+        asyncReceiver = null;
+        closeQuietly(defaultReceiver);
+        defaultReceiver = null;
+        defaultReceiveConfig = null;
     }
 }

@@ -1,5 +1,6 @@
 package cloud.opencode.base.lunar.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,13 @@ class DateOutOfRangeExceptionTest {
         void testExtendsLunarException() {
             DateOutOfRangeException exception = new DateOutOfRangeException(1800);
             assertThat(exception).isInstanceOf(LunarException.class);
+        }
+
+        @Test
+        @DisplayName("继承OpenException")
+        void testExtendsOpenException() {
+            DateOutOfRangeException exception = new DateOutOfRangeException(1800);
+            assertThat(exception).isInstanceOf(OpenException.class);
         }
     }
 
@@ -57,7 +65,7 @@ class DateOutOfRangeExceptionTest {
 
             assertThat(exception.getYear()).isEqualTo(1800);
             assertThat(exception.getMessage()).contains("1800");
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.YEAR_OUT_OF_RANGE);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.YEAR_OUT_OF_RANGE);
         }
 
         @Test
@@ -66,7 +74,7 @@ class DateOutOfRangeExceptionTest {
             DateOutOfRangeException exception = new DateOutOfRangeException("Custom message");
 
             assertThat(exception.getMessage()).contains("Custom message");
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.DATE_OUT_OF_RANGE);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.DATE_OUT_OF_RANGE);
         }
     }
 

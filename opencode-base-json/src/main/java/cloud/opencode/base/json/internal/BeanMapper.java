@@ -50,6 +50,31 @@ final class BeanMapper {
 
     private static final ConcurrentHashMap<Class<?>, List<FieldMeta>> FIELD_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Class<?>, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, RecordMeta> RECORD_META_CACHE = new ConcurrentHashMap<>();
+
+    private static final Set<String> DENIED_PACKAGES = Set.of(
+            "java.lang.Runtime", "java.lang.ProcessBuilder",
+            "java.lang.reflect.Proxy", "java.net.URLClassLoader",
+            "javax.script.ScriptEngineManager", "java.rmi.",
+            "javax.naming.", "javax.management."
+    );
+
+    private static void checkClassSafety(Class<?> clazz) {
+        String name = clazz.getName();
+        for (String denied : DENIED_PACKAGES) {
+            if (name.startsWith(denied) || name.equals(denied)) {
+                throw OpenJsonProcessingException.deserializationError(
+                        "Deserialization of " + name + " is not allowed for security reasons", null);
+            }
+        }
+    }
+
+    private record RecordMeta(
+            Constructor<?> constructor,
+            String[] jsonNames,
+            Class<?>[] paramTypes,
+            Type[] genericTypes
+    ) {}
 
     private BeanMapper() {
     }
@@ -75,15 +100,17 @@ final class BeanMapper {
      * @param obj the object | 对象
      * @return the JsonNode | JsonNode
      */
+    private static final int MAX_DEPTH = 128;
+
     static JsonNode toTree(Object obj) {
         if (obj == null) return JsonNode.nullNode();
-        return toNode(obj, obj.getClass(), 0);
+        return toNode(obj, obj.getClass(), 0, null);
     }
 
     @SuppressWarnings("unchecked")
-    private static JsonNode toNode(Object obj, Type declaredType, int depth) {
-        if (depth > 128) {
-            throw OpenJsonProcessingException.serializationError("Nesting depth exceeds 128", null);
+    private static JsonNode toNode(Object obj, Type declaredType, int depth, Set<Object> visited) {
+        if (depth > MAX_DEPTH) {
+            throw OpenJsonProcessingException.serializationError("Nesting depth exceeds " + MAX_DEPTH, null);
         }
         if (obj == null) return JsonNode.nullNode();
 
@@ -118,45 +145,61 @@ final class BeanMapper {
         if (obj instanceof UUID u) return new JsonNode.StringNode(u.toString());
 
         // Optional
-        if (obj instanceof Optional<?> opt) return opt.map(v -> toNode(v, Object.class, depth + 1)).orElse(JsonNode.nullNode());
+        if (obj instanceof Optional<?> opt) {
+            Set<Object> visitedRef = visited;
+            return opt.map(v -> toNode(v, Object.class, depth + 1, visitedRef)).orElse(JsonNode.nullNode());
+        }
 
         // JsonNode pass-through
         if (obj instanceof JsonNode node) return node;
 
-        // Map
-        if (obj instanceof Map<?, ?> map) {
-            JsonNode.ObjectNode objNode = JsonNode.object();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String key = String.valueOf(entry.getKey());
-                objNode.put(key, toNode(entry.getValue(), Object.class, depth + 1));
-            }
-            return objNode;
+        // Circular reference detection for composite types (Map, Collection, Array, POJO)
+        if (visited == null) {
+            visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        }
+        if (!visited.add(obj)) {
+            throw OpenJsonProcessingException.serializationError(
+                    "Circular reference detected for " + obj.getClass().getName(), null);
         }
 
-        // Collection
-        if (obj instanceof Collection<?> coll) {
-            JsonNode.ArrayNode arrNode = JsonNode.array();
-            for (Object item : coll) {
-                arrNode.add(toNode(item, Object.class, depth + 1));
+        try {
+            // Map
+            if (obj instanceof Map<?, ?> map) {
+                JsonNode.ObjectNode objNode = JsonNode.object();
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    String key = String.valueOf(entry.getKey());
+                    objNode.put(key, toNode(entry.getValue(), Object.class, depth + 1, visited));
+                }
+                return objNode;
             }
-            return arrNode;
-        }
 
-        // Array
-        if (obj.getClass().isArray()) {
-            JsonNode.ArrayNode arrNode = JsonNode.array();
-            int len = Array.getLength(obj);
-            for (int i = 0; i < len; i++) {
-                arrNode.add(toNode(Array.get(obj, i), Object.class, depth + 1));
+            // Collection
+            if (obj instanceof Collection<?> coll) {
+                JsonNode.ArrayNode arrNode = JsonNode.array();
+                for (Object item : coll) {
+                    arrNode.add(toNode(item, Object.class, depth + 1, visited));
+                }
+                return arrNode;
             }
-            return arrNode;
-        }
 
-        // POJO / Record → Object
-        return beanToNode(obj, depth);
+            // Array
+            if (obj.getClass().isArray()) {
+                JsonNode.ArrayNode arrNode = JsonNode.array();
+                int len = Array.getLength(obj);
+                for (int i = 0; i < len; i++) {
+                    arrNode.add(toNode(Array.get(obj, i), Object.class, depth + 1, visited));
+                }
+                return arrNode;
+            }
+
+            // POJO / Record → Object
+            return beanToNode(obj, depth, visited);
+        } finally {
+            visited.remove(obj);
+        }
     }
 
-    private static JsonNode beanToNode(Object obj, int depth) {
+    private static JsonNode beanToNode(Object obj, int depth, Set<Object> visited) {
         Class<?> clazz = obj.getClass();
         JsonNode.ObjectNode node = JsonNode.object();
         List<FieldMeta> fields = getFieldMetas(clazz);
@@ -165,7 +208,7 @@ final class BeanMapper {
             if (fm.ignored || fm.ignoreSerialize) continue;
             try {
                 Object value = fm.field.get(obj);
-                node.put(fm.jsonName, toNode(value, fm.field.getGenericType(), depth + 1));
+                node.put(fm.jsonName, toNode(value, fm.field.getGenericType(), depth + 1, visited));
             } catch (IllegalAccessException e) {
                 // skip inaccessible field
             }
@@ -211,8 +254,22 @@ final class BeanMapper {
         if (rawClass == Double.class || rawClass == double.class) return node.asDouble();
         if (rawClass == Float.class || rawClass == float.class) return (float) node.asDouble();
         if (rawClass == Boolean.class || rawClass == boolean.class) return node.asBoolean();
-        if (rawClass == Short.class || rawClass == short.class) return (short) node.asInt();
-        if (rawClass == Byte.class || rawClass == byte.class) return (byte) node.asInt();
+        if (rawClass == Short.class || rawClass == short.class) {
+            int val = node.asInt();
+            if (val < Short.MIN_VALUE || val > Short.MAX_VALUE) {
+                throw OpenJsonProcessingException.deserializationError(
+                        "Value " + val + " out of range for short", null);
+            }
+            return (short) val;
+        }
+        if (rawClass == Byte.class || rawClass == byte.class) {
+            int val = node.asInt();
+            if (val < Byte.MIN_VALUE || val > Byte.MAX_VALUE) {
+                throw OpenJsonProcessingException.deserializationError(
+                        "Value " + val + " out of range for byte", null);
+            }
+            return (byte) val;
+        }
         if (rawClass == Character.class || rawClass == char.class) {
             String s = nodeToString(node);
             return (s != null && !s.isEmpty()) ? s.charAt(0) : '\0';
@@ -255,8 +312,8 @@ final class BeanMapper {
         // Map
         if (Map.class.isAssignableFrom(rawClass) && node.isObject()) {
             Type valueType = getTypeArgument(type, 1, Object.class);
-            Map<String, Object> map = new LinkedHashMap<>();
             JsonNode.ObjectNode obj = (JsonNode.ObjectNode) node;
+            Map<String, Object> map = new LinkedHashMap<>(obj.size() * 4 / 3 + 1);
             for (String key : obj.keys()) {
                 map.put(key, fromNode(obj.get(key), valueType, depth + 1));
             }
@@ -309,14 +366,47 @@ final class BeanMapper {
     }
 
     private static Object nodeToRecord(JsonNode.ObjectNode node, Class<?> recordClass, int depth) {
+        checkClassSafety(recordClass);
+        RecordMeta meta = getRecordMeta(recordClass);
+        Object[] args = new Object[meta.paramTypes.length];
+
+        for (int i = 0; i < meta.paramTypes.length; i++) {
+            JsonNode fieldNode = node.get(meta.jsonNames[i]);
+            if (fieldNode == null || fieldNode.isNull()) {
+                args[i] = defaultValue(meta.paramTypes[i]);
+            } else {
+                args[i] = fromNode(fieldNode, meta.genericTypes[i], depth + 1);
+            }
+        }
+
+        try {
+            return meta.constructor.newInstance(args);
+        } catch (Exception e) {
+            throw OpenJsonProcessingException.deserializationError(
+                    "Failed to construct record " + recordClass.getName() + ": " + e.getMessage(), e);
+        }
+    }
+
+    private static RecordMeta getRecordMeta(Class<?> recordClass) {
+        RecordMeta cached = RECORD_META_CACHE.get(recordClass);
+        if (cached != null) return cached;
+        RecordMeta meta = buildRecordMeta(recordClass);
+        if (RECORD_META_CACHE.size() < 10_000) {
+            RECORD_META_CACHE.putIfAbsent(recordClass, meta);
+        }
+        return meta;
+    }
+
+    private static RecordMeta buildRecordMeta(Class<?> recordClass) {
         RecordComponent[] components = recordClass.getRecordComponents();
-        Object[] args = new Object[components.length];
+        String[] jsonNames = new String[components.length];
         Class<?>[] paramTypes = new Class<?>[components.length];
+        Type[] genericTypes = new Type[components.length];
 
         for (int i = 0; i < components.length; i++) {
             paramTypes[i] = components[i].getType();
-            String jsonName = components[i].getName();
-            // Check @JsonProperty on component or corresponding field
+            genericTypes[i] = components[i].getGenericType();
+            String name = components[i].getName();
             JsonProperty prop = components[i].getAnnotation(JsonProperty.class);
             if (prop == null) {
                 try {
@@ -325,28 +415,21 @@ final class BeanMapper {
                 } catch (NoSuchFieldException ignored) {
                 }
             }
-            if (prop != null && !prop.value().isEmpty()) {
-                jsonName = prop.value();
-            }
-            JsonNode fieldNode = node.get(jsonName);
-            if (fieldNode == null || fieldNode.isNull()) {
-                args[i] = defaultValue(components[i].getType());
-            } else {
-                args[i] = fromNode(fieldNode, components[i].getGenericType(), depth + 1);
-            }
+            jsonNames[i] = (prop != null && !prop.value().isEmpty()) ? prop.value() : name;
         }
 
         try {
             Constructor<?> ctor = recordClass.getDeclaredConstructor(paramTypes);
             ctor.setAccessible(true);
-            return ctor.newInstance(args);
-        } catch (Exception e) {
+            return new RecordMeta(ctor, jsonNames, paramTypes, genericTypes);
+        } catch (NoSuchMethodException e) {
             throw OpenJsonProcessingException.deserializationError(
-                    "Failed to construct record " + recordClass.getName() + ": " + e.getMessage(), e);
+                    "No canonical constructor for record " + recordClass.getName(), e);
         }
     }
 
     private static Object nodeToPojo(JsonNode.ObjectNode node, Class<?> clazz, int depth) {
+        checkClassSafety(clazz);
         Object instance;
         try {
             Constructor<?> ctor = getNoArgConstructor(clazz);
@@ -381,7 +464,15 @@ final class BeanMapper {
     // ==================== Field Metadata Cache ====================
 
     private static List<FieldMeta> getFieldMetas(Class<?> clazz) {
-        return FIELD_CACHE.computeIfAbsent(clazz, BeanMapper::buildFieldMetas);
+        List<FieldMeta> cached = FIELD_CACHE.get(clazz);
+        if (cached != null) return cached;
+        List<FieldMeta> metas = buildFieldMetas(clazz);
+        if (FIELD_CACHE.size() < 10_000) {
+            FIELD_CACHE.putIfAbsent(clazz, metas);
+            cached = FIELD_CACHE.get(clazz);
+            return cached != null ? cached : metas;
+        }
+        return metas;
     }
 
     private static List<FieldMeta> buildFieldMetas(Class<?> clazz) {
@@ -418,18 +509,22 @@ final class BeanMapper {
             }
             current = current.getSuperclass();
         }
-        return List.copyOf(metas);
+        return Collections.unmodifiableList(metas);
     }
 
     private static Constructor<?> getNoArgConstructor(Class<?> clazz) {
-        return CONSTRUCTOR_CACHE.computeIfAbsent(clazz, c -> {
-            try {
-                return c.getDeclaredConstructor();
-            } catch (NoSuchMethodException e) {
-                throw OpenJsonProcessingException.deserializationError(
-                        "No no-arg constructor for " + c.getName(), e);
+        Constructor<?> cached = CONSTRUCTOR_CACHE.get(clazz);
+        if (cached != null) return cached;
+        try {
+            Constructor<?> ctor = clazz.getDeclaredConstructor();
+            if (CONSTRUCTOR_CACHE.size() < 10_000) {
+                CONSTRUCTOR_CACHE.putIfAbsent(clazz, ctor);
             }
-        });
+            return ctor;
+        } catch (NoSuchMethodException e) {
+            throw OpenJsonProcessingException.deserializationError(
+                    "No no-arg constructor for " + clazz.getName(), e);
+        }
     }
 
     // ==================== Helpers ====================

@@ -5,12 +5,14 @@ import cloud.opencode.base.oauth2.OAuth2Token;
 import cloud.opencode.base.oauth2.exception.OAuth2ErrorCode;
 import cloud.opencode.base.oauth2.exception.OAuth2Exception;
 import cloud.opencode.base.oauth2.http.OAuth2HttpClient;
+import cloud.opencode.base.oauth2.internal.JsonParser;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -59,7 +61,7 @@ public class TokenRefresher implements AutoCloseable {
     private final ConcurrentHashMap<String, CompletableFuture<OAuth2Token>> pendingRefreshes;
     private final ReentrantLock refreshLock;
     private final ScheduledExecutorService scheduler;
-    private volatile boolean closed;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
      * Create a new token refresher
@@ -90,7 +92,7 @@ public class TokenRefresher implements AutoCloseable {
             Thread t = Thread.ofVirtual().name("token-refresher").unstarted(r);
             return t;
         });
-        this.closed = false;
+        // closed is initialized to false by AtomicBoolean constructor
     }
 
     /**
@@ -193,7 +195,7 @@ public class TokenRefresher implements AutoCloseable {
      * @return the new token | 新 Token
      */
     private OAuth2Token doRefresh(String refreshToken) {
-        if (closed) {
+        if (closed.get()) {
             throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_REFRESH_FAILED, "Refresher is closed");
         }
 
@@ -224,102 +226,38 @@ public class TokenRefresher implements AutoCloseable {
     private OAuth2Token parseTokenResponse(String json) {
         OAuth2Token.Builder builder = OAuth2Token.builder();
 
-        String accessToken = extractJsonString(json, "access_token");
+        String accessToken = JsonParser.getString(json, "access_token");
         if (accessToken == null) {
             throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_PARSE_ERROR, "Missing access_token");
         }
         builder.accessToken(accessToken);
 
-        String tokenType = extractJsonString(json, "token_type");
+        String tokenType = JsonParser.getString(json, "token_type");
         if (tokenType != null) {
             builder.tokenType(tokenType);
         }
 
-        String refreshToken = extractJsonString(json, "refresh_token");
+        String refreshToken = JsonParser.getString(json, "refresh_token");
         if (refreshToken != null) {
             builder.refreshToken(refreshToken);
         }
 
-        String idToken = extractJsonString(json, "id_token");
+        String idToken = JsonParser.getString(json, "id_token");
         if (idToken != null) {
             builder.idToken(idToken);
         }
 
-        String scope = extractJsonString(json, "scope");
+        String scope = JsonParser.getString(json, "scope");
         if (scope != null) {
             builder.scopeString(scope);
         }
 
-        Long expiresIn = extractJsonLong(json, "expires_in");
+        Long expiresIn = JsonParser.getLong(json, "expires_in");
         if (expiresIn != null) {
             builder.expiresIn(expiresIn);
         }
 
         return builder.build();
-    }
-
-    /**
-     * Extract string field from JSON
-     * 从 JSON 中提取字符串字段
-     */
-    private String extractJsonString(String json, String field) {
-        String pattern = "\"" + field + "\"";
-        int idx = json.indexOf(pattern);
-        if (idx < 0) return null;
-
-        int colonIdx = json.indexOf(':', idx + pattern.length());
-        if (colonIdx < 0) return null;
-
-        int start = colonIdx + 1;
-        while (start < json.length() && Character.isWhitespace(json.charAt(start))) {
-            start++;
-        }
-
-        if (start >= json.length()) return null;
-
-        if (json.charAt(start) == '"') {
-            int end = json.indexOf('"', start + 1);
-            if (end > start) {
-                return json.substring(start + 1, end);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Extract long field from JSON
-     * 从 JSON 中提取长整型字段
-     */
-    private Long extractJsonLong(String json, String field) {
-        String pattern = "\"" + field + "\"";
-        int idx = json.indexOf(pattern);
-        if (idx < 0) return null;
-
-        int colonIdx = json.indexOf(':', idx + pattern.length());
-        if (colonIdx < 0) return null;
-
-        int start = colonIdx + 1;
-        while (start < json.length() && Character.isWhitespace(json.charAt(start))) {
-            start++;
-        }
-
-        if (start >= json.length()) return null;
-
-        int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
-            end++;
-        }
-
-        if (end > start) {
-            try {
-                return Long.parseLong(json.substring(start, end));
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -339,13 +277,12 @@ public class TokenRefresher implements AutoCloseable {
      * @return true if closed | 如果已关闭返回 true
      */
     public boolean isClosed() {
-        return closed;
+        return closed.get();
     }
 
     @Override
     public void close() {
-        if (!closed) {
-            closed = true;
+        if (closed.compareAndSet(false, true)) {
             scheduler.shutdown();
             try {
                 if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -355,6 +292,8 @@ public class TokenRefresher implements AutoCloseable {
                 scheduler.shutdownNow();
                 Thread.currentThread().interrupt();
             }
+            // Cancel pending futures before clearing to unblock waiting callers
+            pendingRefreshes.values().forEach(f -> f.cancel(true));
             pendingRefreshes.clear();
         }
     }

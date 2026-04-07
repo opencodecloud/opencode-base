@@ -13,14 +13,22 @@
 - **Soft Reference Pool**: GC-friendly pool that releases objects under memory pressure
 - **Virtual Thread Pool**: Optimized for virtual threads with ScopedValue context propagation
 
+### V1.0.3 New Features
+- **PoolLease** (AutoCloseable): Try-with-resources pattern for borrowed objects -- no more forgotten `returnObject()` calls
+- **SimplePooledObjectFactory**: Create pools from `Supplier`/`Consumer` -- one-line pool creation
+- **PoolEventListener**: Lifecycle event hooks (onBorrow, onReturn, onCreate, onDestroy, onEvict, onExhausted, onTimeout)
+- **MaxAge Eviction**: Evict objects that exceed a maximum lifetime (e.g., recycle DB connections every 30 minutes)
+- **Max Object Lifetime**: Config-level lifetime enforcement -- expired objects are rejected on borrow
+- **Pool Warm-up**: `preparePool(count)` method to pre-create objects on demand
+
 ### Configuration
 - **Builder Pattern**: Immutable `PoolConfig` record with fluent builder
 - **Size Control**: maxTotal, maxIdle, minIdle with configurable wait policy
-- **Timeout**: Configurable borrow timeout with BLOCK or FAIL policies
+- **Timeout**: Configurable borrow timeout with BLOCK, FAIL, or GROW policies
 - **LIFO/FIFO**: Configurable object ordering
 
 ### Eviction & Validation
-- **Eviction Policies**: Idle-time, LRU, LFU, and composite (all/any) eviction
+- **Eviction Policies**: Idle-time, LRU, LFU, MaxAge, and composite (all/any) eviction
 - **Periodic Eviction**: Configurable eviction run interval and batch size
 - **Object Validation**: Test on borrow, return, create, and while idle
 
@@ -29,6 +37,7 @@
 - **Metrics Snapshot**: Point-in-time immutable snapshot of pool metrics
 - **Observability Exporter**: Export metrics to external monitoring systems
 - **Object Tracking**: Track pooled object lifecycle and detect leaks
+- **Event Listener**: Real-time lifecycle event callbacks for monitoring and debugging
 
 ## Quick Start
 
@@ -37,41 +46,94 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-pool</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
-### Basic Usage
+### Simplest Usage (V1.0.3)
 ```java
 import cloud.opencode.base.pool.*;
 
-// Create a pool with default config
+// One-line pool creation from Supplier
+ObjectPool<StringBuilder> pool = OpenPool.createPool(StringBuilder::new);
+
+// Try-with-resources (recommended -- prevents leaks)
+try (PoolLease<StringBuilder> lease = pool.borrowLease()) {
+    lease.get().append("Hello");
+}
+
+// Or with Supplier + Consumer (auto-close on destroy)
+ObjectPool<Connection> pool = OpenPool.createPool(
+    () -> DriverManager.getConnection(url),
+    Connection::close
+);
+```
+
+### Traditional Usage
+```java
+// Create a pool with factory
 ObjectPool<Connection> pool = OpenPool.createPool(myFactory);
 
-// Borrow and return manually
+// Execute pattern (auto-return)
+String result = pool.execute(conn -> conn.executeQuery("SELECT 1"));
+
+// Manual borrow/return
 Connection conn = pool.borrowObject();
 try {
     conn.executeQuery("SELECT 1");
 } finally {
     pool.returnObject(conn);
 }
-
-// Execute pattern (recommended -- auto-return)
-String result = pool.execute(conn -> conn.executeQuery("SELECT 1"));
 ```
 
 ### Custom Configuration
 ```java
-PoolConfig config = OpenPool.configBuilder()
+PoolConfig config = PoolConfig.builder()
     .maxTotal(20)
     .maxIdle(10)
     .minIdle(5)
     .maxWait(Duration.ofSeconds(10))
     .testOnBorrow(true)
     .timeBetweenEvictionRuns(Duration.ofMinutes(5))
+    .maxObjectLifetime(Duration.ofHours(1))  // V1.0.3: force recycle after 1h
     .build();
 
 ObjectPool<Connection> pool = OpenPool.createPool(factory, config);
+```
+
+### Event Listener (V1.0.3)
+```java
+PoolConfig config = PoolConfig.builder()
+    .maxTotal(10)
+    .eventListener(new PoolEventListener<Connection>() {
+        @Override
+        public void onExhausted() {
+            log.warn("Connection pool exhausted!");
+        }
+        @Override
+        public void onTimeout(Duration waitDuration) {
+            log.error("Timed out after {}ms", waitDuration.toMillis());
+        }
+    })
+    .build();
+```
+
+### Pool Lease with Invalidation (V1.0.3)
+```java
+try (PoolLease<Connection> lease = pool.borrowLease()) {
+    try {
+        lease.get().executeUpdate("INSERT ...");
+    } catch (SQLException e) {
+        lease.invalidate();  // Mark as bad -- will be destroyed, not returned
+        throw e;
+    }
+}
+```
+
+### Pool Warm-up (V1.0.3)
+```java
+ObjectPool<Connection> pool = OpenPool.createPool(factory, config);
+pool.preparePool(5);  // Pre-create 5 objects
 ```
 
 ### Keyed Pool
@@ -94,15 +156,29 @@ ObjectPool<Connection> pool = OpenPool.createVirtualThreadPool(factory, config);
 
 ### Eviction Policies
 ```java
+// MaxAge eviction: recycle objects older than 30 minutes (V1.0.3)
+EvictionPolicy<Connection> maxAge = OpenPool.maxAgeEviction(Duration.ofMinutes(30));
+
 // Composite eviction: idle > 30min AND borrow count < 5
 EvictionPolicy<Connection> policy = OpenPool.allEviction(
     OpenPool.idleTimeEviction(Duration.ofMinutes(30)),
     OpenPool.lfuEviction(5)
 );
 
-PoolConfig config = OpenPool.configBuilder()
+PoolConfig config = PoolConfig.builder()
     .evictionPolicy(policy)
     .timeBetweenEvictionRuns(Duration.ofMinutes(5))
+    .build();
+```
+
+### Simplified Factory (V1.0.3)
+```java
+// Full control with builder
+PooledObjectFactory<Connection> factory = SimplePooledObjectFactory
+    .<Connection>builder(() -> DriverManager.getConnection(url))
+    .destroyer(Connection::close)
+    .validator(conn -> !conn.isClosed())
+    .passivator(Connection::clearWarnings)
     .build();
 ```
 
@@ -112,12 +188,14 @@ PoolConfig config = OpenPool.configBuilder()
 | Class | Description |
 |-------|-------------|
 | `OpenPool` | Main facade with factory methods for creating all pool types |
-| `ObjectPool<T>` | Core object pool interface with borrow/return/execute semantics |
+| `ObjectPool<T>` | Core object pool interface with borrow/return/execute/borrowLease semantics |
 | `KeyedObjectPool<K,V>` | Keyed object pool interface for per-key sub-pools |
 | `PoolConfig` | Immutable pool configuration record with builder pattern |
 | `PoolContext` | Contextual information passed during pool operations |
 | `PooledObject<T>` | Wrapper around a pooled object with state and timestamp tracking |
 | `PooledObjectFactory<T>` | Factory interface for creating, validating, and destroying pooled objects |
+| `PoolLease<T>` | AutoCloseable lease for try-with-resources borrow pattern **(V1.0.3)** |
+| `PoolEventListener<T>` | Lifecycle event listener for pool monitoring **(V1.0.3)** |
 
 ### Factory (`cloud.opencode.base.pool.factory`)
 | Class | Description |
@@ -127,6 +205,7 @@ PoolConfig config = OpenPool.configBuilder()
 | `DefaultPooledObject<T>` | Default implementation of PooledObject with state management |
 | `KeyedPooledObjectFactory<K,V>` | Factory interface for keyed pooled objects |
 | `PooledObjectState` | Enum of pooled object lifecycle states (IDLE, ALLOCATED, etc.) |
+| `SimplePooledObjectFactory<T>` | Supplier/Consumer-based factory for simple use cases **(V1.0.3)** |
 
 ### Implementations (`cloud.opencode.base.pool.impl`)
 | Class | Description |
@@ -141,7 +220,8 @@ PoolConfig config = OpenPool.configBuilder()
 ### Policy (`cloud.opencode.base.pool.policy`)
 | Class | Description |
 |-------|-------------|
-| `EvictionPolicy<T>` | Interface and built-in implementations for eviction strategies |
+| `EvictionPolicy<T>` | Sealed interface: IdleTime, LRU, LFU, MaxAge, Composite |
+| `EvictionPolicy.MaxAge<T>` | Age-based eviction policy **(V1.0.3)** |
 | `ValidationPolicy<T>` | Validation strategy for pooled objects |
 | `WaitPolicy` | Enum for pool exhaustion behavior (BLOCK, FAIL, GROW) |
 | `EvictionContext<T>` | Context provided to eviction policies during evaluation |
@@ -163,6 +243,28 @@ PoolConfig config = OpenPool.configBuilder()
 | Class | Description |
 |-------|-------------|
 | `OpenPoolException` | Runtime exception for pool operation errors |
+
+## Performance (V1.0.3)
+
+Single-thread borrow+return latency: **~80 ns/op** (9.3× faster than V1.0.0)
+
+| Scenario | Throughput (ops/ms) | Latency (ns/op) |
+|----------|--------------------:|----------------:|
+| borrowReturn (manual) | 12,435 | 80 |
+| borrowReturn (PoolLease) | 11,938 | 84 |
+| borrowReturn (execute) | 11,942 | 84 |
+| getNumIdle+getNumActive | 189,027 | 5.3 |
+| concurrent (4 threads) | 1,846 | 542 |
+| concurrent (100 vthreads) | 1,283 | 779 |
+
+Key optimizations: zero-allocation hot path (nanoTime timestamps, no `Instant.now()`), O(1) idle count tracking, merged borrow timestamps.
+
+## Config Validation (V1.0.3)
+
+`PoolConfig.builder().build()` enforces:
+- `maxTotal >= 1`
+- `maxIdle >= 0`, `minIdle >= 0`
+- Auto-clamps: `maxIdle = min(maxIdle, maxTotal)`, `minIdle = min(minIdle, maxIdle)`
 
 ## Requirements
 

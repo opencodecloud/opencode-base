@@ -1,5 +1,6 @@
 package cloud.opencode.base.xml.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import java.util.List;
@@ -13,7 +14,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-xml V1.0.0
+ * @since JDK 25, opencode-base-xml V1.0.3
  */
 @DisplayName("XmlValidationException Tests")
 class XmlValidationExceptionTest {
@@ -27,7 +28,7 @@ class XmlValidationExceptionTest {
         void constructorWithMessageShouldSetMessage() {
             XmlValidationException exception = new XmlValidationException("Validation error");
 
-            assertThat(exception.getMessage()).isEqualTo("Validation error");
+            assertThat(exception.getMessage()).contains("Validation error");
         }
 
         @Test
@@ -36,7 +37,7 @@ class XmlValidationExceptionTest {
             Throwable cause = new RuntimeException("cause");
             XmlValidationException exception = new XmlValidationException("Validation error", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Validation error");
+            assertThat(exception.getMessage()).contains("Validation error");
             assertThat(exception.getCause()).isEqualTo(cause);
         }
 
@@ -103,6 +104,14 @@ class XmlValidationExceptionTest {
             XmlValidationException exception = new XmlValidationException("error");
 
             assertThat(exception).isInstanceOf(OpenXmlException.class);
+        }
+
+        @Test
+        @DisplayName("should be instance of OpenException")
+        void shouldBeInstanceOfOpenException() {
+            XmlValidationException exception = new XmlValidationException("error");
+
+            assertThat(exception).isInstanceOf(OpenException.class);
         }
     }
 }

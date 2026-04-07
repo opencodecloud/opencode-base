@@ -1,6 +1,7 @@
 package cloud.opencode.base.captcha.exception;
 
 import cloud.opencode.base.captcha.CaptchaType;
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -24,7 +25,7 @@ class CaptchaGenerationExceptionTest {
         void shouldCreateExceptionWithMessageOnly() {
             CaptchaGenerationException ex = new CaptchaGenerationException("Failed to generate");
 
-            assertThat(ex.getMessage()).isEqualTo("Failed to generate");
+            assertThat(ex.getRawMessage()).isEqualTo("Failed to generate");
             assertThat(ex.getType()).isNull();
             assertThat(ex.getCause()).isNull();
         }
@@ -34,7 +35,7 @@ class CaptchaGenerationExceptionTest {
         void shouldCreateExceptionWithEmptyMessage() {
             CaptchaGenerationException ex = new CaptchaGenerationException("");
 
-            assertThat(ex.getMessage()).isEmpty();
+            assertThat(ex.getRawMessage()).isEmpty();
             assertThat(ex.getType()).isNull();
         }
 
@@ -43,7 +44,7 @@ class CaptchaGenerationExceptionTest {
         void shouldCreateExceptionWithNullMessage() {
             CaptchaGenerationException ex = new CaptchaGenerationException((String) null);
 
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
             assertThat(ex.getType()).isNull();
         }
 
@@ -61,7 +62,7 @@ class CaptchaGenerationExceptionTest {
             String message = "Font rendering failed: unable to load system fonts for CAPTCHA image";
             CaptchaGenerationException ex = new CaptchaGenerationException(message);
 
-            assertThat(ex.getMessage()).isEqualTo(message);
+            assertThat(ex.getRawMessage()).isEqualTo(message);
         }
     }
 
@@ -76,7 +77,7 @@ class CaptchaGenerationExceptionTest {
                 "Generation failed", CaptchaType.NUMERIC);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.NUMERIC);
-            assertThat(ex.getMessage()).isEqualTo("Generation failed (type: NUMERIC)");
+            assertThat(ex.getRawMessage()).isEqualTo("Generation failed (type: NUMERIC)");
             assertThat(ex.getCause()).isNull();
         }
 
@@ -87,7 +88,7 @@ class CaptchaGenerationExceptionTest {
                 "Font not found", CaptchaType.ALPHA);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.ALPHA);
-            assertThat(ex.getMessage()).isEqualTo("Font not found (type: ALPHA)");
+            assertThat(ex.getRawMessage()).isEqualTo("Font not found (type: ALPHA)");
         }
 
         @Test
@@ -107,7 +108,7 @@ class CaptchaGenerationExceptionTest {
                 "Invalid expression", CaptchaType.ARITHMETIC);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.ARITHMETIC);
-            assertThat(ex.getMessage()).isEqualTo("Invalid expression (type: ARITHMETIC)");
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid expression (type: ARITHMETIC)");
         }
 
         @Test
@@ -117,7 +118,7 @@ class CaptchaGenerationExceptionTest {
                 "Chinese font missing", CaptchaType.CHINESE);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.CHINESE);
-            assertThat(ex.getMessage()).isEqualTo("Chinese font missing (type: CHINESE)");
+            assertThat(ex.getRawMessage()).isEqualTo("Chinese font missing (type: CHINESE)");
         }
 
         @Test
@@ -127,7 +128,7 @@ class CaptchaGenerationExceptionTest {
                 "GIF encoding failed", CaptchaType.GIF);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.GIF);
-            assertThat(ex.getMessage()).isEqualTo("GIF encoding failed (type: GIF)");
+            assertThat(ex.getRawMessage()).isEqualTo("GIF encoding failed (type: GIF)");
         }
 
         @Test
@@ -137,7 +138,7 @@ class CaptchaGenerationExceptionTest {
                 "Slider image error", CaptchaType.SLIDER);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.SLIDER);
-            assertThat(ex.getMessage()).isEqualTo("Slider image error (type: SLIDER)");
+            assertThat(ex.getRawMessage()).isEqualTo("Slider image error (type: SLIDER)");
         }
 
         @Test
@@ -147,7 +148,7 @@ class CaptchaGenerationExceptionTest {
                 "Click area error", CaptchaType.CLICK);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.CLICK);
-            assertThat(ex.getMessage()).isEqualTo("Click area error (type: CLICK)");
+            assertThat(ex.getRawMessage()).isEqualTo("Click area error (type: CLICK)");
         }
 
         @Test
@@ -157,7 +158,7 @@ class CaptchaGenerationExceptionTest {
                 "Rotation error", CaptchaType.ROTATE);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.ROTATE);
-            assertThat(ex.getMessage()).isEqualTo("Rotation error (type: ROTATE)");
+            assertThat(ex.getRawMessage()).isEqualTo("Rotation error (type: ROTATE)");
         }
 
         @Test
@@ -167,7 +168,7 @@ class CaptchaGenerationExceptionTest {
                 "Image selection error", CaptchaType.IMAGE_SELECT);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.IMAGE_SELECT);
-            assertThat(ex.getMessage()).isEqualTo("Image selection error (type: IMAGE_SELECT)");
+            assertThat(ex.getRawMessage()).isEqualTo("Image selection error (type: IMAGE_SELECT)");
         }
 
         @Test
@@ -176,7 +177,7 @@ class CaptchaGenerationExceptionTest {
             CaptchaGenerationException ex = new CaptchaGenerationException(
                 "Error occurred", CaptchaType.NUMERIC);
 
-            assertThat(ex.getMessage()).isEqualTo("Error occurred (type: NUMERIC)");
+            assertThat(ex.getRawMessage()).isEqualTo("Error occurred (type: NUMERIC)");
         }
 
         @Test
@@ -187,7 +188,7 @@ class CaptchaGenerationExceptionTest {
                 "Unknown error", nullType);
 
             assertThat(ex.getType()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("Unknown error (type: null)");
+            assertThat(ex.getRawMessage()).isEqualTo("Unknown error (type: null)");
         }
 
         @Test
@@ -197,7 +198,7 @@ class CaptchaGenerationExceptionTest {
                 null, CaptchaType.GIF);
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.GIF);
-            assertThat(ex.getMessage()).isEqualTo("null (type: GIF)");
+            assertThat(ex.getRawMessage()).isEqualTo("null (type: GIF)");
         }
     }
 
@@ -212,7 +213,7 @@ class CaptchaGenerationExceptionTest {
             CaptchaGenerationException ex = new CaptchaGenerationException(
                 "Image generation failed", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Image generation failed");
+            assertThat(ex.getRawMessage()).isEqualTo("Image generation failed");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getType()).isNull();
         }
@@ -223,7 +224,7 @@ class CaptchaGenerationExceptionTest {
             CaptchaGenerationException ex = new CaptchaGenerationException(
                 "Generation error", (Throwable) null);
 
-            assertThat(ex.getMessage()).isEqualTo("Generation error");
+            assertThat(ex.getRawMessage()).isEqualTo("Generation error");
             assertThat(ex.getCause()).isNull();
             assertThat(ex.getType()).isNull();
         }
@@ -271,7 +272,7 @@ class CaptchaGenerationExceptionTest {
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.IMAGE_SELECT);
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getMessage()).isEqualTo("Failed to generate CAPTCHA (type: IMAGE_SELECT)");
+            assertThat(ex.getRawMessage()).isEqualTo("Failed to generate CAPTCHA (type: IMAGE_SELECT)");
         }
 
         @Test
@@ -282,7 +283,7 @@ class CaptchaGenerationExceptionTest {
 
             assertThat(ex.getType()).isNull();
             assertThat(ex.getCause()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("null (type: null)");
+            assertThat(ex.getRawMessage()).isEqualTo("null (type: null)");
         }
 
         @Test
@@ -294,7 +295,7 @@ class CaptchaGenerationExceptionTest {
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.ROTATE);
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getMessage()).isEqualTo("Rotation failed (type: ROTATE)");
+            assertThat(ex.getRawMessage()).isEqualTo("Rotation failed (type: ROTATE)");
         }
 
         @Test
@@ -306,7 +307,7 @@ class CaptchaGenerationExceptionTest {
 
             assertThat(ex.getType()).isEqualTo(CaptchaType.CLICK);
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getMessage()).isEqualTo("Click position error (type: CLICK)");
+            assertThat(ex.getRawMessage()).isEqualTo("Click position error (type: CLICK)");
         }
 
         @Test
@@ -318,7 +319,7 @@ class CaptchaGenerationExceptionTest {
 
             assertThat(ex.getType()).isNull();
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getMessage()).isEqualTo("Failed (type: null)");
+            assertThat(ex.getRawMessage()).isEqualTo("Failed (type: null)");
         }
 
         @Test
@@ -327,7 +328,7 @@ class CaptchaGenerationExceptionTest {
             CaptchaGenerationException ex = new CaptchaGenerationException(
                 "Error", CaptchaType.ARITHMETIC, new RuntimeException());
 
-            assertThat(ex.getMessage()).matches("Error \\(type: ARITHMETIC\\)");
+            assertThat(ex.getRawMessage()).matches("Error \\(type: ARITHMETIC\\)");
         }
     }
 
@@ -404,6 +405,14 @@ class CaptchaGenerationExceptionTest {
     @Nested
     @DisplayName("Inheritance Tests")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            CaptchaGenerationException ex = new CaptchaGenerationException("Error");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("should extend CaptchaException")

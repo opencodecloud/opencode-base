@@ -80,6 +80,7 @@ import java.util.stream.Stream;
 public final class FileComparator {
 
     private static final int DEFAULT_BUFFER_SIZE = 8192;
+    private static final char[] HEX_LOWER = "0123456789abcdef".toCharArray();
 
     private FileComparator() {
         throw new AssertionError("Utility class should not be instantiated");
@@ -195,11 +196,13 @@ public final class FileComparator {
      */
     public static String computeHashHex(Path file, String algorithm) {
         byte[] hash = computeHash(file, algorithm);
-        StringBuilder hex = new StringBuilder(hash.length * 2);
-        for (byte b : hash) {
-            hex.append(String.format("%02x", b));
+        char[] chars = new char[hash.length * 2];
+        for (int i = 0; i < hash.length; i++) {
+            int v = hash[i] & 0xFF;
+            chars[i * 2] = HEX_LOWER[v >>> 4];
+            chars[i * 2 + 1] = HEX_LOWER[v & 0x0F];
         }
-        return hex.toString();
+        return new String(chars);
     }
 
     // ==================== Line Comparison ====================
@@ -517,9 +520,9 @@ public final class FileComparator {
                 return false;
             }
 
-            // Compare in chunks
+            // Compare in chunks (64MB for fewer syscalls)
             long position = 0;
-            int chunkSize = 1024 * 1024; // 1MB chunks
+            int chunkSize = 64 * 1024 * 1024;
 
             while (position < size) {
                 long remaining = size - position;

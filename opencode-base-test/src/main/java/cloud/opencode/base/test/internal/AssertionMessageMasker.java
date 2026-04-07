@@ -98,14 +98,17 @@ public final class AssertionMessageMasker {
     // Pattern for extracting digits
     private static final Pattern NON_DIGIT_PATTERN = Pattern.compile("\\D");
 
+    // Pre-compiled split pattern for API key/password masking
+    private static final Pattern SPLIT_PATTERN = Pattern.compile("[=:\\s]+");
+
     // Default instance with all standard patterns
     private static final AssertionMessageMasker DEFAULT_INSTANCE = new AssertionMessageMasker(List.of(
             new MaskRule(EMAIL_PATTERN, AssertionMessageMasker::maskEmail),
             new MaskRule(PHONE_PATTERN, s -> maskWithPrefix(s, 3)),
             new MaskRule(CREDIT_CARD_PATTERN, s -> maskWithSuffix(s, 4)),
             new MaskRule(SSN_PATTERN, s -> "***-**-" + s.substring(s.length() - 4)),
-            new MaskRule(API_KEY_PATTERN, s -> s.split("[=:\\s]+")[0] + "=***MASKED***"),
-            new MaskRule(PASSWORD_PATTERN, s -> s.split("[=:\\s]+")[0] + "=********"),
+            new MaskRule(API_KEY_PATTERN, s -> SPLIT_PATTERN.split(s, 2)[0] + "=***MASKED***"),
+            new MaskRule(PASSWORD_PATTERN, s -> SPLIT_PATTERN.split(s, 2)[0] + "=********"),
             new MaskRule(IPV4_PATTERN, s -> maskIp(s))
     ));
 

@@ -1,1 +1,1 @@
-cloud.opencode.base.yml.snakeyaml.SnakeYamlProvider
+cloud.opencode.base.yml.internal.BuiltinYmlProvider

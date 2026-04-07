@@ -186,6 +186,11 @@ public final class CollectionHandler implements TypeHandler<Collection<?>> {
             return new ArrayDeque<>(size);
         }
 
+        // Fallback for unmodifiable/unknown collection types (e.g., List.of(), Collections.unmodifiableList)
+        if (Collection.class.isAssignableFrom(type)) {
+            return new ArrayList<>(size);
+        }
+
         throw OpenDeepCloneException.unsupportedType(type);
     }
 

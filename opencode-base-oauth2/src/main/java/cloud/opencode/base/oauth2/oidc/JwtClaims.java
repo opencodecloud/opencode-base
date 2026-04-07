@@ -2,6 +2,7 @@ package cloud.opencode.base.oauth2.oidc;
 
 import cloud.opencode.base.oauth2.exception.OAuth2ErrorCode;
 import cloud.opencode.base.oauth2.exception.OAuth2Exception;
+import cloud.opencode.base.oauth2.internal.JsonParser;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -147,6 +148,8 @@ public record JwtClaims(
         return aud.contains(audience);
     }
 
+    private static final int MAX_TOKEN_LENGTH = 65536;
+
     /**
      * Parse a JWT token (without signature verification)
      * 解析 JWT 令牌（不验证签名）
@@ -160,8 +163,13 @@ public record JwtClaims(
             throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_PARSE_ERROR, "Token is empty");
         }
 
+        if (token.length() > MAX_TOKEN_LENGTH) {
+            throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_PARSE_ERROR,
+                    "Token exceeds maximum allowed length");
+        }
+
         String[] parts = token.split("\\.");
-        if (parts.length < 2) {
+        if (parts.length != 3) {
             throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_PARSE_ERROR, "Invalid JWT format");
         }
 
@@ -261,35 +269,85 @@ public record JwtClaims(
 
             char ch = json.charAt(pos);
             if (ch == '"') {
-                int valueStart = pos + 1;
-                int valueEnd = json.indexOf('"', valueStart);
-                if (valueEnd < 0) break;
-                claims.put(key, json.substring(valueStart, valueEnd));
-                pos = valueEnd + 1;
+                // Find closing quote position (escape-aware)
+                int i = pos + 1;
+                boolean hasEscape = false;
+                while (i < json.length()) {
+                    char vc = json.charAt(i);
+                    if (vc == '\\' && i + 1 < json.length()) {
+                        hasEscape = true;
+                        i += 2;
+                        continue;
+                    }
+                    if (vc == '"') break;
+                    i++;
+                }
+                if (i >= json.length()) break;
+                if (!hasEscape) {
+                    // Fast path: no escapes, direct substring
+                    claims.put(key, json.substring(pos + 1, i));
+                } else {
+                    // Slow path: unescape
+                    claims.put(key, JsonParser.unescape(json, pos + 1, i));
+                }
+                pos = i + 1;
             } else if (ch == '[') {
-                // Array - simple parsing for string arrays
-                int arrayEnd = json.indexOf(']', pos);
-                if (arrayEnd < 0) break;
-                String arrayContent = json.substring(pos + 1, arrayEnd);
+                // Array - escape-aware parsing for string arrays
+                int arrayPos = pos + 1;
                 List<String> items = new ArrayList<>();
-                for (String item : arrayContent.split(",")) {
-                    item = item.trim();
-                    if (item.startsWith("\"") && item.endsWith("\"")) {
-                        items.add(item.substring(1, item.length() - 1));
+                while (arrayPos < json.length()) {
+                    while (arrayPos < json.length() && Character.isWhitespace(json.charAt(arrayPos))) arrayPos++;
+                    if (arrayPos >= json.length() || json.charAt(arrayPos) == ']') {
+                        if (arrayPos < json.length()) arrayPos++;
+                        break;
+                    }
+                    if (json.charAt(arrayPos) == ',') {
+                        arrayPos++;
+                        continue;
+                    }
+                    if (json.charAt(arrayPos) == '"') {
+                        // Find closing quote (escape-aware)
+                        int i = arrayPos + 1;
+                        boolean hasEscape = false;
+                        while (i < json.length()) {
+                            char vc = json.charAt(i);
+                            if (vc == '\\' && i + 1 < json.length()) {
+                                hasEscape = true;
+                                i += 2;
+                                continue;
+                            }
+                            if (vc == '"') break;
+                            i++;
+                        }
+                        if (i < json.length()) {
+                            items.add(hasEscape
+                                    ? JsonParser.unescape(json, arrayPos + 1, i)
+                                    : json.substring(arrayPos + 1, i));
+                            arrayPos = i + 1;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        // Skip non-string element
+                        while (arrayPos < json.length()
+                                && json.charAt(arrayPos) != ','
+                                && json.charAt(arrayPos) != ']') {
+                            arrayPos++;
+                        }
                     }
                 }
                 claims.put(key, items);
-                pos = arrayEnd + 1;
+                pos = arrayPos;
             } else if (ch == 't' || ch == 'f') {
-                if (json.substring(pos).startsWith("true")) {
+                if (json.regionMatches(pos, "true", 0, 4)) {
                     claims.put(key, true);
                     pos += 4;
-                } else if (json.substring(pos).startsWith("false")) {
+                } else if (json.regionMatches(pos, "false", 0, 5)) {
                     claims.put(key, false);
                     pos += 5;
                 }
             } else if (ch == 'n') {
-                if (json.substring(pos).startsWith("null")) {
+                if (json.regionMatches(pos, "null", 0, 4)) {
                     pos += 4;
                 }
             } else if (Character.isDigit(ch) || ch == '-') {

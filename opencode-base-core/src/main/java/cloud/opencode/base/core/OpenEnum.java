@@ -3,6 +3,7 @@ package cloud.opencode.base.core;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.Locale;
 
 /**
  * Enum Utility Class - Validation, retrieval, mapping, filtering and conversion for enums
@@ -130,11 +131,11 @@ public final class OpenEnum {
         Map<String, Enum<?>> cache = ENUM_NAME_CACHE.computeIfAbsent(enumClass, k -> {
             Map<String, Enum<?>> map = new HashMap<>();
             for (E e : enumClass.getEnumConstants()) {
-                map.put(e.name().toLowerCase(), e);
+                map.put(e.name().toLowerCase(Locale.ROOT), e);
             }
             return map;
         });
-        return (E) cache.get(name.toLowerCase());
+        return (E) cache.get(name.toLowerCase(Locale.ROOT));
     }
 
     /**

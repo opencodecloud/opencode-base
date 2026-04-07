@@ -1,5 +1,6 @@
 package cloud.opencode.base.money.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.money.Currency;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,8 +28,8 @@ class ExchangeRateExceptionTest {
         void testMessageConstructor() {
             ExchangeRateException ex = new ExchangeRateException("Rate error");
 
-            assertThat(ex.getMessage()).isEqualTo("Rate error");
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.RATE_NOT_FOUND);
+            assertThat(ex.getRawMessage()).isEqualTo("Rate error");
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.RATE_NOT_FOUND);
             assertThat(ex.getSource()).isNull();
             assertThat(ex.getTarget()).isNull();
         }
@@ -38,7 +39,7 @@ class ExchangeRateExceptionTest {
         void testMessageCodeConstructor() {
             ExchangeRateException ex = new ExchangeRateException("Rate error", MoneyErrorCode.RATE_INVALID);
 
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.RATE_INVALID);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.RATE_INVALID);
         }
 
         @Test
@@ -71,7 +72,7 @@ class ExchangeRateExceptionTest {
             ExchangeRateException ex = ExchangeRateException.invalidRate("-1.5");
 
             assertThat(ex.getMessage()).contains("-1.5");
-            assertThat(ex.getErrorCode()).isEqualTo(MoneyErrorCode.RATE_INVALID);
+            assertThat(ex.getMoneyErrorCode()).isEqualTo(MoneyErrorCode.RATE_INVALID);
         }
     }
 
@@ -84,6 +85,13 @@ class ExchangeRateExceptionTest {
         void testExtendsMoneyException() {
             ExchangeRateException ex = new ExchangeRateException("Test");
             assertThat(ex).isInstanceOf(MoneyException.class);
+        }
+
+        @Test
+        @DisplayName("继承OpenException")
+        void testExtendsOpenException() {
+            ExchangeRateException ex = new ExchangeRateException("Test");
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 

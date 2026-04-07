@@ -362,4 +362,291 @@ class GeoUtilTest {
             assertThat(GeoUtil.METERS_PER_DEGREE).isEqualTo(111319.9);
         }
     }
+
+    @Nested
+    @DisplayName("质心计算测试")
+    class CentroidTests {
+
+        @Test
+        @DisplayName("centroid()计算多点质心")
+        void testCentroidBasic() {
+            List<Coordinate> coords = List.of(
+                Coordinate.wgs84(0, 0),
+                Coordinate.wgs84(2, 0),
+                Coordinate.wgs84(2, 2),
+                Coordinate.wgs84(0, 2)
+            );
+            Coordinate centroid = GeoUtil.centroid(coords);
+            assertThat(centroid).isNotNull();
+            assertThat(centroid.longitude()).isCloseTo(1.0, within(0.01));
+            assertThat(centroid.latitude()).isCloseTo(1.0, within(0.01));
+        }
+
+        @Test
+        @DisplayName("centroid()单点返回自身")
+        void testCentroidSinglePoint() {
+            List<Coordinate> coords = List.of(Coordinate.wgs84(116.4074, 39.9042));
+            Coordinate centroid = GeoUtil.centroid(coords);
+            assertThat(centroid).isNotNull();
+            assertThat(centroid.longitude()).isCloseTo(116.4074, within(0.0001));
+            assertThat(centroid.latitude()).isCloseTo(39.9042, within(0.0001));
+        }
+
+        @Test
+        @DisplayName("centroid()null列表返回null")
+        void testCentroidNull() {
+            assertThat(GeoUtil.centroid(null)).isNull();
+        }
+
+        @Test
+        @DisplayName("centroid()空列表返回null")
+        void testCentroidEmpty() {
+            assertThat(GeoUtil.centroid(List.of())).isNull();
+        }
+
+        @Test
+        @DisplayName("centroid()忽略null元素")
+        void testCentroidWithNulls() {
+            List<Coordinate> coords = new ArrayList<>();
+            coords.add(Coordinate.wgs84(0, 0));
+            coords.add(null);
+            coords.add(Coordinate.wgs84(2, 0));
+            Coordinate centroid = GeoUtil.centroid(coords);
+            assertThat(centroid).isNotNull();
+            assertThat(centroid.longitude()).isCloseTo(1.0, within(0.01));
+        }
+
+        @Test
+        @DisplayName("centroid()全null返回null")
+        void testCentroidAllNulls() {
+            List<Coordinate> coords = new ArrayList<>();
+            coords.add(null);
+            coords.add(null);
+            assertThat(GeoUtil.centroid(coords)).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("总路径距离测试")
+    class TotalDistanceTests {
+
+        @Test
+        @DisplayName("totalDistance()计算路径总距离")
+        void testTotalDistanceBasic() {
+            List<Coordinate> path = List.of(
+                Coordinate.wgs84(116.0, 39.0),
+                Coordinate.wgs84(117.0, 39.0),
+                Coordinate.wgs84(117.0, 40.0)
+            );
+            double totalDist = GeoUtil.totalDistance(path);
+            // 两段距离之和，每段约85-111公里
+            assertThat(totalDist).isGreaterThan(150000);
+        }
+
+        @Test
+        @DisplayName("totalDistance()单点返回0")
+        void testTotalDistanceSinglePoint() {
+            assertThat(GeoUtil.totalDistance(List.of(Coordinate.wgs84(0, 0)))).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("totalDistance()null返回0")
+        void testTotalDistanceNull() {
+            assertThat(GeoUtil.totalDistance(null)).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("totalDistance()空列表返回0")
+        void testTotalDistanceEmpty() {
+            assertThat(GeoUtil.totalDistance(List.of())).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("totalDistance()忽略null元素")
+        void testTotalDistanceWithNulls() {
+            List<Coordinate> path = new ArrayList<>();
+            path.add(Coordinate.wgs84(0, 0));
+            path.add(null);
+            path.add(Coordinate.wgs84(1, 0));
+            double dist = GeoUtil.totalDistance(path);
+            assertThat(dist).isGreaterThan(0);
+        }
+    }
+
+    @Nested
+    @DisplayName("点到线段距离测试")
+    class DistanceToSegmentTests {
+
+        @Test
+        @DisplayName("distanceToSegment()点在线段上方")
+        void testDistanceToSegmentAbove() {
+            Coordinate point = Coordinate.wgs84(0.5, 1);
+            Coordinate start = Coordinate.wgs84(0, 0);
+            Coordinate end = Coordinate.wgs84(1, 0);
+            double dist = GeoUtil.distanceToSegment(point, start, end);
+            // 约111公里（1度纬度）
+            assertThat(dist).isCloseTo(111000, within(2000.0));
+        }
+
+        @Test
+        @DisplayName("distanceToSegment()点在端点外侧")
+        void testDistanceToSegmentBeyondEndpoint() {
+            Coordinate point = Coordinate.wgs84(2, 0);
+            Coordinate start = Coordinate.wgs84(0, 0);
+            Coordinate end = Coordinate.wgs84(1, 0);
+            double dist = GeoUtil.distanceToSegment(point, start, end);
+            // 应等于点到end的距离（约111公里）
+            double distToEnd = OpenGeo.distance(point, end);
+            assertThat(dist).isCloseTo(distToEnd, within(100.0));
+        }
+
+        @Test
+        @DisplayName("distanceToSegment()退化线段（同一点）")
+        void testDistanceToSegmentDegenerate() {
+            Coordinate point = Coordinate.wgs84(1, 1);
+            Coordinate start = Coordinate.wgs84(0, 0);
+            double dist = GeoUtil.distanceToSegment(point, start, start);
+            double expected = OpenGeo.distance(point, start);
+            assertThat(dist).isCloseTo(expected, within(1.0));
+        }
+
+        @Test
+        @DisplayName("distanceToSegment()null输入返回0")
+        void testDistanceToSegmentNull() {
+            assertThat(GeoUtil.distanceToSegment(null, Coordinate.wgs84(0, 0), Coordinate.wgs84(1, 0))).isEqualTo(0);
+            assertThat(GeoUtil.distanceToSegment(Coordinate.wgs84(0, 0), null, Coordinate.wgs84(1, 0))).isEqualTo(0);
+            assertThat(GeoUtil.distanceToSegment(Coordinate.wgs84(0, 0), Coordinate.wgs84(1, 0), null)).isEqualTo(0);
+        }
+    }
+
+    @Nested
+    @DisplayName("点到折线距离测试")
+    class DistanceToPolylineTests {
+
+        @Test
+        @DisplayName("distanceToPolyline()计算最短距离")
+        void testDistanceToPolylineBasic() {
+            Coordinate point = Coordinate.wgs84(0.5, 1);
+            List<Coordinate> polyline = List.of(
+                Coordinate.wgs84(0, 0),
+                Coordinate.wgs84(1, 0),
+                Coordinate.wgs84(2, 0)
+            );
+            double dist = GeoUtil.distanceToPolyline(point, polyline);
+            assertThat(dist).isCloseTo(111000, within(2000.0));
+        }
+
+        @Test
+        @DisplayName("distanceToPolyline()null输入返回0")
+        void testDistanceToPolylineNull() {
+            assertThat(GeoUtil.distanceToPolyline(null, List.of(Coordinate.wgs84(0, 0), Coordinate.wgs84(1, 0)))).isEqualTo(0);
+            assertThat(GeoUtil.distanceToPolyline(Coordinate.wgs84(0, 0), null)).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("distanceToPolyline()不足2点返回0")
+        void testDistanceToPolylineTooFewPoints() {
+            assertThat(GeoUtil.distanceToPolyline(Coordinate.wgs84(0, 0), List.of(Coordinate.wgs84(1, 1)))).isEqualTo(0);
+        }
+    }
+
+    @Nested
+    @DisplayName("插值测试")
+    class InterpolateTests {
+
+        @Test
+        @DisplayName("interpolate()起点处fraction=0")
+        void testInterpolateAtStart() {
+            Coordinate c1 = Coordinate.wgs84(0, 0);
+            Coordinate c2 = Coordinate.wgs84(10, 0);
+            Coordinate result = GeoUtil.interpolate(c1, c2, 0.0);
+            assertThat(result.longitude()).isCloseTo(0, within(0.0001));
+            assertThat(result.latitude()).isCloseTo(0, within(0.0001));
+        }
+
+        @Test
+        @DisplayName("interpolate()终点处fraction=1")
+        void testInterpolateAtEnd() {
+            Coordinate c1 = Coordinate.wgs84(0, 0);
+            Coordinate c2 = Coordinate.wgs84(10, 0);
+            Coordinate result = GeoUtil.interpolate(c1, c2, 1.0);
+            assertThat(result.longitude()).isCloseTo(10, within(0.0001));
+            assertThat(result.latitude()).isCloseTo(0, within(0.0001));
+        }
+
+        @Test
+        @DisplayName("interpolate()中点处fraction=0.5")
+        void testInterpolateAtMidpoint() {
+            Coordinate c1 = Coordinate.wgs84(0, 0);
+            Coordinate c2 = Coordinate.wgs84(10, 0);
+            Coordinate result = GeoUtil.interpolate(c1, c2, 0.5);
+            assertThat(result.longitude()).isCloseTo(5.0, within(0.01));
+            assertThat(result.latitude()).isCloseTo(0.0, within(0.01));
+        }
+
+        @Test
+        @DisplayName("interpolate()相同点")
+        void testInterpolateSamePoint() {
+            Coordinate c = Coordinate.wgs84(5, 5);
+            Coordinate result = GeoUtil.interpolate(c, c, 0.5);
+            assertThat(result.longitude()).isCloseTo(5, within(0.0001));
+            assertThat(result.latitude()).isCloseTo(5, within(0.0001));
+        }
+
+        @Test
+        @DisplayName("interpolate()null输入返回null")
+        void testInterpolateNull() {
+            assertThat(GeoUtil.interpolate(null, Coordinate.wgs84(0, 0), 0.5)).isNull();
+            assertThat(GeoUtil.interpolate(Coordinate.wgs84(0, 0), null, 0.5)).isNull();
+        }
+
+        @Test
+        @DisplayName("interpolate()无效fraction抛出异常")
+        void testInterpolateInvalidFraction() {
+            Coordinate c1 = Coordinate.wgs84(0, 0);
+            Coordinate c2 = Coordinate.wgs84(1, 1);
+            assertThatThrownBy(() -> GeoUtil.interpolate(c1, c2, -0.1))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> GeoUtil.interpolate(c1, c2, 1.1))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("罗盘方向测试")
+    class CompassDirectionTests {
+
+        @Test
+        @DisplayName("compassDirection()基本方位")
+        void testCompassDirectionCardinal() {
+            assertThat(GeoUtil.compassDirection(0)).isEqualTo("N");
+            assertThat(GeoUtil.compassDirection(90)).isEqualTo("E");
+            assertThat(GeoUtil.compassDirection(180)).isEqualTo("S");
+            assertThat(GeoUtil.compassDirection(270)).isEqualTo("W");
+        }
+
+        @Test
+        @DisplayName("compassDirection()16方位")
+        void testCompassDirection16Points() {
+            assertThat(GeoUtil.compassDirection(22.5)).isEqualTo("NNE");
+            assertThat(GeoUtil.compassDirection(45)).isEqualTo("NE");
+            assertThat(GeoUtil.compassDirection(67.5)).isEqualTo("ENE");
+            assertThat(GeoUtil.compassDirection(135)).isEqualTo("SE");
+            assertThat(GeoUtil.compassDirection(225)).isEqualTo("SW");
+            assertThat(GeoUtil.compassDirection(315)).isEqualTo("NW");
+        }
+
+        @Test
+        @DisplayName("compassDirection()360度等于北")
+        void testCompassDirection360() {
+            assertThat(GeoUtil.compassDirection(360)).isEqualTo("N");
+        }
+
+        @Test
+        @DisplayName("compassDirection()负角度正确处理")
+        void testCompassDirectionNegative() {
+            assertThat(GeoUtil.compassDirection(-90)).isEqualTo("W");
+            assertThat(GeoUtil.compassDirection(-180)).isEqualTo("S");
+        }
+    }
 }

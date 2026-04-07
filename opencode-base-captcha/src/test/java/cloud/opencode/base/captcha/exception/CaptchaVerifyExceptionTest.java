@@ -1,5 +1,6 @@
 package cloud.opencode.base.captcha.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -25,7 +26,7 @@ class CaptchaVerifyExceptionTest {
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-123");
             assertThat(ex.getProvidedAnswer()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA verification failed: captcha-123");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA verification failed: captcha-123");
         }
 
         @Test
@@ -36,7 +37,7 @@ class CaptchaVerifyExceptionTest {
 
             assertThat(ex.getCaptchaId()).isEqualTo(uuid);
             assertThat(ex.getProvidedAnswer()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA verification failed: " + uuid);
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA verification failed: " + uuid);
         }
 
         @Test
@@ -46,7 +47,7 @@ class CaptchaVerifyExceptionTest {
 
             assertThat(ex.getCaptchaId()).isNull();
             assertThat(ex.getProvidedAnswer()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA verification failed: null");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA verification failed: null");
         }
 
         @Test
@@ -56,7 +57,7 @@ class CaptchaVerifyExceptionTest {
 
             assertThat(ex.getCaptchaId()).isEmpty();
             assertThat(ex.getProvidedAnswer()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA verification failed: ");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA verification failed: ");
         }
 
         @Test
@@ -79,7 +80,7 @@ class CaptchaVerifyExceptionTest {
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-456");
             assertThat(ex.getProvidedAnswer()).isEqualTo("ABCD");
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA verification failed for ID: captcha-456");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA verification failed for ID: captcha-456");
         }
 
         @Test
@@ -167,7 +168,7 @@ class CaptchaVerifyExceptionTest {
 
             assertThat(ex.getCaptchaId()).isEqualTo("captcha-111");
             assertThat(ex.getProvidedAnswer()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("Custom verification error");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom verification error");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
 
@@ -189,7 +190,7 @@ class CaptchaVerifyExceptionTest {
 
             assertThat(ex.getCaptchaId()).isNull();
             assertThat(ex.getProvidedAnswer()).isNull();
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
             assertThat(ex.getCause()).isNull();
         }
 
@@ -369,7 +370,7 @@ class CaptchaVerifyExceptionTest {
         void shouldFormatMessageForCaptchaIdOnlyConstructor() {
             CaptchaVerifyException ex = new CaptchaVerifyException("test-captcha");
 
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA verification failed: test-captcha");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA verification failed: test-captcha");
         }
 
         @Test
@@ -377,7 +378,7 @@ class CaptchaVerifyExceptionTest {
         void shouldFormatMessageForCaptchaIdAndAnswerConstructor() {
             CaptchaVerifyException ex = new CaptchaVerifyException("test-captcha", "wrong-answer");
 
-            assertThat(ex.getMessage()).isEqualTo("CAPTCHA verification failed for ID: test-captcha");
+            assertThat(ex.getRawMessage()).isEqualTo("CAPTCHA verification failed for ID: test-captcha");
         }
 
         @Test
@@ -386,7 +387,7 @@ class CaptchaVerifyExceptionTest {
             CaptchaVerifyException ex = new CaptchaVerifyException(
                 "Custom error message", "test-captcha", new RuntimeException());
 
-            assertThat(ex.getMessage()).isEqualTo("Custom error message");
+            assertThat(ex.getRawMessage()).isEqualTo("Custom error message");
         }
 
         @Test
@@ -394,7 +395,7 @@ class CaptchaVerifyExceptionTest {
         void singleArgMessageUsesColonFormat() {
             CaptchaVerifyException ex = new CaptchaVerifyException("id-1");
 
-            assertThat(ex.getMessage()).startsWith("CAPTCHA verification failed: ");
+            assertThat(ex.getRawMessage()).startsWith("CAPTCHA verification failed: ");
         }
 
         @Test
@@ -402,7 +403,7 @@ class CaptchaVerifyExceptionTest {
         void twoArgMessageUsesForIdFormat() {
             CaptchaVerifyException ex = new CaptchaVerifyException("id-2", "ans");
 
-            assertThat(ex.getMessage()).startsWith("CAPTCHA verification failed for ID: ");
+            assertThat(ex.getRawMessage()).startsWith("CAPTCHA verification failed for ID: ");
         }
 
         @Test
@@ -411,7 +412,7 @@ class CaptchaVerifyExceptionTest {
             CaptchaVerifyException singleArg = new CaptchaVerifyException("captcha-1");
             CaptchaVerifyException twoArg = new CaptchaVerifyException("captcha-1", "answer");
 
-            assertThat(singleArg.getMessage()).isNotEqualTo(twoArg.getMessage());
+            assertThat(singleArg.getRawMessage()).isNotEqualTo(twoArg.getRawMessage());
             assertThat(singleArg.getCaptchaId()).isEqualTo(twoArg.getCaptchaId());
         }
 
@@ -420,13 +421,21 @@ class CaptchaVerifyExceptionTest {
         void providedAnswerDoesNotAppearInMessage() {
             CaptchaVerifyException ex = new CaptchaVerifyException("captcha-1", "secret-answer");
 
-            assertThat(ex.getMessage()).doesNotContain("secret-answer");
+            assertThat(ex.getRawMessage()).doesNotContain("secret-answer");
         }
     }
 
     @Nested
     @DisplayName("Inheritance Tests")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            CaptchaVerifyException ex = new CaptchaVerifyException("id");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("should extend CaptchaException")

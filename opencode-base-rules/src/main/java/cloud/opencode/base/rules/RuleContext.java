@@ -1,12 +1,13 @@
 package cloud.opencode.base.rules;
 
+import cloud.opencode.base.rules.key.TypedKey;
 import cloud.opencode.base.rules.model.DefaultFactStore;
 import cloud.opencode.base.rules.model.FactStore;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Rule Context - Manages Facts and Variables During Rule Execution
@@ -62,8 +63,8 @@ public final class RuleContext {
 
     private RuleContext(FactStore facts) {
         this.facts = facts;
-        this.variables = new ConcurrentHashMap<>();
-        this.results = new ConcurrentHashMap<>();
+        this.variables = new HashMap<>();
+        this.results = new HashMap<>();
     }
 
     /**
@@ -297,6 +298,65 @@ public final class RuleContext {
      */
     public FactStore facts() {
         return facts;
+    }
+
+    /**
+     * Gets a typed value by typed key (checks variables first, then facts)
+     * 通过类型化键获取类型化值（先检查变量，再检查事实）
+     *
+     * @param key the typed key | 类型化键
+     * @param <T> the value type | 值类型
+     * @return the typed value, or null if not found | 类型化值，如果未找到则为null
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    public <T> T get(TypedKey<T> key) {
+        Object value = variables.get(key.name());
+        if (value == null) value = facts.get(key.name());
+        if (value == null) return null;
+        return key.type().isInstance(value) ? key.type().cast(value) : null;
+    }
+
+    /**
+     * Gets a typed value by typed key with a default
+     * 通过类型化键获取类型化值，带默认值
+     *
+     * @param key          the typed key | 类型化键
+     * @param defaultValue the default value | 默认值
+     * @param <T>          the value type | 值类型
+     * @return the typed value, or default if not found | 类型化值，如果未找到则为默认值
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    public <T> T get(TypedKey<T> key, T defaultValue) {
+        T value = get(key);
+        return value != null ? value : defaultValue;
+    }
+
+    /**
+     * Puts a typed value by typed key into variables
+     * 通过类型化键将类型化值放入变量中
+     *
+     * @param key   the typed key | 类型化键
+     * @param value the value | 值
+     * @param <T>   the value type | 值类型
+     * @return this context for chaining | 此上下文用于链式调用
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    public <T> RuleContext put(TypedKey<T> key, T value) {
+        variables.put(key.name(), value);
+        return this;
+    }
+
+    /**
+     * Checks if a typed key exists in variables or facts
+     * 检查类型化键是否存在于变量或事实中
+     *
+     * @param key the typed key | 类型化键
+     * @param <T> the value type | 值类型
+     * @return true if exists | 如果存在返回true
+     * @since JDK 25, opencode-base-rules V1.0.3
+     */
+    public <T> boolean contains(TypedKey<T> key) {
+        return variables.containsKey(key.name()) || facts.contains(key.name());
     }
 
     /**

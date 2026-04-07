@@ -249,7 +249,8 @@ public final class OpenHex {
      * 十六进制字符串转整数
      */
     public static int toInt(String hex) {
-        return Integer.parseInt(normalize(hex), 16);
+        String cleaned = stripHexPrefix(hex);
+        return Integer.parseInt(cleaned, 16);
     }
 
     /**
@@ -257,6 +258,33 @@ public final class OpenHex {
      * 十六进制字符串转长整数
      */
     public static long toLong(String hex) {
-        return Long.parseLong(normalize(hex), 16);
+        String cleaned = stripHexPrefix(hex);
+        return Long.parseLong(cleaned, 16);
+    }
+
+    /**
+     * Strips optional "0x"/"0X" prefix and whitespace, validating all remaining chars are hex digits.
+     * 去除可选的 "0x"/"0X" 前缀和空白，验证所有剩余字符为十六进制数字。
+     */
+    private static String stripHexPrefix(String hex) {
+        if (hex == null || hex.isEmpty()) {
+            throw new NumberFormatException("Hex string must not be null or empty");
+        }
+        String trimmed = hex.strip();
+        if (trimmed.startsWith("0x") || trimmed.startsWith("0X")) {
+            trimmed = trimmed.substring(2);
+        }
+        trimmed = trimmed.replace(" ", "");
+        if (trimmed.isEmpty()) {
+            throw new NumberFormatException("Hex string contains no hex digits: " + hex);
+        }
+        for (int i = 0; i < trimmed.length(); i++) {
+            if (!OpenChar.isHexDigit(trimmed.charAt(i))) {
+                throw new NumberFormatException(
+                        "Invalid hex character '" + trimmed.charAt(i) + "' at index " + i + " in: "
+                        + (hex.length() > 32 ? hex.substring(0, 32) + "..." : hex));
+            }
+        }
+        return trimmed;
     }
 }

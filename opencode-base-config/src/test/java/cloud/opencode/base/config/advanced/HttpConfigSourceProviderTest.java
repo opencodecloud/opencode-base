@@ -68,25 +68,28 @@ class HttpConfigSourceProviderTest {
     class CreateTests {
 
         @Test
-        @DisplayName("create returns a ConfigSource")
-        void testCreateReturnsSource() {
-            ConfigSource source = provider.create("http://config-server/app", Map.of());
-            assertThat(source).isNotNull();
+        @DisplayName("create with unresolvable host throws IllegalArgumentException (SSRF protection)")
+        void testCreateWithUnresolvableHostThrows() {
+            // Unresolvable hosts are rejected to prevent DNS rebinding SSRF
+            assertThatThrownBy(() -> provider.create("http://config-server/app", Map.of()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Cannot resolve host");
         }
 
         @Test
-        @DisplayName("create returns source with empty properties (TODO impl)")
-        void testCreateReturnsEmptyProperties() {
-            ConfigSource source = provider.create("http://config-server/app", Map.of());
-            assertThat(source.getProperties()).isEmpty();
+        @DisplayName("create with localhost throws IllegalArgumentException (SSRF protection)")
+        void testCreateWithLocalhostThrows() {
+            assertThatThrownBy(() -> provider.create("http://localhost/app", Map.of()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("blocked hostname");
         }
 
         @Test
-        @DisplayName("create source name contains URI")
-        void testCreateSourceName() {
-            String uri = "http://config-server/app";
-            ConfigSource source = provider.create(uri, Map.of());
-            assertThat(source.getName()).contains(uri);
+        @DisplayName("create with loopback IP throws IllegalArgumentException (SSRF protection)")
+        void testCreateWithLoopbackIpThrows() {
+            assertThatThrownBy(() -> provider.create("http://127.0.0.1/app", Map.of()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("internal/private");
         }
     }
 

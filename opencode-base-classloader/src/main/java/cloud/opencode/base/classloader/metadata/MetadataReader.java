@@ -184,16 +184,16 @@ public final class MetadataReader {
         }
 
         // Interfaces
-        builder.interfaceNames(Arrays.stream(clazz.getInterfaces())
-                .map(Class::getName)
-                .toList());
+        builder.interfaceNames(classNames(clazz.getInterfaces()));
 
         // Permitted subclasses (for sealed classes)
         if (clazz.isSealed()) {
-            builder.permittedSubclasses(Arrays.stream(clazz.getPermittedSubclasses())
-                    .map(Class::getName)
-                    .toList());
+            builder.permittedSubclasses(classNames(clazz.getPermittedSubclasses()));
         }
+
+        // Generic signature and type parameters
+        builder.genericSignature(buildGenericSignature(clazz));
+        builder.typeParameters(parseTypeParameters(clazz));
 
         // Methods
         builder.methods(parseMethodsFromClass(clazz));
@@ -204,6 +204,11 @@ public final class MetadataReader {
         // Annotations
         builder.annotations(parseAnnotationsFromClass(clazz));
 
+        // Record components
+        if (clazz.isRecord()) {
+            builder.recordComponents(parseRecordComponents(clazz));
+        }
+
         return builder.build();
     }
 
@@ -211,39 +216,77 @@ public final class MetadataReader {
         List<MethodMetadata> result = new ArrayList<>();
 
         for (Method method : clazz.getDeclaredMethods()) {
+            Type genericReturn = method.getGenericReturnType();
+            Type[] genericParams = method.getGenericParameterTypes();
+
             result.add(new MethodMetadata(
                     method.getName(),
                     method.getReturnType().getName(),
-                    Arrays.stream(method.getParameterTypes()).map(Class::getName).toList(),
-                    Arrays.stream(method.getParameters()).map(Parameter::getName).toList(),
-                    Arrays.stream(method.getExceptionTypes()).map(Class::getName).toList(),
+                    classNames(method.getParameterTypes()),
+                    parameterNames(method.getParameters()),
+                    classNames(method.getExceptionTypes()),
                     method.getModifiers(),
                     method.isSynthetic(),
                     method.isBridge(),
                     method.isDefault(),
                     parseAnnotations(method.getAnnotations()),
-                    parseParameterAnnotations(method.getParameterAnnotations())
+                    parseParameterAnnotations(method.getParameterAnnotations()),
+                    method.toGenericString(),
+                    genericReturn.getTypeName(),
+                    typeNames(genericParams)
             ));
         }
 
         // Add constructors
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            Type[] genericParams = constructor.getGenericParameterTypes();
+
             result.add(new MethodMetadata(
                     "<init>",
                     "void",
-                    Arrays.stream(constructor.getParameterTypes()).map(Class::getName).toList(),
-                    Arrays.stream(constructor.getParameters()).map(Parameter::getName).toList(),
-                    Arrays.stream(constructor.getExceptionTypes()).map(Class::getName).toList(),
+                    classNames(constructor.getParameterTypes()),
+                    parameterNames(constructor.getParameters()),
+                    classNames(constructor.getExceptionTypes()),
                     constructor.getModifiers(),
                     constructor.isSynthetic(),
                     false,
                     false,
                     parseAnnotations(constructor.getAnnotations()),
-                    parseParameterAnnotations(constructor.getParameterAnnotations())
+                    parseParameterAnnotations(constructor.getParameterAnnotations()),
+                    constructor.toGenericString(),
+                    "void",
+                    typeNames(genericParams)
             ));
         }
 
         return result;
+    }
+
+    private static List<String> classNames(Class<?>[] classes) {
+        if (classes.length == 0) return List.of();
+        List<String> names = new ArrayList<>(classes.length);
+        for (Class<?> c : classes) {
+            names.add(c.getName());
+        }
+        return List.copyOf(names);
+    }
+
+    private static List<String> parameterNames(Parameter[] parameters) {
+        if (parameters.length == 0) return List.of();
+        List<String> names = new ArrayList<>(parameters.length);
+        for (Parameter p : parameters) {
+            names.add(p.getName());
+        }
+        return List.copyOf(names);
+    }
+
+    private static List<String> typeNames(Type[] types) {
+        if (types.length == 0) return List.of();
+        List<String> names = new ArrayList<>(types.length);
+        for (Type t : types) {
+            names.add(t.getTypeName());
+        }
+        return List.copyOf(names);
     }
 
     private static List<FieldMetadata> parseFieldsFromClass(Class<?> clazz) {
@@ -259,12 +302,19 @@ public final class MetadataReader {
                 }
             }
 
+            Type genericType = field.getGenericType();
+            String genericTypeName = genericType.getTypeName();
+            // Only set genericType if it differs from the raw type name (i.e., has actual generic info)
+            String rawTypeName = field.getType().getName();
+            String resolvedGenericType = genericTypeName.equals(rawTypeName) ? null : genericTypeName;
+
             result.add(new FieldMetadata(
                     field.getName(),
-                    field.getType().getName(),
+                    rawTypeName,
                     field.getModifiers(),
                     constantValue,
-                    parseAnnotations(field.getAnnotations())
+                    parseAnnotations(field.getAnnotations()),
+                    resolvedGenericType
             ));
         }
 
@@ -290,12 +340,135 @@ public final class MetadataReader {
         for (Method method : annotationType.getDeclaredMethods()) {
             try {
                 Object value = method.invoke(annotation);
-                attributes.put(method.getName(), value);
+                attributes.put(method.getName(), resolveAnnotationValue(value));
             } catch (Exception ignored) {
             }
         }
 
         return new AnnotationMetadata(annotationType.getName(), attributes, true);
+    }
+
+    /**
+     * Recursively resolve annotation attribute values
+     * 递归解析注解属性值
+     *
+     * @param value raw annotation attribute value | 原始注解属性值
+     * @return resolved value | 解析后的值
+     */
+    private static Object resolveAnnotationValue(Object value) {
+        if (value instanceof Annotation nested) {
+            return parseAnnotation(nested);
+        }
+        if (value instanceof Annotation[] array) {
+            return Arrays.stream(array)
+                    .map(MetadataReader::parseAnnotation)
+                    .toList();
+        }
+        if (value instanceof Enum<?> e) {
+            return e.name();
+        }
+        if (value != null && value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> list = new ArrayList<>(length);
+            for (int i = 0; i < length; i++) {
+                list.add(resolveAnnotationValue(java.lang.reflect.Array.get(value, i)));
+            }
+            return List.copyOf(list);
+        }
+        if (value instanceof Class<?> cls) {
+            return cls.getName();
+        }
+        return value;
+    }
+
+    /**
+     * Build generic signature string for a class
+     * 构建类的泛型签名字符串
+     *
+     * @param clazz class to inspect | 要检查的类
+     * @return generic signature or null if class has no type parameters | 泛型签名，无类型参数返回 null
+     */
+    private static String buildGenericSignature(Class<?> clazz) {
+        TypeVariable<?>[] typeParams = clazz.getTypeParameters();
+        if (typeParams.length == 0) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder("<");
+        for (int i = 0; i < typeParams.length; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(formatTypeVariable(typeParams[i]));
+        }
+        sb.append(">");
+        return sb.toString();
+    }
+
+    /**
+     * Parse type parameters of a class into string representations
+     * 将类的类型参数解析为字符串表示
+     *
+     * @param clazz class to inspect | 要检查的类
+     * @return list of type parameter strings | 类型参数字符串列表
+     */
+    private static List<String> parseTypeParameters(Class<?> clazz) {
+        TypeVariable<?>[] typeParams = clazz.getTypeParameters();
+        if (typeParams.length == 0) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>(typeParams.length);
+        for (TypeVariable<?> tv : typeParams) {
+            result.add(formatTypeVariable(tv));
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Format a TypeVariable into a human-readable string (e.g. "T extends Comparable&lt;T&gt;")
+     * 将 TypeVariable 格式化为可读字符串
+     *
+     * @param typeVar type variable | 类型变量
+     * @return formatted string | 格式化后的字符串
+     */
+    private static String formatTypeVariable(TypeVariable<?> typeVar) {
+        Type[] bounds = typeVar.getBounds();
+        if (bounds.length == 1 && bounds[0] == Object.class) {
+            return typeVar.getName();
+        }
+        StringBuilder sb = new StringBuilder(typeVar.getName());
+        sb.append(" extends ");
+        for (int i = 0; i < bounds.length; i++) {
+            if (i > 0) sb.append(" & ");
+            sb.append(bounds[i].getTypeName());
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Parse record components from a record class
+     * 从 Record 类中解析 Record 组件
+     *
+     * @param clazz record class | Record 类
+     * @return list of record component metadata | Record 组件元数据列表
+     */
+    private static List<RecordComponentMetadata> parseRecordComponents(Class<?> clazz) {
+        java.lang.reflect.RecordComponent[] components = clazz.getRecordComponents();
+        if (components == null || components.length == 0) {
+            return List.of();
+        }
+        List<RecordComponentMetadata> result = new ArrayList<>();
+        for (java.lang.reflect.RecordComponent component : components) {
+            Type genericType = component.getGenericType();
+            String genericTypeName = genericType.getTypeName();
+            String rawTypeName = component.getType().getName();
+            String resolvedGenericType = genericTypeName.equals(rawTypeName) ? null : genericTypeName;
+
+            result.add(new RecordComponentMetadata(
+                    component.getName(),
+                    rawTypeName,
+                    resolvedGenericType,
+                    parseAnnotations(component.getAnnotations())
+            ));
+        }
+        return result;
     }
 
     private static List<List<AnnotationMetadata>> parseParameterAnnotations(Annotation[][] parameterAnnotations) {

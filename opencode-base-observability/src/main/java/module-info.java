@@ -18,11 +18,16 @@
  * </ul>
  *
  * @author Leon Soo
+ * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-observability V1.0.0
+ * @since JDK 25, opencode-base-observability V1.0.3
  */
 module cloud.opencode.base.observability {
     requires transitive cloud.opencode.base.core;
 
     exports cloud.opencode.base.observability;
+    exports cloud.opencode.base.observability.context;
+    exports cloud.opencode.base.observability.exception;
+    exports cloud.opencode.base.observability.health;
+    exports cloud.opencode.base.observability.metric;
 }

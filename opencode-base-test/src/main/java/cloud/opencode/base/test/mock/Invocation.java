@@ -42,6 +42,25 @@ import java.util.Arrays;
 public record Invocation(Method method, Object[] args, Instant timestamp) {
 
     /**
+     * Compact constructor — defensively copies args array.
+     * 紧凑构造器 — 防御性复制参数数组。
+     */
+    public Invocation {
+        args = args != null ? args.clone() : null;
+    }
+
+    /**
+     * Returns a defensive copy of the arguments array.
+     * 返回参数数组的防御性副本。
+     *
+     * @return args copy or null | 参数副本或 null
+     */
+    @Override
+    public Object[] args() {
+        return args != null ? args.clone() : null;
+    }
+
+    /**
      * Creates an invocation with current timestamp.
      * 使用当前时间戳创建调用记录。
      *

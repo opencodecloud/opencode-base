@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,9 @@ class CoordinateExceptionTest {
         void testMessageOnlyConstructor() {
             CoordinateException ex = new CoordinateException("Coordinate error");
 
-            assertThat(ex.getMessage()).isEqualTo("Coordinate error");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
+            assertThat(ex.getRawMessage()).isEqualTo("Coordinate error");
+            assertThat(ex.getMessage()).contains("Coordinate error");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
         }
 
         @Test
@@ -36,9 +38,10 @@ class CoordinateExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             CoordinateException ex = new CoordinateException("Coordinate error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Coordinate error");
+            assertThat(ex.getRawMessage()).isEqualTo("Coordinate error");
+            assertThat(ex.getMessage()).contains("Coordinate error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
         }
     }
 
@@ -52,6 +55,14 @@ class CoordinateExceptionTest {
             CoordinateException ex = new CoordinateException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            CoordinateException ex = new CoordinateException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

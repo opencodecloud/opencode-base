@@ -259,14 +259,14 @@ public final class BenchmarkRunner {
         System.gc();
 
         // Measure
-        List<Long> times = new ArrayList<>(measureIterations);
+        long[] times = new long[measureIterations];
         for (int i = 0; i < measureIterations; i++) {
             long start = System.nanoTime();
             runnable.run();
-            times.add(System.nanoTime() - start);
+            times[i] = System.nanoTime() - start;
         }
 
-        return new BenchmarkResult(name, times.stream().mapToLong(Long::longValue).toArray());
+        return new BenchmarkResult(name, times);
     }
 
     // ============ Results | 结果 ============

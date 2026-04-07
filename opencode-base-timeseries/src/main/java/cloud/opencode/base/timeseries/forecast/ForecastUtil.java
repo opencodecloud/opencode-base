@@ -408,7 +408,10 @@ public final class ForecastUtil {
         int n = points.size();
 
         for (int i = 1; i <= steps; i++) {
-            int seasonIndex = (n - seasonLength + (i - 1) % seasonLength) % n;
+            int seasonIndex = n - seasonLength + ((i - 1) % seasonLength);
+            if (seasonIndex < 0 || seasonIndex >= n) {
+                seasonIndex = Math.floorMod(seasonIndex, n);
+            }
             double forecastValue = points.get(seasonIndex).value();
             Instant forecastTime = lastTime.plus(interval.multipliedBy(i));
             forecast.add(DataPoint.of(forecastTime, forecastValue));

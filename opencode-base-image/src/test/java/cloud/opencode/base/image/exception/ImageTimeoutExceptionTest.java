@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageTimeoutException 异常测试")
 class ImageTimeoutExceptionTest {
@@ -28,8 +29,8 @@ class ImageTimeoutExceptionTest {
         void testConstructorWithMessage() {
             ImageTimeoutException ex = new ImageTimeoutException("Operation timed out");
 
-            assertThat(ex.getMessage()).isEqualTo("Operation timed out");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.TIMEOUT);
+            assertThat(ex.getRawMessage()).isEqualTo("Operation timed out");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.TIMEOUT);
             assertThat(ex.getTimeout()).isNull();
         }
 
@@ -39,7 +40,7 @@ class ImageTimeoutExceptionTest {
             Duration timeout = Duration.ofSeconds(30);
             ImageTimeoutException ex = new ImageTimeoutException("Timeout", timeout);
 
-            assertThat(ex.getMessage()).contains("30");
+            assertThat(ex.getRawMessage()).contains("30");
             assertThat(ex.getTimeout()).isEqualTo(timeout);
         }
 
@@ -49,7 +50,7 @@ class ImageTimeoutExceptionTest {
             Throwable cause = new RuntimeException("Thread interrupted");
             ImageTimeoutException ex = new ImageTimeoutException("Timeout error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Timeout error");
+            assertThat(ex.getRawMessage()).isEqualTo("Timeout error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getTimeout()).isNull();
         }
@@ -87,6 +88,22 @@ class ImageTimeoutExceptionTest {
             ImageTimeoutException ex = new ImageTimeoutException("Test");
 
             assertThat(ex).isInstanceOf(ImageResourceException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageTimeoutException ex = new ImageTimeoutException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageTimeoutException ex = new ImageTimeoutException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

@@ -5,6 +5,8 @@ import cloud.opencode.base.serialization.binary.JdkSerializer;
 import cloud.opencode.base.serialization.exception.OpenSerializationException;
 import cloud.opencode.base.serialization.spi.SerializerProvider;
 
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -17,9 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 统一序列化门面
  *
  * <p>This is the main entry point for all serialization operations. It provides a unified API
- * for serializing and deserializing objects using various formats (JSON, XML, Kryo, Protobuf, etc.).</p>
+ * for serializing and deserializing objects using various formats (JSON, JDK binary, etc.).</p>
  * <p>这是所有序列化操作的主入口点。它提供统一的 API，
- * 用于使用各种格式（JSON、XML、Kryo、Protobuf 等）序列化和反序列化对象。</p>
+ * 用于使用各种格式（JSON、JDK 二进制等）序列化和反序列化对象。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
@@ -38,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * // Specify format
  * byte[] json = OpenSerializer.serialize(user, "json");
- * byte[] kryo = OpenSerializer.serialize(user, "kryo");
+ * byte[] jdk = OpenSerializer.serialize(user, "jdk");
  *
  * // String serialization
  * String jsonStr = OpenSerializer.serializeToString(user);
@@ -154,14 +156,25 @@ public final class OpenSerializer {
         // Sort by priority (lower number = higher priority)
         providers.sort(Comparator.comparingInt(SerializerProvider::getPriority));
 
-        // Register serializers
+        // Register serializers (isolate each provider to prevent one failure from killing all)
         for (SerializerProvider provider : providers) {
-            Serializer serializer = provider.create();
-            SERIALIZERS.put(serializer.getFormat(), serializer);
+            try {
+                Serializer serializer = provider.create();
+                if (serializer == null || serializer.getFormat() == null || serializer.getFormat().isEmpty()) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Skipping SerializerProvider {0}: returned null serializer or empty format",
+                            provider.getClass().getName());
+                    continue;
+                }
+                SERIALIZERS.put(serializer.getFormat(), serializer);
 
-            // First available serializer becomes default
-            if (defaultSerializer == null) {
-                defaultSerializer = serializer;
+                // First available serializer becomes default
+                if (defaultSerializer == null) {
+                    defaultSerializer = serializer;
+                }
+            } catch (Exception e) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Failed to create serializer from provider " + provider.getClass().getName(), e);
             }
         }
 
@@ -183,7 +196,11 @@ public final class OpenSerializer {
      */
     public static void register(Serializer serializer) {
         Objects.requireNonNull(serializer, "Serializer must not be null");
-        SERIALIZERS.put(serializer.getFormat(), serializer);
+        String format = serializer.getFormat();
+        if (format == null || format.isEmpty()) {
+            throw new IllegalArgumentException("Serializer format must not be null or empty");
+        }
+        SERIALIZERS.put(format, serializer);
     }
 
     /**
@@ -594,5 +611,143 @@ public final class OpenSerializer {
         }
         byte[] data = serialize(source, format);
         return deserialize(data, targetType, format);
+    }
+
+    // ==================== Streaming API | 流式 API ====================
+
+    /**
+     * Serializes an object to an output stream using the default serializer.
+     * 使用默认序列化器将对象序列化到输出流。
+     *
+     * @param obj the object to serialize | 要序列化的对象
+     * @param out the output stream | 输出流
+     * @throws OpenSerializationException if serialization fails | 序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static void serialize(Object obj, OutputStream out) {
+        defaultSerializer.serialize(obj, out);
+    }
+
+    /**
+     * Serializes an object to an output stream using the specified format.
+     * 使用指定格式将对象序列化到输出流。
+     *
+     * @param obj    the object to serialize | 要序列化的对象
+     * @param out    the output stream | 输出流
+     * @param format the format name | 格式名称
+     * @throws OpenSerializationException if serialization fails | 序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static void serialize(Object obj, OutputStream out, String format) {
+        get(format).serialize(obj, out);
+    }
+
+    /**
+     * Deserializes from an input stream using the default serializer.
+     * 使用默认序列化器从输入流反序列化。
+     *
+     * @param in   the input stream | 输入流
+     * @param type the target class | 目标类
+     * @param <T>  the target type | 目标类型
+     * @return the deserialized object | 反序列化后的对象
+     * @throws OpenSerializationException if deserialization fails | 反序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static <T> T deserialize(InputStream in, Class<T> type) {
+        return defaultSerializer.deserialize(in, type);
+    }
+
+    /**
+     * Deserializes from an input stream using the specified format.
+     * 使用指定格式从输入流反序列化。
+     *
+     * @param in     the input stream | 输入流
+     * @param type   the target class | 目标类
+     * @param format the format name | 格式名称
+     * @param <T>    the target type | 目标类型
+     * @return the deserialized object | 反序列化后的对象
+     * @throws OpenSerializationException if deserialization fails | 反序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static <T> T deserialize(InputStream in, Class<T> type, String format) {
+        return get(format).deserialize(in, type);
+    }
+
+    /**
+     * Deserializes a generic type from an input stream using the default serializer.
+     * 使用默认序列化器从输入流反序列化泛型类型。
+     *
+     * @param in      the input stream | 输入流
+     * @param typeRef the type reference | 类型引用
+     * @param <T>     the target type | 目标类型
+     * @return the deserialized object | 反序列化后的对象
+     * @throws OpenSerializationException if deserialization fails | 反序列化失败时抛出
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static <T> T deserialize(InputStream in, TypeReference<T> typeRef) {
+        return defaultSerializer.deserialize(in, typeRef);
+    }
+
+    // ==================== Result API | 结果 API ====================
+
+    /**
+     * Serializes an object and returns the result with timing information using the default serializer.
+     * 使用默认序列化器序列化对象并返回带计时信息的结果。
+     *
+     * @param obj the object to serialize | 要序列化的对象
+     * @return the serialization result with timing | 带计时的序列化结果
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static SerializationResult serializeWithResult(Object obj) {
+        Serializer serializer = defaultSerializer;
+        return SerializationResult.timed(() -> serializer.serialize(obj), serializer.getFormat());
+    }
+
+    /**
+     * Serializes an object and returns the result with timing information using the specified format.
+     * 使用指定格式序列化对象并返回带计时信息的结果。
+     *
+     * @param obj    the object to serialize | 要序列化的对象
+     * @param format the format name | 格式名称
+     * @return the serialization result with timing | 带计时的序列化结果
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static SerializationResult serializeWithResult(Object obj, String format) {
+        Serializer serializer = get(format);
+        return SerializationResult.timed(() -> serializer.serialize(obj), format);
+    }
+
+    // ==================== Detection API | 检测 API ====================
+
+    /**
+     * Detects the serialization format of the given data.
+     * 检测给定数据的序列化格式。
+     *
+     * <p>Delegates to {@link FormatDetector#detect(byte[])}.</p>
+     * <p>委托给 {@link FormatDetector#detect(byte[])}。</p>
+     *
+     * @param data the data to inspect | 要检测的数据
+     * @return the detected format name ("json", "xml", "protobuf", or "unknown") | 检测到的格式名称
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static String detect(byte[] data) {
+        return FormatDetector.detect(data);
+    }
+
+    // ==================== Info API | 信息 API ====================
+
+    /**
+     * Lists metadata information for all registered serializers.
+     * 列出所有已注册序列化器的元数据信息。
+     *
+     * @return an unmodifiable list of serializer info | 不可修改的序列化器信息列表
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public static List<SerializerInfo> listSerializers() {
+        List<SerializerInfo> infos = new ArrayList<>();
+        for (Serializer serializer : SERIALIZERS.values()) {
+            infos.add(serializer.info());
+        }
+        return List.copyOf(infos);
     }
 }

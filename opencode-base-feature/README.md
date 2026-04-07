@@ -23,6 +23,15 @@
 - **ExpressionStrategy**: Expression language-based dynamic rules
 - **CompositeStrategy**: Combine multiple strategies with AND/OR logic
 
+### Lifecycle & Group Management (V1.0.3+)
+- **Feature Lifecycle**: `CREATED → ACTIVE → DEPRECATED → ARCHIVED` state transitions
+- **Feature Expiration**: Automatic expiration with configurable `expiresAt` / `expiresAfter(Duration)`
+- **Feature Groups**: Group features for batch enable/disable operations
+- **Snapshot & Restore**: Capture and restore complete feature state for rollback
+- **Environment Strategy**: Per-environment (dev/staging/prod) feature activation
+- **Test Support**: `TestFeatureManager` for isolated feature testing in unit tests
+- **Unified Exception**: `FeatureException` extends `OpenException` for consistent error handling
+
 ### Advanced Features
 - **Annotation Support**: `@FeatureToggle` and `@FeatureVariant` annotations
 - **Proxy-Based Routing**: Dynamic variant routing via `FeatureProxy`
@@ -37,7 +46,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-feature</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -101,6 +110,81 @@ Feature feature = Feature.builder("complex")
     .build();
 ```
 
+### Lifecycle & Expiration (V1.0.3+)
+
+```java
+import cloud.opencode.base.feature.lifecycle.FeatureLifecycle;
+
+// Feature with expiration
+Feature promo = Feature.builder("summer-sale")
+    .expiresAt(Instant.parse("2026-09-01T00:00:00Z"))
+    .build();
+
+// Feature with duration-based expiration
+Feature experiment = Feature.builder("experiment-v2")
+    .expiresAfter(Duration.ofDays(30))
+    .build();
+
+// Feature lifecycle management
+Feature legacy = Feature.builder("old-api")
+    .lifecycle(FeatureLifecycle.DEPRECATED)
+    .build();
+
+// Expired or archived features automatically return false
+features.isEnabled("summer-sale"); // false after expiration
+```
+
+### Feature Groups (V1.0.3+)
+
+```java
+// Register features with groups
+features.register(Feature.builder("dark-mode").group("ui").build());
+features.register(Feature.builder("new-layout").group("ui").build());
+features.register(Feature.builder("cache-v2").group("backend").build());
+
+// Batch operations
+features.enableGroup("ui");   // Enable all UI features
+features.disableGroup("ui");  // Disable all UI features
+List<Feature> uiFeatures = features.getByGroup("ui");
+```
+
+### Snapshot & Restore (V1.0.3+)
+
+```java
+// Capture current state
+FeatureSnapshot snapshot = features.snapshot();
+
+// Make changes...
+features.enable("risky-feature");
+
+// Rollback if something goes wrong
+features.restore(snapshot);
+```
+
+### Environment Strategy (V1.0.3+)
+
+```java
+Feature feature = Feature.builder("debug-panel")
+    .strategy(EnvironmentStrategy.builder()
+        .dev(true)
+        .staging(true)
+        .prod(false)
+        .build())
+    .build();
+```
+
+### Test Support (V1.0.3+)
+
+```java
+try (TestFeatureManager test = new TestFeatureManager()) {
+    test.withFeature("feature-a", true)
+        .withFeature("feature-b", false);
+
+    assertTrue(test.isEnabled("feature-a"));
+    assertFalse(test.isEnabled("feature-b"));
+} // Automatically cleans up
+```
+
 ### Conditional Execution
 
 ```java
@@ -138,6 +222,8 @@ OpenFeature features = OpenFeature.create(new LruFeatureStore(maxSize));
 | `OpenFeature` | Main facade class for feature toggle management (singleton) |
 | `Feature` | Immutable record representing a feature toggle definition |
 | `FeatureContext` | Evaluation context carrying user, tenant, and custom attributes |
+| `FeatureGroup` | Record representing a named group of features |
+| `FeatureSnapshot` | Record capturing a point-in-time snapshot of all feature states |
 
 ### Annotation Package (`cloud.opencode.base.feature.annotation`)
 | Class | Description |
@@ -160,6 +246,7 @@ OpenFeature features = OpenFeature.create(new LruFeatureStore(maxSize));
 | `FeatureNotFoundException` | Exception when a feature key is not found |
 | `FeatureSecurityException` | Exception for feature security violations |
 | `FeatureStoreException` | Exception for feature store I/O errors |
+| `FeatureExpiredException` | Exception for expired feature access |
 | `FeatureErrorCode` | Enumeration of feature error codes |
 
 ### Listener Package (`cloud.opencode.base.feature.listener`)
@@ -202,6 +289,17 @@ OpenFeature features = OpenFeature.create(new LruFeatureStore(maxSize));
 | `DateRangeStrategy` | Time-window-based activation |
 | `ExpressionStrategy` | Dynamic rule evaluation using expression engine |
 | `CompositeStrategy` | Combines multiple strategies with AND/OR logic |
+| `EnvironmentStrategy` | Per-environment (dev/staging/prod) feature activation |
+
+### Lifecycle Package (`cloud.opencode.base.feature.lifecycle`)
+| Class | Description |
+|-------|-------------|
+| `FeatureLifecycle` | Enum for feature lifecycle states (CREATED, ACTIVE, DEPRECATED, ARCHIVED) |
+
+### Testing Package (`cloud.opencode.base.feature.testing`)
+| Class | Description |
+|-------|-------------|
+| `TestFeatureManager` | AutoCloseable test helper for isolated feature testing |
 
 ## Requirements
 

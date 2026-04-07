@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+import java.util.Objects;
 
 /**
  * SPI Loader - Service Provider Interface loading utility
@@ -20,6 +21,8 @@ import java.util.stream.StreamSupport;
  *   <li>Filter by type (loadByType) - 按类型过滤</li>
  *   <li>Cached loading for performance - 缓存加载提升性能</li>
  *   <li>Reload support (reload) - 重新加载支持</li>
+ *   <li>Safe loading with error isolation (loadSafe) - 带错误隔离的安全加载</li>
+ *   <li>Priority-ordered loading (loadOrdered) - 按优先级排序加载</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -31,6 +34,12 @@ import java.util.stream.StreamSupport;
  * if (SpiLoader.hasService(MyService.class)) {
  *     int count = SpiLoader.count(MyService.class);
  * }
+ *
+ * // Error-isolated loading | 带错误隔离的加载
+ * List<MyService> safe = SpiLoader.loadSafe(MyService.class);  // skips broken providers
+ *
+ * // Priority-ordered loading | 按优先级排序加载
+ * List<MyService> ordered = SpiLoader.loadOrdered(MyService.class);
  * }</pre>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -94,12 +103,32 @@ public final class SpiLoader {
     }
 
     /**
-     * Forces reload of SPI services
-     * 强制重新加载 SPI 服务
+     * Forces reload of SPI services using the context ClassLoader.
+     * 使用上下文类加载器强制重新加载 SPI 服务。
      */
     public static <T> List<T> reload(Class<T> serviceClass) {
-        CACHE.remove(serviceClass);
-        return load(serviceClass);
+        return reload(serviceClass, Thread.currentThread().getContextClassLoader());
+    }
+
+    /**
+     * Forces reload of SPI services atomically using compute to prevent concurrent reload races.
+     * 使用 compute 原子地强制重新加载 SPI 服务，防止并发 reload 竞争。
+     *
+     * @param <T> the service type - 服务类型
+     * @param serviceClass the service class - 服务类
+     * @param classLoader the class loader to use - 使用的类加载器
+     * @return the reloaded list of service implementations - 重新加载的服务实现列表
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> List<T> reload(Class<T> serviceClass, ClassLoader classLoader) {
+        return Collections.unmodifiableList((List<T>) CACHE.compute(serviceClass, (k, oldValue) -> {
+            List<T> services = new ArrayList<>();
+            ServiceLoader<T> loader = ServiceLoader.load(serviceClass, classLoader);
+            for (T service : loader) {
+                services.add(service);
+            }
+            return services;
+        }));
     }
 
     /**
@@ -157,6 +186,103 @@ public final class SpiLoader {
     public static <T> Stream<T> loadStream(Class<T> serviceClass, ClassLoader classLoader) {
         ServiceLoader<T> loader = ServiceLoader.load(serviceClass, classLoader);
         return loader.stream().map(ServiceLoader.Provider::get);
+    }
+
+    // ==================== Safe Loading | 安全加载 ====================
+
+    /**
+     * Loads SPI service implementations, skipping any that throw during instantiation.
+     * 加载 SPI 服务实现，跳过实例化时抛出异常的实现。
+     *
+     * <p>Unlike {@link #load(Class)}, this method does not cache results and does not
+     * throw if a provider fails to instantiate. Failed providers are silently skipped.</p>
+     * <p>与 {@link #load(Class)} 不同，此方法不缓存结果，且不因提供者实例化失败而抛出异常。
+     * 失败的提供者被静默跳过。</p>
+     *
+     * @param serviceClass the service interface class | 服务接口类
+     * @param <T>          the service type | 服务类型
+     * @return unmodifiable list of successfully loaded services | 成功加载的服务的不可修改列表
+     */
+    public static <T> List<T> loadSafe(Class<T> serviceClass) {
+        return loadSafe(serviceClass, Thread.currentThread().getContextClassLoader());
+    }
+
+    /**
+     * Loads SPI service implementations with error isolation and a specified ClassLoader.
+     * 使用指定类加载器加载 SPI 服务实现，带错误隔离。
+     *
+     * @param serviceClass the service interface class | 服务接口类
+     * @param classLoader  the class loader to use | 使用的类加载器
+     * @param <T>          the service type | 服务类型
+     * @return unmodifiable list of successfully loaded services | 成功加载的服务的不可修改列表
+     */
+    public static <T> List<T> loadSafe(Class<T> serviceClass, ClassLoader classLoader) {
+        Objects.requireNonNull(serviceClass, "serviceClass must not be null");
+        ServiceLoader<T> loader = ServiceLoader.load(serviceClass, classLoader);
+        List<T> services = new ArrayList<>();
+        for (ServiceLoader.Provider<T> provider : loader.stream().toList()) {
+            try {
+                services.add(provider.get());
+            } catch (Exception | ServiceConfigurationError ignored) {
+                // Skip providers that fail to instantiate
+            }
+        }
+        return Collections.unmodifiableList(services);
+    }
+
+    // ==================== Ordered Loading | 排序加载 ====================
+
+    /**
+     * Loads SPI service implementations sorted by priority.
+     * 按优先级排序加载 SPI 服务实现。
+     *
+     * <p>Services with a {@code getPriority()} or {@code getOrder()} method
+     * returning an integer are sorted by that value (lower = higher priority).
+     * Services without priority information retain their original loading order.</p>
+     * <p>拥有返回整数的 {@code getPriority()} 或 {@code getOrder()} 方法的服务按该值排序
+     * （值越小优先级越高）。没有优先级信息的服务保持原始加载顺序。</p>
+     *
+     * @param serviceClass the service interface class | 服务接口类
+     * @param <T>          the service type | 服务类型
+     * @return unmodifiable ordered list of services | 排序后的服务不可修改列表
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <T> List<T> loadOrdered(Class<T> serviceClass) {
+        List<T> services = new ArrayList<>(load(serviceClass));
+        // Pre-extract priorities in O(n) to avoid O(n log n) reflection during sort
+        java.util.IdentityHashMap<T, Integer> priorities = new java.util.IdentityHashMap<>(services.size());
+        for (T service : services) {
+            priorities.put(service, getPriority(service));
+        }
+        services.sort(java.util.Comparator.comparingInt(priorities::get));
+        return Collections.unmodifiableList(services);
+    }
+
+    /**
+     * Extracts priority value from a service instance.
+     * 从服务实例中提取优先级值。
+     *
+     * <p>Checks in order: Comparable natural order proxy, getPriority() method, getOrder() method.
+     * Returns Integer.MAX_VALUE if no priority information is found.</p>
+     */
+    private static int getPriority(Object service) {
+        // Check for getPriority() method (common pattern: jakarta.annotation.Priority, etc.)
+        try {
+            java.lang.reflect.Method m = service.getClass().getMethod("getPriority");
+            if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
+                return (int) m.invoke(service);
+            }
+        } catch (Exception ignored) {
+        }
+        // Check for getOrder() method (common in Spring-like frameworks)
+        try {
+            java.lang.reflect.Method m = service.getClass().getMethod("getOrder");
+            if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
+                return (int) m.invoke(service);
+            }
+        } catch (Exception ignored) {
+        }
+        return Integer.MAX_VALUE;
     }
 
     /**

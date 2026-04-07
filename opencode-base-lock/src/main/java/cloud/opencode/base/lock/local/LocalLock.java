@@ -110,16 +110,18 @@ public class LocalLock implements Lock<Long> {
 
     @Override
     public LockGuard<Long> lock(Duration timeout) {
-        long startTime = System.nanoTime();
+        long startTime = metrics != null ? System.nanoTime() : 0;
         try {
             if (!jdkLock.tryLock(timeout.toNanos(), TimeUnit.NANOSECONDS)) {
                 recordTimeout();
                 throw new OpenLockTimeoutException(
                         "Failed to acquire lock within " + timeout, timeout);
             }
-            Long token = tokenGenerator.incrementAndGet();
+            long token = tokenGenerator.incrementAndGet();
             currentToken.set(token);
-            recordAcquire(System.nanoTime() - startTime);
+            if (metrics != null) {
+                metrics.recordAcquire(Duration.ofNanos(System.nanoTime() - startTime));
+            }
             return new LockGuard<>(this, token);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -131,7 +133,7 @@ public class LocalLock implements Lock<Long> {
     public boolean tryLock() {
         boolean acquired = jdkLock.tryLock();
         if (acquired) {
-            Long token = tokenGenerator.incrementAndGet();
+            long token = tokenGenerator.incrementAndGet();
             currentToken.set(token);
             recordAcquire(0);
         }
@@ -144,7 +146,7 @@ public class LocalLock implements Lock<Long> {
             long startTime = System.nanoTime();
             boolean acquired = jdkLock.tryLock(timeout.toNanos(), TimeUnit.NANOSECONDS);
             if (acquired) {
-                Long token = tokenGenerator.incrementAndGet();
+                long token = tokenGenerator.incrementAndGet();
                 currentToken.set(token);
                 recordAcquire(System.nanoTime() - startTime);
             } else {
@@ -159,11 +161,11 @@ public class LocalLock implements Lock<Long> {
 
     @Override
     public LockGuard<Long> lockInterruptibly() throws InterruptedException {
-        long startTime = System.nanoTime();
+        long startTime = metrics != null ? System.nanoTime() : 0;
         jdkLock.lockInterruptibly();
-        Long token = tokenGenerator.incrementAndGet();
+        long token = tokenGenerator.incrementAndGet();
         currentToken.set(token);
-        recordAcquire(System.nanoTime() - startTime);
+        recordAcquire(metrics != null ? (System.nanoTime() - startTime) : 0);
         return new LockGuard<>(this, token);
     }
 

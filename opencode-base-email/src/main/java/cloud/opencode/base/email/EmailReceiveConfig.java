@@ -463,4 +463,27 @@ public record EmailReceiveConfig(
     public boolean isPop3() {
         return protocol == Protocol.POP3;
     }
+
+    /**
+     * Return string representation with masked sensitive fields
+     * 返回屏蔽敏感字段的字符串表示
+     *
+     * <p>Passwords and OAuth2 tokens are masked to prevent accidental exposure in logs.</p>
+     * <p>密码和OAuth2令牌被屏蔽以防止在日志中意外暴露。</p>
+     *
+     * @return the masked string representation | 屏蔽后的字符串表示
+     */
+    @Override
+    public String toString() {
+        return "EmailReceiveConfig[host=" + host
+                + ", port=" + port
+                + ", username=" + username
+                + ", password=" + (password != null ? "***" : "null")
+                + ", oauth2Token=" + (oauth2Token != null ? "***" : "null")
+                + ", protocol=" + protocol
+                + ", ssl=" + ssl
+                + ", defaultFolder=" + defaultFolder
+                + ", debug=" + debug
+                + "]";
+    }
 }

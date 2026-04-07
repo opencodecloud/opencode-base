@@ -149,6 +149,19 @@ public record OAuth2Token(
     }
 
     /**
+     * Returns a string representation with sensitive fields redacted.
+     * 返回敏感字段已脱敏的字符串表示。
+     */
+    @Override
+    public String toString() {
+        return "OAuth2Token[tokenType=" + tokenType
+                + ", hasRefreshToken=" + hasRefreshToken()
+                + ", hasIdToken=" + hasIdToken()
+                + ", isExpired=" + isExpired()
+                + ", scopes=" + scopes + "]";
+    }
+
+    /**
      * Create a new builder
      * 创建新的构建器
      *
@@ -285,6 +298,9 @@ public record OAuth2Token(
          * @return this builder | 此构建器
          */
         public Builder expiresIn(long seconds) {
+            if (seconds < 0) {
+                throw new IllegalArgumentException("expires_in must not be negative: " + seconds);
+            }
             this.expiresAt = Instant.now().plusSeconds(seconds);
             return this;
         }

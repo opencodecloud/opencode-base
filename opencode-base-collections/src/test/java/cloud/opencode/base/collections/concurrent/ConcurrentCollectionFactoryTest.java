@@ -286,6 +286,27 @@ class ConcurrentCollectionFactoryTest {
     }
 
     @Nested
+    @DisplayName("Stack 工厂方法测试")
+    class StackFactoryTests {
+
+        @Test
+        @DisplayName("newLockFreeStack - 创建无锁并发栈")
+        void testNewLockFreeStack() {
+            LockFreeStack<String> stack = ConcurrentCollectionFactory.newLockFreeStack();
+
+            assertThat(stack).isNotNull();
+            assertThat(stack.isEmpty()).isTrue();
+            assertThat(stack.size()).isZero();
+
+            stack.push("a");
+            stack.push("b");
+
+            assertThat(stack.pop()).isEqualTo("b");
+            assertThat(stack.pop()).isEqualTo("a");
+        }
+    }
+
+    @Nested
     @DisplayName("包装方法测试")
     class WrapperTests {
 

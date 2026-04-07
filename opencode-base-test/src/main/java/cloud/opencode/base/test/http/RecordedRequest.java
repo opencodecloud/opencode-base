@@ -42,6 +42,26 @@ public record RecordedRequest(
         Map<String, String> headers,
         byte[] body) {
 
+    /**
+     * Compact constructor — defensively copies the body array.
+     * 紧凑构造器 — 防御性复制请求体数组。
+     */
+    public RecordedRequest {
+        headers = headers != null ? Map.copyOf(headers) : Map.of();
+        body = body != null ? body.clone() : new byte[0];
+    }
+
+    /**
+     * Returns a defensive copy of the body bytes.
+     * 返回请求体字节的防御性副本。
+     *
+     * @return body bytes copy | 请求体字节副本
+     */
+    @Override
+    public byte[] body() {
+        return body.clone();
+    }
+
     public String bodyAsString() {
         return new String(body, StandardCharsets.UTF_8);
     }

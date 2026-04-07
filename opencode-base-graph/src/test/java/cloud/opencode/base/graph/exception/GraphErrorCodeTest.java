@@ -45,6 +45,17 @@ class GraphErrorCodeTest {
             assertThat(GraphErrorCode.DISCONNECTED.getCode()).isEqualTo(2003);
             assertThat(GraphErrorCode.NEGATIVE_WEIGHT.getCode()).isEqualTo(2004);
             assertThat(GraphErrorCode.INVALID_DIRECTION.getCode()).isEqualTo(2005);
+            assertThat(GraphErrorCode.NEGATIVE_CYCLE.getCode()).isEqualTo(2006);
+            assertThat(GraphErrorCode.NOT_DAG.getCode()).isEqualTo(2007);
+            assertThat(GraphErrorCode.NOT_BIPARTITE.getCode()).isEqualTo(2008);
+        }
+
+        @Test
+        @DisplayName("V1.0.3新增错误码描述非空")
+        void testNewErrorCodeDescriptions() {
+            assertThat(GraphErrorCode.NEGATIVE_CYCLE.getDescription()).isNotEmpty();
+            assertThat(GraphErrorCode.NOT_DAG.getDescription()).isNotEmpty();
+            assertThat(GraphErrorCode.NOT_BIPARTITE.getDescription()).isNotEmpty();
         }
 
         @Test

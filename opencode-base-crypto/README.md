@@ -20,6 +20,11 @@ Modern cryptographic utilities for JDK 25+ with comprehensive support for symmet
 - Sealed box and secret box constructs
 - Codec utilities: Base64URL, Hex, PEM
 - Constant-time comparison and secure memory erasure
+- Streaming AEAD encryption for large files (AES-GCM, ChaCha20-Poly1305)
+- TOTP/HOTP one-time passwords (RFC 6238/4226)
+- Cryptographic algorithm policy enforcement (strict/standard/legacy)
+- Versioned cipher for seamless algorithm migration
+- SecureBytes: auto-erasable byte container with try-with-resources
 - Optional Bouncy Castle integration for SM2/SM3/SM4, BLAKE, PGP
 
 ## Maven
@@ -28,9 +33,242 @@ Modern cryptographic utilities for JDK 25+ with comprehensive support for symmet
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-crypto</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
+
+## Quick Start
+
+```java
+import cloud.opencode.base.crypto.OpenCrypto;
+
+// AES-GCM encryption
+var cipher = OpenCrypto.aesGcm();
+byte[] key = cipher.generateKey();
+byte[] encrypted = cipher.encrypt(plaintext, key);
+byte[] decrypted = cipher.decrypt(encrypted, key);
+
+// SHA-256 digest
+byte[] hash = OpenCrypto.sha256().digest("Hello".getBytes());
+
+// Password hashing with Argon2id
+var hasher = OpenCrypto.argon2();
+String hashed = hasher.hash("myPassword");
+boolean matches = hasher.verify("myPassword", hashed);
+
+// Ed25519 signature
+var signer = OpenCrypto.ed25519();
+var keyPair = signer.generateKeyPair();
+byte[] signature = signer.sign(data, keyPair.getPrivate());
+boolean sigValid = signer.verify(data, signature, keyPair.getPublic());
+
+// HMAC-SHA256
+var mac = OpenCrypto.hmacSha256(secretKey);
+byte[] tag = mac.compute(data);
+
+// X25519 key exchange
+var kex = OpenCrypto.x25519();
+var kp = kex.generateKeyPair();
+byte[] sharedSecret = kex.exchange(kp.getPrivate(), otherPublicKey);
+```
+
+## New in V1.0.3
+
+### TOTP/HOTP One-Time Passwords
+
+RFC 4226 (HOTP) and RFC 6238 (TOTP) compliant, compatible with Google Authenticator.
+
+```java
+import cloud.opencode.base.crypto.otp.Totp;
+import cloud.opencode.base.crypto.otp.Hotp;
+import cloud.opencode.base.crypto.otp.TotpSecret;
+
+// Generate a secret key
+byte[] secret = TotpSecret.generate();              // 20-byte random key
+String base32 = TotpSecret.toBase32(secret);        // Base32 for QR code
+byte[] decoded = TotpSecret.fromBase32(base32);     // Decode back
+
+// TOTP — generate and verify
+Totp totp = Totp.sha1();                            // SHA-1, 30s, 6 digits
+String code = totp.generate(secret);                // Current time code
+boolean valid = totp.verify(secret, code);          // Verify (window=1)
+boolean ok = totp.verify(secret, code, 2);          // Custom window
+
+// TOTP — custom config
+Totp custom = Totp.builder()
+    .algorithm("HmacSHA256")
+    .period(60)
+    .digits(8)
+    .build();
+
+// Generate otpauth:// URI for QR provisioning
+String uri = Totp.generateUri("MyApp", "user@example.com", secret);
+
+// HOTP — counter-based
+Hotp hotp = Hotp.sha1();
+String hotpCode = hotp.generate(secret, 42);        // Counter = 42
+boolean hotpValid = hotp.verify(secret, 42, hotpCode, 5); // Look-ahead = 5
+```
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `Totp` | `sha1()` / `sha256()` / `sha512()` | Create TOTP with preset algorithm |
+| `Totp` | `builder()` | Custom algorithm, period, digits |
+| `Totp` | `generate(secret)` | Generate code for current time |
+| `Totp` | `generate(secret, time)` | Generate code for specific time |
+| `Totp` | `verify(secret, code)` | Verify with default window (1) |
+| `Totp` | `verify(secret, code, windowSize)` | Verify with custom window |
+| `Totp` | `verify(secret, code, time, windowSize)` | Verify at specific time |
+| `Totp` | `generateUri(issuer, account, secret)` | Generate otpauth:// URI |
+| `Hotp` | `sha1()` / `sha256()` / `sha512()` | Create HOTP with preset algorithm |
+| `Hotp` | `generate(secret, counter)` | Generate 6-digit OTP |
+| `Hotp` | `generate(secret, counter, digits)` | Generate OTP with custom digits (6-8) |
+| `Hotp` | `verify(secret, counter, code, lookAhead)` | Verify with look-ahead window |
+| `TotpSecret` | `generate()` / `generate(length)` | Generate random secret |
+| `TotpSecret` | `toBase32(data)` / `fromBase32(str)` | Base32 encode/decode |
+
+### Streaming AEAD for Large Files
+
+Segment-based AEAD encryption with per-segment authentication, anti-reorder and anti-truncation protection.
+
+```java
+import cloud.opencode.base.crypto.streaming.StreamingAead;
+
+byte[] key = new byte[32]; // AES-256 key
+// ...populate key...
+
+// AES-GCM streaming encryption
+try (StreamingAead aead = StreamingAead.aesGcm(key)
+        .setSegmentSize(1024 * 1024)   // 1 MB segments (default)
+        .setAad("context".getBytes())) {
+    aead.encryptFile(Path.of("large.bin"), Path.of("large.enc"));
+    aead.decryptFile(Path.of("large.enc"), Path.of("large.dec"));
+}
+
+// ChaCha20-Poly1305 streaming
+try (StreamingAead chacha = StreamingAead.chaCha20(key)) {
+    chacha.encrypt(inputStream, outputStream);
+}
+
+// Stream-based API
+try (StreamingAead aead = StreamingAead.aesGcm(key)) {
+    aead.encrypt(inputStream, encryptedOutputStream);
+    aead.decrypt(encryptedInputStream, decryptedOutputStream);
+}
+```
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `StreamingAead` | `aesGcm(key)` | Create AES-GCM streaming encryptor (16/24/32-byte key) |
+| `StreamingAead` | `chaCha20(key)` | Create ChaCha20-Poly1305 streaming encryptor (32-byte key) |
+| `StreamingAead` | `setSegmentSize(bytes)` | Set segment size (256B - 64MB, default 1MB) |
+| `StreamingAead` | `setAad(aad)` | Set additional authenticated data |
+| `StreamingAead` | `encrypt(in, out)` | Encrypt stream |
+| `StreamingAead` | `decrypt(in, out)` | Decrypt stream |
+| `StreamingAead` | `encryptFile(source, target)` | Encrypt file |
+| `StreamingAead` | `decryptFile(source, target)` | Decrypt file (atomic write, no partial plaintext on failure) |
+| `StreamingAead` | `close()` | Erase key material from memory |
+
+### Versioned Cipher
+
+Self-describing encrypted payloads with version metadata for zero-downtime algorithm migration.
+
+```java
+import cloud.opencode.base.crypto.versioned.VersionedCipher;
+import cloud.opencode.base.crypto.symmetric.AesGcmCipher;
+
+// Build with multiple versions
+VersionedCipher vc = VersionedCipher.builder()
+    .addVersion(1, oldCipher)       // Legacy AES-128-GCM
+    .addVersion(2, newCipher)       // Current AES-256-GCM
+    .currentVersion(2)              // Encrypt with v2
+    .build();
+
+// Encrypt always uses current version
+byte[] encrypted = vc.encrypt(plaintext);
+
+// Decrypt auto-detects version from payload header
+byte[] decrypted = vc.decrypt(encrypted);
+
+// Base64 convenience
+String base64 = vc.encryptBase64("sensitive data");
+String plain = vc.decryptBase64ToString(base64);
+```
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `VersionedCipher` | `builder()` | Create builder |
+| `VersionedCipher` | `encrypt(plaintext)` | Encrypt with current version |
+| `VersionedCipher` | `decrypt(payload)` | Decrypt, auto-detecting version |
+| `VersionedCipher` | `encryptBase64(plaintext)` / `encryptBase64(str)` | Encrypt to Base64 |
+| `VersionedCipher` | `decryptBase64(base64)` / `decryptBase64ToString(base64)` | Decrypt from Base64 |
+| `VersionedPayload` | `serialize()` / `deserialize(data)` | Binary serialization |
+
+### Crypto Policy
+
+Algorithm governance with predefined policies for compliance enforcement.
+
+```java
+import cloud.opencode.base.crypto.policy.CryptoPolicy;
+
+// Predefined policies
+CryptoPolicy strict = CryptoPolicy.strict();      // AES-256-GCM, Ed25519, etc.
+CryptoPolicy standard = CryptoPolicy.standard();  // + AES-128-GCM, RSA-OAEP, etc.
+CryptoPolicy legacy = CryptoPolicy.legacy();      // + SHA-1, MD5, 3DES
+
+// Check algorithm compliance
+strict.check("AES-256-GCM", 256);                 // OK
+strict.isAllowed("MD5", 0);                        // false
+// strict.check("MD5", 0);                         // throws PolicyViolationException
+
+// Custom policy
+CryptoPolicy custom = CryptoPolicy.builder()
+    .allow("AES-256-GCM", "ChaCha20-Poly1305")
+    .deny("DES", "RC4")
+    .minKeyBits("RSA", 4096)
+    .build();
+```
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `CryptoPolicy` | `strict()` / `standard()` / `legacy()` | Predefined policies |
+| `CryptoPolicy` | `builder()` | Custom policy builder |
+| `CryptoPolicy` | `check(algorithm, keyBits)` | Check compliance (throws on violation) |
+| `CryptoPolicy` | `isAllowed(algorithm, keyBits)` | Check compliance (returns boolean) |
+| `CryptoPolicy` | `getAllowedAlgorithms()` | Get allowed algorithm set |
+| `CryptoPolicy` | `getDeniedAlgorithms()` | Get denied algorithm set |
+| `CryptoPolicy` | `getMinKeyBits()` | Get minimum key size requirements |
+
+### SecureBytes
+
+Auto-erasable secure byte container for sensitive key material.
+
+```java
+import cloud.opencode.base.crypto.util.SecureBytes;
+
+// Defensive copy — caller keeps original
+try (SecureBytes key = SecureBytes.of(rawKeyBytes)) {
+    byte[] copy = key.getBytes();       // Returns a copy
+    byte[] ref = key.getBytesUnsafe();  // Returns direct reference (hot path)
+    int len = key.length();
+} // Internal data is zeroed here
+
+// Zero-copy — caller transfers ownership
+try (SecureBytes key = SecureBytes.wrap(generateKey())) {
+    doEncrypt(key.getBytesUnsafe());
+} // The original array is zeroed
+```
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `SecureBytes` | `of(data)` | Create with defensive copy |
+| `SecureBytes` | `wrap(data)` | Create with zero-copy (transfers ownership) |
+| `SecureBytes` | `getBytes()` | Get copy of data |
+| `SecureBytes` | `getBytesUnsafe()` | Get direct reference (hot path, do not retain) |
+| `SecureBytes` | `length()` | Get byte length |
+| `SecureBytes` | `isClosed()` | Check if closed |
+| `SecureBytes` | `close()` | Zero internal data |
+| `SecureBytes` | `equals(other)` | Constant-time equality (returns false if closed) |
 
 ## API Overview
 
@@ -141,6 +379,19 @@ Modern cryptographic utilities for JDK 25+ with comprehensive support for symmet
 | `CryptoDetector` | Crypto provider detection |
 | `CryptoUtil` | General crypto utilities |
 | `SecureEraser` | Secure memory erasure |
+| `SecureBytes` | Auto-erasable secure byte container (AutoCloseable) |
+| **Streaming AEAD** | |
+| `StreamingAead` | Chunked AEAD encryption for large data/files |
+| **OTP (One-Time Password)** | |
+| `Totp` | RFC 6238 Time-based OTP generation and verification |
+| `Hotp` | RFC 4226 HMAC-based OTP generation and verification |
+| `TotpSecret` | OTP secret key generation and Base32 encoding |
+| **Policy** | |
+| `CryptoPolicy` | Algorithm whitelist/blacklist policy enforcement |
+| `PolicyViolationException` | Policy violation exception |
+| **Versioned Cipher** | |
+| `VersionedCipher` | Multi-version cipher for algorithm migration |
+| `VersionedPayload` | Versioned encrypted payload with metadata |
 | **Enums** | |
 | `AsymmetricAlgorithm` | Asymmetric algorithm enum |
 | `CurveType` | Elliptic curve type enum |
@@ -152,41 +403,6 @@ Modern cryptographic utilities for JDK 25+ with comprehensive support for symmet
 | `OpenCryptoException` | General crypto exception |
 | `OpenKeyException` | Key-related exception |
 | `OpenSignatureException` | Signature-related exception |
-
-## Quick Start
-
-```java
-import cloud.opencode.base.crypto.OpenCrypto;
-
-// AES-GCM encryption
-var cipher = OpenCrypto.aesGcm();
-byte[] key = cipher.generateKey();
-byte[] encrypted = cipher.encrypt(plaintext, key);
-byte[] decrypted = cipher.decrypt(encrypted, key);
-
-// SHA-256 digest
-byte[] hash = OpenCrypto.sha256().digest("Hello".getBytes());
-
-// Password hashing with Argon2id
-var hasher = OpenCrypto.argon2();
-String hashed = hasher.hash("myPassword");
-boolean matches = hasher.verify("myPassword", hashed);
-
-// Ed25519 signature
-var signer = OpenCrypto.ed25519();
-var keyPair = signer.generateKeyPair();
-byte[] signature = signer.sign(data, keyPair.getPrivate());
-boolean valid = signer.verify(data, signature, keyPair.getPublic());
-
-// HMAC-SHA256
-var mac = OpenCrypto.hmacSha256(secretKey);
-byte[] tag = mac.compute(data);
-
-// X25519 key exchange
-var kex = OpenCrypto.x25519();
-var kp = kex.generateKeyPair();
-byte[] sharedSecret = kex.exchange(kp.getPrivate(), otherPublicKey);
-```
 
 ## Requirements
 

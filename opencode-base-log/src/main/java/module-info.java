@@ -28,10 +28,13 @@ module cloud.opencode.base.log {
 
     // Export public API packages
     exports cloud.opencode.base.log;
+    exports cloud.opencode.base.log.async;
     exports cloud.opencode.base.log.audit;
     exports cloud.opencode.base.log.context;
     exports cloud.opencode.base.log.enhance;
     exports cloud.opencode.base.log.exception;
+    exports cloud.opencode.base.log.filter;
+    exports cloud.opencode.base.log.level;
     exports cloud.opencode.base.log.marker;
     exports cloud.opencode.base.log.perf;
     exports cloud.opencode.base.log.spi;

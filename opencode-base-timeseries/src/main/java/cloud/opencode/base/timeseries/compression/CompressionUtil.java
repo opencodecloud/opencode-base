@@ -447,7 +447,9 @@ public final class CompressionUtil {
     // ==================== Bit I/O Helpers | 位 I/O 辅助 ====================
 
     private static class BitWriter {
-        private final ByteBuffer buffer = ByteBuffer.allocate(1024 * 1024);
+        private static final int INITIAL_CAPACITY = 1024;
+        private byte[] buffer = new byte[INITIAL_CAPACITY];
+        private int byteCount = 0;
         private long currentByte = 0;
         private int bitPosition = 0;
 
@@ -455,7 +457,8 @@ public final class CompressionUtil {
             currentByte = (currentByte << 1) | (bit & 1);
             bitPosition++;
             if (bitPosition == 8) {
-                buffer.put((byte) currentByte);
+                ensureCapacity(byteCount + 1);
+                buffer[byteCount++] = (byte) currentByte;
                 currentByte = 0;
                 bitPosition = 0;
             }
@@ -479,17 +482,25 @@ public final class CompressionUtil {
             writeBits(value, 8);
         }
 
+        private void ensureCapacity(int minCapacity) {
+            if (minCapacity > buffer.length) {
+                int newCapacity = buffer.length + (buffer.length >> 1);
+                if (newCapacity < minCapacity) {
+                    newCapacity = minCapacity;
+                }
+                buffer = java.util.Arrays.copyOf(buffer, newCapacity);
+            }
+        }
+
         byte[] toByteArray() {
             // Flush remaining bits
             if (bitPosition > 0) {
+                ensureCapacity(byteCount + 1);
                 currentByte <<= (8 - bitPosition);
-                buffer.put((byte) currentByte);
+                buffer[byteCount++] = (byte) currentByte;
             }
 
-            byte[] result = new byte[buffer.position()];
-            buffer.flip();
-            buffer.get(result);
-            return result;
+            return java.util.Arrays.copyOf(buffer, byteCount);
         }
     }
 

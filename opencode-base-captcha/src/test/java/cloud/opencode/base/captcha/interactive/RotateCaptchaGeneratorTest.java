@@ -148,13 +148,11 @@ class RotateCaptchaGeneratorTest {
         }
 
         @Test
-        @DisplayName("metadata contains correctAngle")
-        void metadataContainsCorrectAngle() {
+        @DisplayName("metadata does not contain correctAngle (security)")
+        void metadataDoesNotContainCorrectAngle() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            assertThat(captcha.metadata()).containsKey("correctAngle");
-            int angle = (Integer) captcha.metadata().get("correctAngle");
-            assertThat(angle).isBetween(30, 330);
+            assertThat(captcha.metadata()).doesNotContainKey("correctAngle");
         }
 
         @Test
@@ -172,7 +170,7 @@ class RotateCaptchaGeneratorTest {
             Captcha captcha = generator.generate(defaultConfig);
 
             assertThat(captcha.metadata()).containsKeys(
-                    "width", "height", "correctAngle", "tolerance"
+                    "width", "height", "tolerance"
             );
         }
     }
@@ -182,11 +180,11 @@ class RotateCaptchaGeneratorTest {
     class AngleTests {
 
         @Test
-        @DisplayName("correct angle is within valid range")
+        @DisplayName("correct angle from answer is within valid range")
         void correctAngleInValidRange() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            int angle = (Integer) captcha.metadata().get("correctAngle");
+            int angle = Integer.parseInt(captcha.answer());
             assertThat(angle).isBetween(30, 330);
         }
 
@@ -194,7 +192,7 @@ class RotateCaptchaGeneratorTest {
         @DisplayName("correct angle avoids straight angles")
         void correctAngleAvoidsStraightAngles() {
             Captcha captcha = generator.generate(defaultConfig);
-            int angle = (Integer) captcha.metadata().get("correctAngle");
+            int angle = Integer.parseInt(captcha.answer());
 
             // Should not be near 0, 90, 180, 270, 360 (within 20 degrees)
             assertThat(Math.abs(angle - 0)).isGreaterThanOrEqualTo(20);
@@ -202,17 +200,6 @@ class RotateCaptchaGeneratorTest {
             assertThat(Math.abs(angle - 180)).isGreaterThanOrEqualTo(20);
             assertThat(Math.abs(angle - 270)).isGreaterThanOrEqualTo(20);
             assertThat(Math.abs(angle - 360)).isGreaterThanOrEqualTo(20);
-        }
-
-        @Test
-        @DisplayName("answer matches correct angle in metadata")
-        void answerMatchesCorrectAngle() {
-            Captcha captcha = generator.generate(defaultConfig);
-
-            int answerAngle = Integer.parseInt(captcha.answer());
-            int metadataAngle = (Integer) captcha.metadata().get("correctAngle");
-
-            assertThat(answerAngle).isEqualTo(metadataAngle);
         }
 
         @Test
@@ -225,14 +212,11 @@ class RotateCaptchaGeneratorTest {
         }
 
         @RepeatedTest(5)
-        @DisplayName("answer consistently represents the correct angle")
+        @DisplayName("answer consistently represents a valid angle")
         void answerConsistentlyRepresentsAngle() {
             Captcha captcha = generator.generate(defaultConfig);
 
             int answerAngle = Integer.parseInt(captcha.answer());
-            int metadataAngle = (Integer) captcha.metadata().get("correctAngle");
-
-            assertThat(answerAngle).isEqualTo(metadataAngle);
             assertThat(answerAngle).isBetween(30, 330);
         }
     }
@@ -425,7 +409,7 @@ class RotateCaptchaGeneratorTest {
             Set<Integer> angles = new HashSet<>();
             for (int i = 0; i < 10; i++) {
                 Captcha captcha = generator.generate(defaultConfig);
-                angles.add((Integer) captcha.metadata().get("correctAngle"));
+                angles.add(Integer.parseInt(captcha.answer()));
             }
 
             assertThat(angles.size()).isGreaterThan(3);
@@ -470,7 +454,7 @@ class RotateCaptchaGeneratorTest {
         void angleWithinToleranceRangeIsComputable() {
             Captcha captcha = generator.generate(defaultConfig);
 
-            int correctAngle = (Integer) captcha.metadata().get("correctAngle");
+            int correctAngle = Integer.parseInt(captcha.answer());
             int tolerance = (Integer) captcha.metadata().get("tolerance");
 
             int minValid = correctAngle - tolerance;

@@ -19,13 +19,12 @@
  * OpenCode 并行 - 现代化并行计算工具
  *
  * <p>This package provides comprehensive parallel computing utilities built on
- * JDK 25 virtual threads and structured concurrency.</p>
- * <p>此包提供基于 JDK 25 虚拟线程和结构化并发的综合并行计算工具。</p>
+ * JDK 25 virtual threads.</p>
+ * <p>此包提供基于 JDK 25 虚拟线程的综合并行计算工具。</p>
  *
  * <h2>Core Classes | 核心类</h2>
  * <ul>
  *   <li>{@link cloud.opencode.base.parallel.OpenParallel} - Static facade for parallel operations</li>
- *   <li>{@link cloud.opencode.base.parallel.OpenStructured} - Structured concurrency facade</li>
  * </ul>
  *
  * <h2>Sub-packages | 子包</h2>
@@ -46,13 +45,6 @@
  * List<String> results = OpenParallel.invokeAll(
  *     () -> fetchA(),
  *     () -> fetchB()
- * );
- *
- * // Structured concurrency
- * Result result = OpenStructured.parallel(
- *     () -> fetchUser(),
- *     () -> fetchOrders(),
- *     (user, orders) -> new Result(user, orders)
  * );
  * }</pre>
  *

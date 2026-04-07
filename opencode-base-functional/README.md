@@ -7,13 +7,14 @@
 ## Features
 
 ### Monad Types
-- **Try**: Exception-safe computation with `map`, `flatMap`, `recover`
-- **Either**: Disjoint union for error handling (Left = error, Right = success)
-- **Option**: Null-safe container (Some/None) as an alternative to Optional
-- **Validation**: Accumulating error validation (collects all errors, not just first)
+- **Try**: Exception-safe computation with `map`, `flatMap`, `recover`, `fold`, `andFinally`, `mapFailure`
+- **Either**: Disjoint union for error handling (Left = error, Right = success) with `filterOrElse`, `toOption`, `toTry`, `toValidation`
+- **Option**: Null-safe container (Some/None) with `contains`, `exists`, `zip`, `toTry`, `toValidation`
+- **Validation**: Accumulating error validation with `mapError`, `peek`, `getOrElseThrow`, `toTry`, `toOption`
 - **Lazy**: Deferred computation with memoization
 - **Sequence**: Lazy sequence operations
 - **Trampoline**: Stack-safe recursive computation
+- **Unit**: Singleton void-equivalent value type
 
 ### Pattern Matching
 - **Type Matching**: Match by class type with extraction
@@ -24,8 +25,10 @@
 - **Composition**: `compose`, `andThen` for function chaining
 - **Currying**: Convert multi-arg functions to curried form
 - **Memoization**: Cache function results with configurable LRU bounds
-- **Checked Functions**: `CheckedFunction`, `CheckedBiFunction`, `CheckedBiConsumer`
+- **Checked Functions**: `CheckedFunction`, `CheckedBiFunction`, `CheckedBiConsumer`, `CheckedConsumer`, `CheckedRunnable`
+- **Function Lifting**: `lift()` / `liftTry()` to convert throwing functions into Option/Try-returning functions
 - **TriFunction**: Three-argument functional interface
+- **Unit**: Void-equivalent value type for generic APIs
 
 ### Optics
 - **Lens**: Immutable nested update for records and objects
@@ -53,7 +56,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-functional</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -129,12 +132,67 @@ Map<String, Object> map = OpenFunctional.recordToMap(person);
 Validation<String, Integer> v1 = OpenFunctional.valid(42);
 Validation<String, Integer> v2 = OpenFunctional.invalid("must be positive");
 
-// Combine validations
-Validation<List<String>, User> result = Validation.combine(
+// Combine validations (combiner is the last argument)
+Validation<String, User> result = Validation.combine(
     validateName(name),
     validateAge(age),
-    validateEmail(email)
-).apply(User::new);
+    validateEmail(email),
+    User::new
+);
+```
+
+### Monad Interoperability (V1.0.3)
+
+```java
+// Convert between monad types freely
+Either<String, Integer> either = Either.right(42);
+Option<Integer> option = either.toOption();        // Some(42)
+Try<Integer> tryVal = either.toTry();              // Success(42)
+Validation<String, Integer> valid = either.toValidation(); // Valid(42)
+
+// Filter with fallback
+Either<String, Integer> filtered = either.filterOrElse(
+    x -> x > 0,
+    () -> "must be positive"
+);
+
+// Stream integration
+long count = either.stream().count();  // 1
+```
+
+### Function Lifting (V1.0.3)
+
+```java
+// Lift throwing functions into safe wrappers
+Function<String, Option<Integer>> safeParse = OpenFunctional.lift(Integer::parseInt);
+safeParse.apply("123");   // Some(123)
+safeParse.apply("abc");   // None
+
+Function<String, Try<Integer>> tryParse = OpenFunctional.liftTry(Integer::parseInt);
+tryParse.apply("123");    // Success(123)
+tryParse.apply("abc");    // Failure(NumberFormatException)
+```
+
+### Checked Functional Interfaces (V1.0.3)
+
+```java
+// Consumer that throws checked exceptions
+CheckedConsumer<Path> writer = path -> Files.writeString(path, "data");
+Consumer<Path> safe = writer.unchecked();  // wraps in OpenFunctionalException
+
+// Runnable that throws checked exceptions
+CheckedRunnable task = () -> Thread.sleep(100);
+Runnable safeTask = task.unchecked();
+```
+
+### Unit Type (V1.0.3)
+
+```java
+// Use Unit where Void cannot be instantiated
+Function<String, Unit> logger = s -> { System.out.println(s); return Unit.INSTANCE; };
+
+// Or use the ignore helper
+items.stream().map(Unit.ignore()).collect(toList());
 ```
 
 ## Class Reference
@@ -155,6 +213,7 @@ Validation<List<String>, User> result = Validation.combine(
 | `Sequence` | Lazy sequence with functional transformations |
 | `Trampoline` | Stack-safe recursive computation via trampolining |
 | `For` | For-comprehension support for monadic composition |
+| `Unit` | Singleton void-equivalent value type for generic APIs |
 
 ### Pattern Package (`cloud.opencode.base.functional.pattern`)
 | Class | Description |
@@ -170,6 +229,8 @@ Validation<List<String>, User> result = Validation.combine(
 | `CheckedFunction` | Function that may throw checked exceptions |
 | `CheckedBiFunction` | BiFunction that may throw checked exceptions |
 | `CheckedBiConsumer` | BiConsumer that may throw checked exceptions |
+| `CheckedConsumer` | Consumer that may throw checked exceptions |
+| `CheckedRunnable` | Runnable that may throw checked exceptions |
 | `TriFunction` | Three-argument functional interface |
 
 ### Optics Package (`cloud.opencode.base.functional.optics`)

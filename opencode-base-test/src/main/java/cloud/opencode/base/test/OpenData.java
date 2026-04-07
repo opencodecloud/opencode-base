@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 /**
@@ -55,7 +56,6 @@ import java.util.function.Supplier;
  */
 public final class OpenData {
 
-    private static final Random RANDOM = new Random();
     private static final ThreadLocal<Random> SEEDED_RANDOM = new ThreadLocal<>();
 
     // Character sets for random string generation
@@ -104,7 +104,7 @@ public final class OpenData {
      */
     private static Random random() {
         Random seeded = SEEDED_RANDOM.get();
-        return seeded != null ? seeded : RANDOM;
+        return seeded != null ? seeded : ThreadLocalRandom.current();
     }
 
     /**
@@ -137,6 +137,13 @@ public final class OpenData {
      * @return random int | 随机整数
      */
     public static int randomInt(int min, int max) {
+        if (max == Integer.MAX_VALUE) {
+            // Avoid max + 1 overflow
+            if (min == Integer.MIN_VALUE) {
+                return random().nextInt();
+            }
+            return min + random().nextInt(0, (int) ((long) max - min + 1));
+        }
         return random().nextInt(min, max + 1);
     }
 
@@ -159,6 +166,14 @@ public final class OpenData {
      * @return random long | 随机长整数
      */
     public static long randomLong(long min, long max) {
+        if (max == Long.MAX_VALUE) {
+            if (min == Long.MIN_VALUE) {
+                return random().nextLong();
+            }
+            // Use BigInteger-style range: pick from [min, MAX_VALUE]
+            long range = max - min; // no overflow since max != MIN and min >= MIN+1
+            return min + (random().nextLong() >>> 1) % (range + 1);
+        }
         return random().nextLong(min, max + 1);
     }
 

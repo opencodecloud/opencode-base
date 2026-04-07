@@ -22,6 +22,8 @@ import org.junit.jupiter.api.Test;
 
 import java.awt.*;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -182,13 +184,11 @@ class CaptchaConfigTest {
         }
 
         @Test
-        @DisplayName("width accepts zero")
-        void widthAcceptsZero() {
-            CaptchaConfig config = CaptchaConfig.builder()
-                .width(0)
-                .build();
-
-            assertThat(config.getWidth()).isZero();
+        @DisplayName("width rejects zero")
+        void widthRejectsZero() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().width(0).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("width");
         }
 
         @Test
@@ -227,13 +227,11 @@ class CaptchaConfigTest {
         }
 
         @Test
-        @DisplayName("height accepts zero")
-        void heightAcceptsZero() {
-            CaptchaConfig config = CaptchaConfig.builder()
-                .height(0)
-                .build();
-
-            assertThat(config.getHeight()).isZero();
+        @DisplayName("height rejects zero")
+        void heightRejectsZero() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().height(0).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("height");
         }
 
         @Test
@@ -950,6 +948,267 @@ class CaptchaConfigTest {
     }
 
     @Nested
+    @DisplayName("Builder Validation Tests")
+    class BuilderValidationTests {
+
+        // ---- width bounds ----
+
+        @Test
+        @DisplayName("width rejects negative value")
+        void widthRejectsNegative() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().width(-1).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("width");
+        }
+
+        @Test
+        @DisplayName("width rejects value exceeding maximum")
+        void widthRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().width(2001).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("width");
+        }
+
+        @Test
+        @DisplayName("width accepts boundary value 1")
+        void widthAcceptsMinBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().width(1).build();
+            assertThat(config.getWidth()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("width accepts boundary value 2000")
+        void widthAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().width(2000).build();
+            assertThat(config.getWidth()).isEqualTo(2000);
+        }
+
+        // ---- height bounds ----
+
+        @Test
+        @DisplayName("height rejects negative value")
+        void heightRejectsNegative() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().height(-1).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("height");
+        }
+
+        @Test
+        @DisplayName("height rejects value exceeding maximum")
+        void heightRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().height(2001).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("height");
+        }
+
+        @Test
+        @DisplayName("height accepts boundary value 1")
+        void heightAcceptsMinBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().height(1).build();
+            assertThat(config.getHeight()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("height accepts boundary value 2000")
+        void heightAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().height(2000).build();
+            assertThat(config.getHeight()).isEqualTo(2000);
+        }
+
+        // ---- length bounds ----
+
+        @Test
+        @DisplayName("length rejects zero")
+        void lengthRejectsZero() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().length(0).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("length");
+        }
+
+        @Test
+        @DisplayName("length rejects value exceeding maximum")
+        void lengthRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().length(21).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("length");
+        }
+
+        @Test
+        @DisplayName("length accepts boundary value 20")
+        void lengthAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().length(20).build();
+            assertThat(config.getLength()).isEqualTo(20);
+        }
+
+        // ---- gifFrameCount bounds ----
+
+        @Test
+        @DisplayName("gifFrameCount rejects zero")
+        void gifFrameCountRejectsZero() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().gifFrameCount(0).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("gifFrameCount");
+        }
+
+        @Test
+        @DisplayName("gifFrameCount rejects value exceeding maximum")
+        void gifFrameCountRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().gifFrameCount(101).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("gifFrameCount");
+        }
+
+        @Test
+        @DisplayName("gifFrameCount accepts boundary value 100")
+        void gifFrameCountAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().gifFrameCount(100).build();
+            assertThat(config.getGifFrameCount()).isEqualTo(100);
+        }
+
+        // ---- noiseLines bounds ----
+
+        @Test
+        @DisplayName("noiseLines rejects negative value")
+        void noiseLinesRejectsNegative() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().noiseLines(-1).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noiseLines");
+        }
+
+        @Test
+        @DisplayName("noiseLines rejects value exceeding maximum")
+        void noiseLinesRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().noiseLines(101).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noiseLines");
+        }
+
+        @Test
+        @DisplayName("noiseLines accepts boundary value 100")
+        void noiseLinesAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().noiseLines(100).build();
+            assertThat(config.getNoiseLines()).isEqualTo(100);
+        }
+
+        // ---- noiseDots bounds ----
+
+        @Test
+        @DisplayName("noiseDots rejects negative value")
+        void noiseDotsRejectsNegative() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().noiseDots(-1).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noiseDots");
+        }
+
+        @Test
+        @DisplayName("noiseDots rejects value exceeding maximum")
+        void noiseDotsRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().noiseDots(1001).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noiseDots");
+        }
+
+        @Test
+        @DisplayName("noiseDots accepts boundary value 1000")
+        void noiseDotsAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().noiseDots(1000).build();
+            assertThat(config.getNoiseDots()).isEqualTo(1000);
+        }
+
+        // ---- fontSize bounds ----
+
+        @Test
+        @DisplayName("fontSize rejects zero")
+        void fontSizeRejectsZero() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().fontSize(0).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("fontSize");
+        }
+
+        @Test
+        @DisplayName("fontSize rejects value exceeding maximum")
+        void fontSizeRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().fontSize(201).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("fontSize");
+        }
+
+        @Test
+        @DisplayName("fontSize accepts boundary value 200")
+        void fontSizeAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().fontSize(200).build();
+            assertThat(config.getFontSize()).isEqualTo(200.0f);
+        }
+
+        // ---- gifDelay bounds ----
+
+        @Test
+        @DisplayName("gifDelay rejects zero")
+        void gifDelayRejectsZero() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().gifDelay(0).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("gifDelay");
+        }
+
+        @Test
+        @DisplayName("gifDelay rejects value exceeding maximum")
+        void gifDelayRejectsExceedingMax() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().gifDelay(10001).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("gifDelay");
+        }
+
+        @Test
+        @DisplayName("gifDelay accepts boundary value 10000")
+        void gifDelayAcceptsMaxBoundary() {
+            CaptchaConfig config = CaptchaConfig.builder().gifDelay(10000).build();
+            assertThat(config.getGifDelay()).isEqualTo(10000);
+        }
+
+        // ---- null checks ----
+
+        @Test
+        @DisplayName("type rejects null")
+        void typeRejectsNull() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().type(null).build())
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("type");
+        }
+
+        @Test
+        @DisplayName("expireTime rejects null")
+        void expireTimeRejectsNull() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().expireTime(null).build())
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("expireTime");
+        }
+
+        @Test
+        @DisplayName("fontName rejects null")
+        void fontNameRejectsNull() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().fontName(null).build())
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("fontName");
+        }
+
+        // ---- DoS prevention: extreme values ----
+
+        @Test
+        @DisplayName("rejects extreme width that would cause OOM")
+        void rejectsExtremeWidth() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().width(100000).build())
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("rejects extreme height that would cause OOM")
+        void rejectsExtremeHeight() {
+            assertThatThrownBy(() -> CaptchaConfig.builder().height(100000).build())
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("Factory Method Tests")
     class FactoryMethodTests {
 
@@ -970,12 +1229,12 @@ class CaptchaConfigTest {
         }
 
         @Test
-        @DisplayName("defaults returns new instance each time")
-        void defaultsReturnsNewInstanceEachTime() {
+        @DisplayName("defaults returns cached singleton instance")
+        void defaultsReturnsCachedSingletonInstance() {
             CaptchaConfig config1 = CaptchaConfig.defaults();
             CaptchaConfig config2 = CaptchaConfig.defaults();
 
-            assertThat(config1).isNotSameAs(config2);
+            assertThat(config1).isSameAs(config2);
         }
 
         @Test
@@ -997,6 +1256,436 @@ class CaptchaConfigTest {
             assertThat(fromBuilder.isCaseSensitive()).isEqualTo(fromDefaults.isCaseSensitive());
             assertThat(fromBuilder.getGifFrameCount()).isEqualTo(fromDefaults.getGifFrameCount());
             assertThat(fromBuilder.getGifDelay()).isEqualTo(fromDefaults.getGifDelay());
+        }
+    }
+
+    // ==================== Sprint 1 New Field Tests ====================
+
+    /**
+     * Tests for Sprint 1 new field default values.
+     * Sprint 1 新字段默认值测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("Sprint 1 New Field Default Values Tests")
+    class NewFieldDefaultValuesTests {
+
+        @Test
+        @DisplayName("default customFontPaths is empty list")
+        void should_returnEmptyList_when_defaultCustomFontPaths() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.getCustomFontPaths()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("default randomFontPerChar is false")
+        void should_returnFalse_when_defaultRandomFontPerChar() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.isRandomFontPerChar()).isFalse();
+        }
+
+        @Test
+        @DisplayName("default charOverlapRatio is 0.0")
+        void should_returnZero_when_defaultCharOverlapRatio() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.getCharOverlapRatio()).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("default sineWarpEnabled is false")
+        void should_returnFalse_when_defaultSineWarpEnabled() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.isSineWarpEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("default outlineShadowEnabled is false")
+        void should_returnFalse_when_defaultOutlineShadowEnabled() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.isOutlineShadowEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("default bezierNoiseEnabled is false")
+        void should_returnFalse_when_defaultBezierNoiseEnabled() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.isBezierNoiseEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("default powDifficulty is 20")
+        void should_return20_when_defaultPowDifficulty() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.getPowDifficulty()).isEqualTo(20);
+        }
+
+        @Test
+        @DisplayName("default audioSpeedVariation is 0.2")
+        void should_return0point2_when_defaultAudioSpeedVariation() {
+            CaptchaConfig config = CaptchaConfig.defaults();
+
+            assertThat(config.getAudioSpeedVariation()).isEqualTo(0.2f);
+        }
+    }
+
+    /**
+     * Tests for Sprint 1 new field Builder set/get.
+     * Sprint 1 新字段 Builder 设置/获取测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("Sprint 1 New Field Builder Tests")
+    class NewFieldBuilderTests {
+
+        @Test
+        @DisplayName("should set and get randomFontPerChar")
+        void should_setRandomFontPerChar_when_builderUsed() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .randomFontPerChar(true)
+                .build();
+
+            assertThat(config.isRandomFontPerChar()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should set and get sineWarpEnabled")
+        void should_setSineWarpEnabled_when_builderUsed() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .sineWarpEnabled(true)
+                .build();
+
+            assertThat(config.isSineWarpEnabled()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should set and get outlineShadowEnabled")
+        void should_setOutlineShadowEnabled_when_builderUsed() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .outlineShadowEnabled(true)
+                .build();
+
+            assertThat(config.isOutlineShadowEnabled()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should set and get bezierNoiseEnabled")
+        void should_setBezierNoiseEnabled_when_builderUsed() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .bezierNoiseEnabled(true)
+                .build();
+
+            assertThat(config.isBezierNoiseEnabled()).isTrue();
+        }
+    }
+
+    /**
+     * Tests for charOverlapRatio boundary validation.
+     * charOverlapRatio 边界校验测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("CharOverlapRatio Boundary Tests")
+    class CharOverlapRatioBoundaryTests {
+
+        @Test
+        @DisplayName("should accept charOverlapRatio = 0.0")
+        void should_accept_when_ratioIsZero() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .charOverlapRatio(0.0f)
+                .build();
+
+            assertThat(config.getCharOverlapRatio()).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("should accept charOverlapRatio = 0.5")
+        void should_accept_when_ratioIsHalf() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .charOverlapRatio(0.5f)
+                .build();
+
+            assertThat(config.getCharOverlapRatio()).isEqualTo(0.5f);
+        }
+
+        @Test
+        @DisplayName("should reject negative charOverlapRatio")
+        void should_reject_when_ratioIsNegative() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .charOverlapRatio(-0.1f)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("charOverlapRatio");
+        }
+
+        @Test
+        @DisplayName("should reject charOverlapRatio > 0.5")
+        void should_reject_when_ratioExceedsHalf() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .charOverlapRatio(0.6f)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("charOverlapRatio");
+        }
+
+        @Test
+        @DisplayName("should accept charOverlapRatio = 0.3 (middle value)")
+        void should_accept_when_ratioIsMiddleValue() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .charOverlapRatio(0.3f)
+                .build();
+
+            assertThat(config.getCharOverlapRatio()).isEqualTo(0.3f);
+        }
+    }
+
+    /**
+     * Tests for powDifficulty boundary validation.
+     * powDifficulty 边界校验测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("PowDifficulty Boundary Tests")
+    class PowDifficultyBoundaryTests {
+
+        @Test
+        @DisplayName("should accept powDifficulty = 10 (minimum)")
+        void should_accept_when_difficultyIs10() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .powDifficulty(10)
+                .build();
+
+            assertThat(config.getPowDifficulty()).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("should reject powDifficulty = 1 (below minimum)")
+        void should_reject_when_difficultyIs1() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .powDifficulty(1)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("powDifficulty");
+        }
+
+        @Test
+        @DisplayName("should reject powDifficulty = 9 (below minimum)")
+        void should_reject_when_difficultyIs9() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .powDifficulty(9)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("powDifficulty");
+        }
+
+        @Test
+        @DisplayName("should accept powDifficulty = 32")
+        void should_accept_when_difficultyIs32() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .powDifficulty(32)
+                .build();
+
+            assertThat(config.getPowDifficulty()).isEqualTo(32);
+        }
+
+        @Test
+        @DisplayName("should reject powDifficulty = 0")
+        void should_reject_when_difficultyIsZero() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .powDifficulty(0)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("powDifficulty");
+        }
+
+        @Test
+        @DisplayName("should reject powDifficulty = 33")
+        void should_reject_when_difficultyIs33() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .powDifficulty(33)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("powDifficulty");
+        }
+    }
+
+    /**
+     * Tests for audioSpeedVariation boundary validation.
+     * audioSpeedVariation 边界校验测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("AudioSpeedVariation Boundary Tests")
+    class AudioSpeedVariationBoundaryTests {
+
+        @Test
+        @DisplayName("should accept audioSpeedVariation = 0.0")
+        void should_accept_when_variationIsZero() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .audioSpeedVariation(0.0f)
+                .build();
+
+            assertThat(config.getAudioSpeedVariation()).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("should accept audioSpeedVariation = 0.5")
+        void should_accept_when_variationIsHalf() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .audioSpeedVariation(0.5f)
+                .build();
+
+            assertThat(config.getAudioSpeedVariation()).isEqualTo(0.5f);
+        }
+
+        @Test
+        @DisplayName("should reject negative audioSpeedVariation")
+        void should_reject_when_variationIsNegative() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .audioSpeedVariation(-0.1f)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("audioSpeedVariation");
+        }
+
+        @Test
+        @DisplayName("should reject audioSpeedVariation > 0.5")
+        void should_reject_when_variationExceedsHalf() {
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .audioSpeedVariation(0.6f)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("audioSpeedVariation");
+        }
+    }
+
+    /**
+     * Tests for customFontPaths limits and operations.
+     * customFontPaths 限制和操作测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("CustomFontPaths Tests")
+    class CustomFontPathsTests {
+
+        @Test
+        @DisplayName("should accept up to 20 custom font paths")
+        void should_accept_when_exactly20Paths() {
+            List<String> paths = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                paths.add("/font/custom" + i + ".ttf");
+            }
+            CaptchaConfig config = CaptchaConfig.builder()
+                .customFontPaths(paths)
+                .build();
+
+            assertThat(config.getCustomFontPaths()).hasSize(20);
+        }
+
+        @Test
+        @DisplayName("should reject more than 20 custom font paths")
+        void should_reject_when_moreThan20Paths() {
+            List<String> paths = new ArrayList<>();
+            for (int i = 0; i < 21; i++) {
+                paths.add("/font/custom" + i + ".ttf");
+            }
+            assertThatThrownBy(() -> CaptchaConfig.builder()
+                .customFontPaths(paths)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("customFontPaths");
+        }
+
+        @Test
+        @DisplayName("should append custom font path with customFontPath()")
+        void should_appendPath_when_customFontPathCalled() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .customFontPath("/font/a.ttf")
+                .customFontPath("/font/b.ttf")
+                .build();
+
+            assertThat(config.getCustomFontPaths())
+                .containsExactly("/font/a.ttf", "/font/b.ttf");
+        }
+
+        @Test
+        @DisplayName("customFontPaths should be defensively copied")
+        void should_notBeAffected_when_inputListModified() {
+            List<String> paths = new ArrayList<>(List.of("/font/a.ttf"));
+            CaptchaConfig config = CaptchaConfig.builder()
+                .customFontPaths(paths)
+                .build();
+
+            paths.add("/font/b.ttf");
+
+            assertThat(config.getCustomFontPaths()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("getCustomFontPaths should return unmodifiable list")
+        void should_returnUnmodifiable_when_getCustomFontPaths() {
+            CaptchaConfig config = CaptchaConfig.builder()
+                .customFontPath("/font/a.ttf")
+                .build();
+
+            assertThatThrownBy(() -> config.getCustomFontPaths().add("/font/b.ttf"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    /**
+     * Tests for toBuilder() copying new Sprint 1 fields.
+     * toBuilder() 拷贝 Sprint 1 新字段测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("ToBuilder Sprint 1 New Fields Tests")
+    class ToBuilderNewFieldsTests {
+
+        @Test
+        @DisplayName("toBuilder preserves all Sprint 1 new fields")
+        void should_preserveAllNewFields_when_toBuilderUsed() {
+            CaptchaConfig original = CaptchaConfig.builder()
+                .randomFontPerChar(true)
+                .charOverlapRatio(0.2f)
+                .sineWarpEnabled(true)
+                .outlineShadowEnabled(true)
+                .bezierNoiseEnabled(true)
+                .powDifficulty(25)
+                .audioSpeedVariation(0.4f)
+                .customFontPath("/font/test.ttf")
+                .build();
+
+            CaptchaConfig copy = original.toBuilder().build();
+
+            assertThat(copy.isRandomFontPerChar()).isTrue();
+            assertThat(copy.getCharOverlapRatio()).isEqualTo(0.2f);
+            assertThat(copy.isSineWarpEnabled()).isTrue();
+            assertThat(copy.isOutlineShadowEnabled()).isTrue();
+            assertThat(copy.isBezierNoiseEnabled()).isTrue();
+            assertThat(copy.getPowDifficulty()).isEqualTo(25);
+            assertThat(copy.getAudioSpeedVariation()).isEqualTo(0.4f);
+            assertThat(copy.getCustomFontPaths()).containsExactly("/font/test.ttf");
         }
     }
 }

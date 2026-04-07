@@ -26,6 +26,17 @@ import java.util.function.Function;
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
+ * // PoolLease pattern (recommended, try-with-resources)
+ * try (PoolLease<Connection> lease = pool.borrowLease()) {
+ *     Connection conn = lease.get();
+ *     // use connection
+ * } // auto-return
+ *
+ * // Execute pattern (also recommended)
+ * String result = pool.execute(conn -> {
+ *     return conn.executeQuery("SELECT...");
+ * });
+ *
  * // Manual borrow/return
  * Connection conn = pool.borrowObject();
  * try {
@@ -33,11 +44,6 @@ import java.util.function.Function;
  * } finally {
  *     pool.returnObject(conn);
  * }
- *
- * // Execute pattern (recommended)
- * String result = pool.execute(conn -> {
- *     return conn.executeQuery("SELECT...");
- * });
  * }</pre>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -174,6 +180,59 @@ public interface ObjectPool<T> extends AutoCloseable {
             action.accept(obj);
         } finally {
             returnObject(obj);
+        }
+    }
+
+    /**
+     * Borrows an object wrapped in a {@link PoolLease} for try-with-resources.
+     * 借用对象并包装在 {@link PoolLease} 中，用于 try-with-resources。
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>{@code
+     * try (PoolLease<Connection> lease = pool.borrowLease()) {
+     *     Connection conn = lease.get();
+     *     // use connection
+     * } // auto-return
+     * }</pre>
+     *
+     * @return a pool lease wrapping the borrowed object - 包装借用对象的池租约
+     * @throws OpenPoolException if borrowing fails - 如果借用失败
+     */
+    default PoolLease<T> borrowLease() throws OpenPoolException {
+        T obj = borrowObject();
+        return new PoolLease<>(obj, this);
+    }
+
+    /**
+     * Borrows an object wrapped in a {@link PoolLease} with timeout for try-with-resources.
+     * 带超时借用对象并包装在 {@link PoolLease} 中，用于 try-with-resources。
+     *
+     * @param timeout the maximum wait time - 最大等待时间
+     * @return a pool lease wrapping the borrowed object - 包装借用对象的池租约
+     * @throws OpenPoolException if borrowing fails or times out - 如果借用失败或超时
+     */
+    default PoolLease<T> borrowLease(Duration timeout) throws OpenPoolException {
+        T obj = borrowObject(timeout);
+        return new PoolLease<>(obj, this);
+    }
+
+    /**
+     * Pre-creates objects to warm up the pool.
+     * 预创建对象以预热池。
+     *
+     * <p>Creates the specified number of objects and adds them to the pool.
+     * Useful for avoiding cold-start latency.</p>
+     * <p>创建指定数量的对象并添加到池中。适用于避免冷启动延迟。</p>
+     *
+     * @param count the number of objects to pre-create - 要预创建的对象数量
+     * @throws OpenPoolException if object creation fails - 如果对象创建失败
+     */
+    default void preparePool(int count) throws OpenPoolException {
+        if (count < 0) {
+            throw new IllegalArgumentException("count must be non-negative: " + count);
+        }
+        for (int i = 0; i < count; i++) {
+            addObject();
         }
     }
 }

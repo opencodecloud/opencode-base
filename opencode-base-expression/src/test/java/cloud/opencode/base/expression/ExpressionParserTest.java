@@ -103,7 +103,8 @@ class ExpressionParserTest {
         void testParseInvalidExpression() {
             ExpressionParser parser = OpenExpression.parser();
 
-            assertThatThrownBy(() -> parser.parseExpression("1 + + 2"))
+            // 1 + + 2 is now valid (unary +), use a truly invalid expression
+            assertThatThrownBy(() -> parser.parseExpression("1 ) 2"))
                     .isInstanceOf(OpenExpressionException.class);
         }
 

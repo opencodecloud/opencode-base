@@ -472,10 +472,7 @@ public final class OpenReflect {
      * @return the accessible object | 可访问对象
      */
     public static <T extends AccessibleObject> T makeAccessible(T accessible) {
-        if (!accessible.canAccess(null)) {
-            accessible.setAccessible(true);
-        }
-        return accessible;
+        return ReflectUtil.setAccessible(accessible);
     }
 
     /**

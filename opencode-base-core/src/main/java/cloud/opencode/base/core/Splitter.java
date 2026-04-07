@@ -73,6 +73,7 @@ import java.util.stream.StreamSupport;
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @see Joiner
+ * @see <a href="../string/builder/Splitter.html">cloud.opencode.base.string.builder.Splitter</a> (extended version with CharMatcher support)
  * @since JDK 25, opencode-base-core V1.0.0
  */
 public final class Splitter {
@@ -137,6 +138,11 @@ public final class Splitter {
     /**
      * Creates a splitter that uses the given regex pattern as separator.
      * 创建使用给定正则表达式模式作为分隔符的分割器。
+     *
+     * <p>The pattern is compiled on each call. For repeated use, cache the Splitter instance
+     * or use {@link #on(Pattern)} with a pre-compiled Pattern.</p>
+     * <p>每次调用都会编译模式。重复使用时请缓存 Splitter 实例，
+     * 或使用 {@link #on(Pattern)} 传入预编译的 Pattern。</p>
      *
      * @param regex the regex pattern - 正则表达式模式
      * @return the splitter - 分割器
@@ -334,7 +340,13 @@ public final class Splitter {
                         finished = true;
                     } else {
                         next = input.subSequence(position, bounds[0]).toString();
+                        int prevPosition = position;
                         position = bounds[1];
+                        // Guard against zero-length separator match (e.g., zero-width regex)
+                        // Only advance if position didn't change to prevent infinite loop
+                        if (position == prevPosition && position < input.length()) {
+                            position++;
+                        }
                     }
                 }
 
@@ -376,7 +388,7 @@ public final class Splitter {
     private record StringStrategy(String separator) implements Strategy {
         @Override
         public int[] nextBounds(CharSequence input, int start) {
-            String str = input.toString();
+            String str = input instanceof String s ? s : input.toString();
             int idx = str.indexOf(separator, start);
             return idx >= 0 ? new int[]{idx, idx + separator.length()} : null;
         }

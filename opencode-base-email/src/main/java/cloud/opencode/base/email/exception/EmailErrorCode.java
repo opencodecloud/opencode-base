@@ -1,7 +1,5 @@
 package cloud.opencode.base.email.exception;
 
-import jakarta.mail.AuthenticationFailedException;
-
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 
@@ -219,8 +217,17 @@ public enum EmailErrorCode {
         if (e == null) {
             return UNKNOWN;
         }
-        if (e instanceof AuthenticationFailedException) {
-            return AUTH_FAILED;
+        // Check for ProtocolException authentication failures
+        if (e instanceof cloud.opencode.base.email.protocol.ProtocolException pe) {
+            if (pe.isAuthenticationFailure()) {
+                return AUTH_FAILED;
+            }
+            if (pe.isTimeout()) {
+                return CONNECTION_TIMEOUT;
+            }
+            if (pe.isConnectionFailure()) {
+                return CONNECTION_FAILED;
+            }
         }
         if (e instanceof SocketTimeoutException) {
             return CONNECTION_TIMEOUT;

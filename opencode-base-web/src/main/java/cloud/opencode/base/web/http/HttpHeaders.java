@@ -182,7 +182,7 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, List<String
      * @return this for chaining - 用于链式调用
      */
     public HttpHeaders set(String name, String value) {
-        List<String> values = new ArrayList<>();
+        List<String> values = new ArrayList<>(1);
         values.add(value);
         headers.put(name, values);
         return this;
@@ -436,7 +436,7 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, List<String
 
     @Override
     public Iterator<Map.Entry<String, List<String>>> iterator() {
-        return toMap().entrySet().iterator();
+        return Collections.unmodifiableMap(headers).entrySet().iterator();
     }
 
     @Override

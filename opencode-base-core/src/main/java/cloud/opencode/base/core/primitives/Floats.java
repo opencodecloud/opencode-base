@@ -109,6 +109,12 @@ public final class Floats {
     }
 
     public static float constrainToRange(float value, float min, float max) {
+        if (Float.isNaN(value) || Float.isNaN(min) || Float.isNaN(max)) {
+            throw new IllegalArgumentException("value, min, and max must not be NaN");
+        }
+        if (min > max) {
+            throw new IllegalArgumentException("min (" + min + ") > max (" + max + ")");
+        }
         return Math.max(min, Math.min(max, value));
     }
 

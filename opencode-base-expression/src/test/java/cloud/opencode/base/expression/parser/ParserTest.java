@@ -654,7 +654,8 @@ class ParserTest {
         @Test
         @DisplayName("Unexpected token throws | 意外词法单元抛出异常")
         void testUnexpectedToken() {
-            assertThatThrownBy(() -> Parser.parse("1 + + 2"))
+            // 1 + + 2 is now valid (unary +), use a truly invalid expression
+            assertThatThrownBy(() -> Parser.parse("1 ) 2"))
                     .isInstanceOf(OpenExpressionException.class);
         }
 

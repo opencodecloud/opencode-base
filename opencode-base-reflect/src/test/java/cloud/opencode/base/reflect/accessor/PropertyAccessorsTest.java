@@ -43,6 +43,7 @@ class PropertyAccessorsTest {
                     PropertyAccessors.Strategy.BEAN,
                     PropertyAccessors.Strategy.METHOD_HANDLE,
                     PropertyAccessors.Strategy.VAR_HANDLE,
+                    PropertyAccessors.Strategy.LAMBDA,
                     PropertyAccessors.Strategy.AUTO
             );
         }
@@ -89,6 +90,14 @@ class PropertyAccessorsTest {
             PropertyAccessor<TestBean> accessor = PropertyAccessors.create(
                     TestBean.class, "name", PropertyAccessors.Strategy.VAR_HANDLE);
             assertThat(accessor).isInstanceOf(VarHandleAccessor.class);
+        }
+
+        @Test
+        @DisplayName("LAMBDA策略")
+        void testCreateLambda() {
+            PropertyAccessor<TestBean> accessor = PropertyAccessors.create(
+                    TestBean.class, "name", PropertyAccessors.Strategy.LAMBDA);
+            assertThat(accessor).isInstanceOf(LambdaAccessor.class);
         }
     }
 

@@ -5,18 +5,17 @@ import cloud.opencode.base.email.EmailConfig;
 import cloud.opencode.base.email.attachment.ByteArrayAttachment;
 import cloud.opencode.base.email.attachment.InlineAttachment;
 import cloud.opencode.base.email.exception.EmailConfigException;
-import jakarta.mail.Session;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.*;
 
 /**
+ * SmtpEmailSender test class
  * SmtpEmailSender 测试类
  *
  * @author Leon Soo
@@ -42,7 +41,6 @@ class SmtpEmailSenderTest {
             SmtpEmailSender sender = new SmtpEmailSender(config);
 
             assertThat(sender.getConfig()).isEqualTo(config);
-            assertThat(sender.getSession()).isNotNull();
         }
 
         @Test
@@ -71,7 +69,7 @@ class SmtpEmailSenderTest {
 
             SmtpEmailSender sender = new SmtpEmailSender(config);
 
-            assertThat(sender.getSession()).isNotNull();
+            assertThat(sender.getConfig()).isNotNull();
         }
 
         @Test
@@ -85,7 +83,7 @@ class SmtpEmailSenderTest {
 
             SmtpEmailSender sender = new SmtpEmailSender(config);
 
-            assertThat(sender.getSession()).isNotNull();
+            assertThat(sender.getConfig()).isNotNull();
         }
 
         @Test
@@ -114,7 +112,7 @@ class SmtpEmailSenderTest {
 
             SmtpEmailSender sender = new SmtpEmailSender(config);
 
-            assertThat(sender.getSession()).isNotNull();
+            assertThat(sender.getConfig()).isNotNull();
         }
 
         @Test
@@ -150,40 +148,6 @@ class SmtpEmailSenderTest {
             assertThat(sender.getConfig()).isEqualTo(config);
             assertThat(sender.getConfig().host()).isEqualTo("smtp.example.com");
             assertThat(sender.getConfig().port()).isEqualTo(587);
-        }
-    }
-
-    @Nested
-    @DisplayName("getSession() 测试")
-    class GetSessionTests {
-
-        @Test
-        @DisplayName("返回非null Session")
-        void testGetSession() {
-            EmailConfig config = EmailConfig.builder()
-                    .host("smtp.example.com")
-                    .build();
-
-            SmtpEmailSender sender = new SmtpEmailSender(config);
-
-            Session session = sender.getSession();
-            assertThat(session).isNotNull();
-        }
-
-        @Test
-        @DisplayName("Session包含正确属性")
-        void testSessionProperties() {
-            EmailConfig config = EmailConfig.builder()
-                    .host("smtp.test.com")
-                    .port(25)
-                    .build();
-
-            SmtpEmailSender sender = new SmtpEmailSender(config);
-
-            Session session = sender.getSession();
-            Properties props = session.getProperties();
-            assertThat(props.getProperty("mail.smtp.host")).isEqualTo("smtp.test.com");
-            assertThat(props.getProperty("mail.smtp.port")).isEqualTo("25");
         }
     }
 

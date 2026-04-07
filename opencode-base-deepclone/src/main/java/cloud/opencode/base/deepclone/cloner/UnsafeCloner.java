@@ -4,15 +4,15 @@ import cloud.opencode.base.deepclone.CloneContext;
 import cloud.opencode.base.deepclone.exception.OpenDeepCloneException;
 import cloud.opencode.base.deepclone.strategy.FieldCloneStrategy;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Unsafe-based high-performance deep cloner
@@ -47,7 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: Yes (stateless, field cache uses ConcurrentHashMap) - 线程安全: 是（无状态，字段缓存使用ConcurrentHashMap）</li>
+ *   <li>Thread-safe: Yes (stateless, field cache uses synchronizedMap) - 线程安全: 是（无状态，字段缓存使用synchronizedMap）</li>
  * </ul>
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
@@ -57,9 +57,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class UnsafeCloner extends AbstractCloner {
 
     /**
-     * Unsafe instance
+     * MethodHandle for Unsafe.allocateInstance(Class)
      */
-    private static final sun.misc.Unsafe UNSAFE;
+    private static final MethodHandle ALLOCATE_INSTANCE;
 
     /**
      * Whether Unsafe is available
@@ -71,18 +71,6 @@ public final class UnsafeCloner extends AbstractCloner {
      * 最大缓存大小，防止无限制内存增长。
      */
     private static final int MAX_CACHE_SIZE = 10_000;
-
-    /**
-     * VarHandle cache for field access (bounded LRU)
-     * 字段访问的 VarHandle 缓存（有界 LRU）
-     */
-    private static final Map<Field, VarHandle> VAR_HANDLES =
-            Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<Field, VarHandle> eldest) {
-                    return size() > MAX_CACHE_SIZE;
-                }
-            });
 
     /**
      * Field cache (bounded LRU)
@@ -97,17 +85,22 @@ public final class UnsafeCloner extends AbstractCloner {
             });
 
     static {
-        sun.misc.Unsafe unsafe = null;
+        MethodHandle mh = null;
         boolean available = false;
         try {
-            Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            Field field = unsafeClass.getDeclaredField("theUnsafe");
             field.setAccessible(true);
-            unsafe = (sun.misc.Unsafe) field.get(null);
+            Object unsafe = field.get(null);
+            mh = MethodHandles.lookup()
+                    .findVirtual(unsafeClass, "allocateInstance",
+                            MethodType.methodType(Object.class, Class.class))
+                    .bindTo(unsafe);
             available = true;
         } catch (Exception e) {
             // Unsafe not available
         }
-        UNSAFE = unsafe;
+        ALLOCATE_INSTANCE = mh;
         AVAILABLE = available;
     }
 
@@ -154,8 +147,8 @@ public final class UnsafeCloner extends AbstractCloner {
             throw new OpenDeepCloneException("Unsafe is not available");
         }
         try {
-            return (T) UNSAFE.allocateInstance(type);
-        } catch (InstantiationException e) {
+            return (T) ALLOCATE_INSTANCE.invoke(type);
+        } catch (Throwable e) {
             throw OpenDeepCloneException.instantiationFailed(type, e);
         }
     }
@@ -210,16 +203,6 @@ public final class UnsafeCloner extends AbstractCloner {
         }
 
         return clone;
-    }
-
-    /**
-     * Gets the Unsafe instance
-     * 获取Unsafe实例
-     *
-     * @return the Unsafe instance | Unsafe实例
-     */
-    protected sun.misc.Unsafe getUnsafe() {
-        return UNSAFE;
     }
 
     /**
@@ -279,6 +262,11 @@ public final class UnsafeCloner extends AbstractCloner {
      */
     protected void copyField(Object source, Object target, Field field, CloneContext context) {
         try {
+            // Apply FieldFilter if set
+            if (fieldFilter != null && !fieldFilter.accept(field)) {
+                return;
+            }
+
             FieldCloneStrategy strategy = FieldCloneStrategy.fromAnnotations(field);
 
             Object value = field.get(source);
@@ -291,24 +279,12 @@ public final class UnsafeCloner extends AbstractCloner {
 
             field.set(target, clonedValue);
         } catch (IllegalAccessException e) {
+            if (context.isLenient()) {
+                context.addWarning("Field access failed: " + field.getName() + " in " + source.getClass().getName());
+                return;
+            }
             throw OpenDeepCloneException.fieldAccessFailed(field.getName(), source.getClass(), e);
         }
-    }
-
-    /**
-     * Gets or creates a VarHandle for a field
-     * 获取或创建字段的VarHandle
-     */
-    private VarHandle getVarHandle(Field field) {
-        return VAR_HANDLES.computeIfAbsent(field, f -> {
-            try {
-                MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(
-                        f.getDeclaringClass(), MethodHandles.lookup());
-                return lookup.unreflectVarHandle(f);
-            } catch (IllegalAccessException e) {
-                throw OpenDeepCloneException.fieldAccessFailed(f.getName(), f.getDeclaringClass(), e);
-            }
-        });
     }
 
     @Override

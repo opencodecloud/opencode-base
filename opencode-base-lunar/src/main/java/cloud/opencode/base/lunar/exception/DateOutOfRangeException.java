@@ -1,5 +1,7 @@
 package cloud.opencode.base.lunar.exception;
 
+import java.io.Serial;
+
 /**
  * Date Out Of Range Exception
  * 日期越界异常
@@ -31,6 +33,9 @@ package cloud.opencode.base.lunar.exception;
  * @since JDK 25, opencode-base-lunar V1.0.0
  */
 public class DateOutOfRangeException extends LunarException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     /**
      * Minimum supported year | 最小支持年份

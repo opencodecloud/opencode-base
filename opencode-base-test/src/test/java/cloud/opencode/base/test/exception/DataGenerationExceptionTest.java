@@ -25,7 +25,7 @@ class DataGenerationExceptionTest {
         void shouldCreateWithErrorCode() {
             DataGenerationException ex = new DataGenerationException(TestErrorCode.DATA_GENERATION_FAILED);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.DATA_GENERATION_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.DATA_GENERATION_FAILED);
         }
 
         @Test
@@ -33,7 +33,7 @@ class DataGenerationExceptionTest {
         void shouldCreateWithErrorCodeAndDetail() {
             DataGenerationException ex = new DataGenerationException(TestErrorCode.DATA_RANGE_INVALID, "invalid");
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.DATA_RANGE_INVALID);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.DATA_RANGE_INVALID);
             assertThat(ex.getMessage()).contains("invalid");
         }
 
@@ -41,7 +41,7 @@ class DataGenerationExceptionTest {
         @DisplayName("Should create with message")
         void shouldCreateWithMessage() {
             DataGenerationException ex = new DataGenerationException("Custom message");
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
         }
 
         @Test
@@ -50,7 +50,7 @@ class DataGenerationExceptionTest {
             Throwable cause = new RuntimeException("root");
             DataGenerationException ex = new DataGenerationException("Custom message", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -64,7 +64,7 @@ class DataGenerationExceptionTest {
         void generationFailedShouldCreateGenerationFailedException() {
             DataGenerationException ex = DataGenerationException.generationFailed("email");
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.DATA_GENERATION_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.DATA_GENERATION_FAILED);
             assertThat(ex.getMessage()).contains("email");
         }
 
@@ -73,7 +73,7 @@ class DataGenerationExceptionTest {
         void invalidRangeShouldCreateInvalidRangeException() {
             DataGenerationException ex = DataGenerationException.invalidRange(10, 5);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.DATA_RANGE_INVALID);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.DATA_RANGE_INVALID);
             assertThat(ex.getMessage()).contains("10");
             assertThat(ex.getMessage()).contains("5");
         }

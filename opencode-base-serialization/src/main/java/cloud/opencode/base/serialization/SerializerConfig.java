@@ -2,6 +2,7 @@
 package cloud.opencode.base.serialization;
 
 import cloud.opencode.base.serialization.compress.CompressionAlgorithm;
+import cloud.opencode.base.serialization.filter.ClassFilter;
 
 import java.util.Objects;
 
@@ -62,7 +63,8 @@ public final class SerializerConfig {
             false,
             CompressionAlgorithm.GZIP,
             1024,
-            false
+            false,
+            null
     );
 
     /**
@@ -95,18 +97,28 @@ public final class SerializerConfig {
      */
     private final boolean failOnUnknownProperties;
 
+    /**
+     * The class filter for deserialization security, may be null (no filtering)
+     * 反序列化安全的类过滤器，可能为 null（不过滤）
+     *
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    private final ClassFilter classFilter;
+
     private SerializerConfig(
             boolean includeTypeInfo,
             boolean compressionEnabled,
             CompressionAlgorithm compressionAlgorithm,
             int compressionThreshold,
-            boolean failOnUnknownProperties
+            boolean failOnUnknownProperties,
+            ClassFilter classFilter
     ) {
         this.includeTypeInfo = includeTypeInfo;
         this.compressionEnabled = compressionEnabled;
         this.compressionAlgorithm = compressionAlgorithm;
         this.compressionThreshold = compressionThreshold;
         this.failOnUnknownProperties = failOnUnknownProperties;
+        this.classFilter = classFilter;
     }
 
     // ==================== Factory Methods | 工厂方法 ====================
@@ -143,7 +155,8 @@ public final class SerializerConfig {
                 .enableCompression(this.compressionEnabled)
                 .compressionAlgorithm(this.compressionAlgorithm)
                 .compressionThreshold(this.compressionThreshold)
-                .failOnUnknownProperties(this.failOnUnknownProperties);
+                .failOnUnknownProperties(this.failOnUnknownProperties)
+                .classFilter(this.classFilter);
     }
 
     // ==================== Getter Methods | 获取方法 ====================
@@ -201,6 +214,23 @@ public final class SerializerConfig {
         return failOnUnknownProperties;
     }
 
+    /**
+     * Returns the class filter for deserialization security.
+     * 返回反序列化安全的类过滤器。
+     *
+     * <p>When non-null, this filter should be consulted before deserializing
+     * any class to prevent deserialization of dangerous types.</p>
+     * <p>当非 null 时，应在反序列化任何类之前查询此过滤器，
+     * 以防止危险类型的反序列化。</p>
+     *
+     * @return the class filter, or null if filtering is not enabled |
+     *         类过滤器，如果未启用过滤则为 null
+     * @since JDK 25, opencode-base-serialization V1.0.3
+     */
+    public ClassFilter getClassFilter() {
+        return classFilter;
+    }
+
     // ==================== Object Methods | 对象方法 ====================
 
     @Override
@@ -211,13 +241,14 @@ public final class SerializerConfig {
                 && compressionEnabled == that.compressionEnabled
                 && compressionThreshold == that.compressionThreshold
                 && failOnUnknownProperties == that.failOnUnknownProperties
-                && compressionAlgorithm == that.compressionAlgorithm;
+                && compressionAlgorithm == that.compressionAlgorithm
+                && Objects.equals(classFilter, that.classFilter);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(includeTypeInfo, compressionEnabled, compressionAlgorithm,
-                compressionThreshold, failOnUnknownProperties);
+                compressionThreshold, failOnUnknownProperties, classFilter);
     }
 
     @Override
@@ -228,6 +259,7 @@ public final class SerializerConfig {
                 ", compressionAlgorithm=" + compressionAlgorithm +
                 ", compressionThreshold=" + compressionThreshold +
                 ", failOnUnknownProperties=" + failOnUnknownProperties +
+                ", classFilter=" + classFilter +
                 '}';
     }
 
@@ -244,6 +276,7 @@ public final class SerializerConfig {
         private CompressionAlgorithm compressionAlgorithm = CompressionAlgorithm.GZIP;
         private int compressionThreshold = 1024;
         private boolean failOnUnknownProperties = false;
+        private ClassFilter classFilter = null;
 
         private Builder() {}
 
@@ -311,6 +344,19 @@ public final class SerializerConfig {
         }
 
         /**
+         * Sets the class filter for deserialization security.
+         * 设置反序列化安全的类过滤器。
+         *
+         * @param classFilter the class filter, may be null - 类过滤器，可以为 null
+         * @return this builder - 此构建器
+         * @since JDK 25, opencode-base-serialization V1.0.3
+         */
+        public Builder classFilter(ClassFilter classFilter) {
+            this.classFilter = classFilter;
+            return this;
+        }
+
+        /**
          * Builds the configuration.
          * 构建配置。
          *
@@ -322,7 +368,8 @@ public final class SerializerConfig {
                     compressionEnabled,
                     compressionAlgorithm,
                     compressionThreshold,
-                    failOnUnknownProperties
+                    failOnUnknownProperties,
+                    classFilter
             );
         }
     }

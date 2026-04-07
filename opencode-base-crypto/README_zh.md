@@ -20,6 +20,11 @@
 - Sealed Box 和 Secret Box
 - 编解码工具：Base64URL、Hex、PEM
 - 常量时间比较和安全内存擦除
+- 流式 AEAD 加密大文件（AES-GCM、ChaCha20-Poly1305）
+- TOTP/HOTP 一次性密码（RFC 6238/4226）
+- 加密算法策略管控（严格/标准/兼容）
+- 版本化加密器，支持无缝算法迁移
+- SecureBytes：支持 try-with-resources 的自动擦除安全字节容器
 - 可选 Bouncy Castle 集成（SM2/SM3/SM4、BLAKE、PGP）
 
 ## Maven 依赖
@@ -28,9 +33,241 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-crypto</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
+
+## 快速开始
+
+```java
+import cloud.opencode.base.crypto.OpenCrypto;
+
+// AES-GCM 加密
+var cipher = OpenCrypto.aesGcm();
+byte[] key = cipher.generateKey();
+byte[] encrypted = cipher.encrypt(plaintext, key);
+byte[] decrypted = cipher.decrypt(encrypted, key);
+
+// SHA-256 摘要
+byte[] hash = OpenCrypto.sha256().digest("Hello".getBytes());
+
+// Argon2id 密码哈希
+var hasher = OpenCrypto.argon2();
+String hashed = hasher.hash("myPassword");
+boolean matches = hasher.verify("myPassword", hashed);
+
+// Ed25519 签名
+var signer = OpenCrypto.ed25519();
+var keyPair = signer.generateKeyPair();
+byte[] signature = signer.sign(data, keyPair.getPrivate());
+boolean sigValid = signer.verify(data, signature, keyPair.getPublic());
+
+// HMAC-SHA256
+var mac = OpenCrypto.hmacSha256(secretKey);
+byte[] tag = mac.compute(data);
+
+// X25519 密钥交换
+var kex = OpenCrypto.x25519();
+var kp = kex.generateKeyPair();
+byte[] sharedSecret = kex.exchange(kp.getPrivate(), otherPublicKey);
+```
+
+## V1.0.3 新增功能
+
+### TOTP/HOTP 一次性密码
+
+符合 RFC 4226 (HOTP) 和 RFC 6238 (TOTP) 规范，兼容 Google Authenticator。
+
+```java
+import cloud.opencode.base.crypto.otp.Totp;
+import cloud.opencode.base.crypto.otp.Hotp;
+import cloud.opencode.base.crypto.otp.TotpSecret;
+
+// 生成密钥
+byte[] secret = TotpSecret.generate();              // 20 字节随机密钥
+String base32 = TotpSecret.toBase32(secret);        // Base32 编码（用于二维码）
+byte[] decoded = TotpSecret.fromBase32(base32);     // 解码
+
+// TOTP — 生成和验证
+Totp totp = Totp.sha1();                            // SHA-1, 30秒, 6位
+String code = totp.generate(secret);                // 当前时间验证码
+boolean valid = totp.verify(secret, code);          // 验证（窗口=1）
+boolean ok = totp.verify(secret, code, 2);          // 自定义窗口
+
+// TOTP — 自定义配置
+Totp custom = Totp.builder()
+    .algorithm("HmacSHA256")
+    .period(60)
+    .digits(8)
+    .build();
+
+// 生成 otpauth:// URI 用于二维码
+String uri = Totp.generateUri("MyApp", "user@example.com", secret);
+
+// HOTP — 基于计数器
+Hotp hotp = Hotp.sha1();
+String hotpCode = hotp.generate(secret, 42);        // 计数器 = 42
+boolean hotpValid = hotp.verify(secret, 42, hotpCode, 5); // 前瞻窗口 = 5
+```
+
+| 类名 | 方法 | 说明 |
+|------|------|------|
+| `Totp` | `sha1()` / `sha256()` / `sha512()` | 使用预设算法创建 TOTP |
+| `Totp` | `builder()` | 自定义算法、步长、位数 |
+| `Totp` | `generate(secret)` | 生成当前时间的验证码 |
+| `Totp` | `generate(secret, time)` | 生成指定时间的验证码 |
+| `Totp` | `verify(secret, code)` | 验证（默认窗口 1） |
+| `Totp` | `verify(secret, code, windowSize)` | 验证（自定义窗口） |
+| `Totp` | `verify(secret, code, time, windowSize)` | 指定时间验证 |
+| `Totp` | `generateUri(issuer, account, secret)` | 生成 otpauth:// URI |
+| `Hotp` | `sha1()` / `sha256()` / `sha512()` | 使用预设算法创建 HOTP |
+| `Hotp` | `generate(secret, counter)` | 生成 6 位 OTP |
+| `Hotp` | `generate(secret, counter, digits)` | 生成指定位数 OTP (6-8) |
+| `Hotp` | `verify(secret, counter, code, lookAhead)` | 带前瞻窗口验证 |
+| `TotpSecret` | `generate()` / `generate(length)` | 生成随机密钥 |
+| `TotpSecret` | `toBase32(data)` / `fromBase32(str)` | Base32 编解码 |
+
+### 流式 AEAD 加密大文件
+
+分段 AEAD 加密，每段独立认证，防重排和防截断保护。
+
+```java
+import cloud.opencode.base.crypto.streaming.StreamingAead;
+
+byte[] key = new byte[32]; // AES-256 密钥
+// ...填充密钥...
+
+// AES-GCM 流式加密
+try (StreamingAead aead = StreamingAead.aesGcm(key)
+        .setSegmentSize(1024 * 1024)   // 1 MB 段大小（默认值）
+        .setAad("context".getBytes())) {
+    aead.encryptFile(Path.of("large.bin"), Path.of("large.enc"));
+    aead.decryptFile(Path.of("large.enc"), Path.of("large.dec"));
+}
+
+// ChaCha20-Poly1305 流式加密
+try (StreamingAead chacha = StreamingAead.chaCha20(key)) {
+    chacha.encrypt(inputStream, outputStream);
+}
+
+// 流式 API
+try (StreamingAead aead = StreamingAead.aesGcm(key)) {
+    aead.encrypt(inputStream, encryptedOutputStream);
+    aead.decrypt(encryptedInputStream, decryptedOutputStream);
+}
+```
+
+| 类名 | 方法 | 说明 |
+|------|------|------|
+| `StreamingAead` | `aesGcm(key)` | 创建 AES-GCM 流式加密器（16/24/32 字节密钥） |
+| `StreamingAead` | `chaCha20(key)` | 创建 ChaCha20-Poly1305 流式加密器（32 字节密钥） |
+| `StreamingAead` | `setSegmentSize(bytes)` | 设置段大小（256B - 64MB，默认 1MB） |
+| `StreamingAead` | `setAad(aad)` | 设置附加认证数据 |
+| `StreamingAead` | `encrypt(in, out)` | 流式加密 |
+| `StreamingAead` | `decrypt(in, out)` | 流式解密 |
+| `StreamingAead` | `encryptFile(source, target)` | 加密文件 |
+| `StreamingAead` | `decryptFile(source, target)` | 解密文件（原子写入，失败时不留部分明文） |
+| `StreamingAead` | `close()` | 擦除内存中的密钥材料 |
+
+### 版本化加密器
+
+自描述加密载荷，支持零停机算法迁移。
+
+```java
+import cloud.opencode.base.crypto.versioned.VersionedCipher;
+
+// 构建多版本加密器
+VersionedCipher vc = VersionedCipher.builder()
+    .addVersion(1, oldCipher)       // 旧版 AES-128-GCM
+    .addVersion(2, newCipher)       // 当前 AES-256-GCM
+    .currentVersion(2)              // 使用 v2 加密
+    .build();
+
+// 加密始终使用当前版本
+byte[] encrypted = vc.encrypt(plaintext);
+
+// 解密自动从载荷头部检测版本
+byte[] decrypted = vc.decrypt(encrypted);
+
+// Base64 便捷方法
+String base64 = vc.encryptBase64("敏感数据");
+String plain = vc.decryptBase64ToString(base64);
+```
+
+| 类名 | 方法 | 说明 |
+|------|------|------|
+| `VersionedCipher` | `builder()` | 创建构建器 |
+| `VersionedCipher` | `encrypt(plaintext)` | 使用当前版本加密 |
+| `VersionedCipher` | `decrypt(payload)` | 解密（自动检测版本） |
+| `VersionedCipher` | `encryptBase64(plaintext)` / `encryptBase64(str)` | 加密为 Base64 |
+| `VersionedCipher` | `decryptBase64(base64)` / `decryptBase64ToString(base64)` | 从 Base64 解密 |
+| `VersionedPayload` | `serialize()` / `deserialize(data)` | 二进制序列化 |
+
+### 加密策略管控
+
+算法治理，内置预定义策略用于合规检查。
+
+```java
+import cloud.opencode.base.crypto.policy.CryptoPolicy;
+
+// 预定义策略
+CryptoPolicy strict = CryptoPolicy.strict();      // AES-256-GCM, Ed25519 等
+CryptoPolicy standard = CryptoPolicy.standard();  // + AES-128-GCM, RSA-OAEP 等
+CryptoPolicy legacy = CryptoPolicy.legacy();      // + SHA-1, MD5, 3DES
+
+// 检查算法合规性
+strict.check("AES-256-GCM", 256);                 // 通过
+strict.isAllowed("MD5", 0);                        // false
+// strict.check("MD5", 0);                         // 抛出 PolicyViolationException
+
+// 自定义策略
+CryptoPolicy custom = CryptoPolicy.builder()
+    .allow("AES-256-GCM", "ChaCha20-Poly1305")
+    .deny("DES", "RC4")
+    .minKeyBits("RSA", 4096)
+    .build();
+```
+
+| 类名 | 方法 | 说明 |
+|------|------|------|
+| `CryptoPolicy` | `strict()` / `standard()` / `legacy()` | 预定义策略 |
+| `CryptoPolicy` | `builder()` | 自定义策略构建器 |
+| `CryptoPolicy` | `check(algorithm, keyBits)` | 检查合规性（违规时抛异常） |
+| `CryptoPolicy` | `isAllowed(algorithm, keyBits)` | 检查合规性（返回布尔值） |
+| `CryptoPolicy` | `getAllowedAlgorithms()` | 获取允许的算法集合 |
+| `CryptoPolicy` | `getDeniedAlgorithms()` | 获取拒绝的算法集合 |
+| `CryptoPolicy` | `getMinKeyBits()` | 获取最小密钥长度要求 |
+
+### SecureBytes 安全字节容器
+
+用于敏感密钥材料的自动擦除安全字节容器。
+
+```java
+import cloud.opencode.base.crypto.util.SecureBytes;
+
+// 防御性拷贝 — 调用者保留原始数组
+try (SecureBytes key = SecureBytes.of(rawKeyBytes)) {
+    byte[] copy = key.getBytes();       // 返回副本
+    byte[] ref = key.getBytesUnsafe();  // 返回直接引用（热路径）
+    int len = key.length();
+} // 内部数据在此被清零
+
+// 零拷贝 — 调用者转让所有权
+try (SecureBytes key = SecureBytes.wrap(generateKey())) {
+    doEncrypt(key.getBytesUnsafe());
+} // 原始数组被清零
+```
+
+| 类名 | 方法 | 说明 |
+|------|------|------|
+| `SecureBytes` | `of(data)` | 创建（防御性拷贝） |
+| `SecureBytes` | `wrap(data)` | 创建（零拷贝，转让所有权） |
+| `SecureBytes` | `getBytes()` | 获取数据副本 |
+| `SecureBytes` | `getBytesUnsafe()` | 获取直接引用（热路径，不要持有） |
+| `SecureBytes` | `length()` | 获取字节长度 |
+| `SecureBytes` | `isClosed()` | 检查是否已关闭 |
+| `SecureBytes` | `close()` | 清零内部数据 |
+| `SecureBytes` | `equals(other)` | 常量时间比较（已关闭时返回 false） |
 
 ## API 概览
 
@@ -141,6 +378,19 @@
 | `CryptoDetector` | 加密提供者检测 |
 | `CryptoUtil` | 通用加密工具 |
 | `SecureEraser` | 安全内存擦除 |
+| `SecureBytes` | 自动擦除的安全字节容器（AutoCloseable） |
+| **流式 AEAD** | |
+| `StreamingAead` | 大数据/文件分段 AEAD 加密 |
+| **OTP（一次性密码）** | |
+| `Totp` | RFC 6238 基于时间的一次性密码生成和验证 |
+| `Hotp` | RFC 4226 基于 HMAC 的一次性密码生成和验证 |
+| `TotpSecret` | OTP 密钥生成和 Base32 编解码 |
+| **加密策略** | |
+| `CryptoPolicy` | 算法白名单/黑名单策略管控 |
+| `PolicyViolationException` | 策略违规异常 |
+| **版本化加密** | |
+| `VersionedCipher` | 多版本加密器，支持算法迁移 |
+| `VersionedPayload` | 带版本元数据的加密载荷 |
 | **枚举** | |
 | `AsymmetricAlgorithm` | 非对称算法枚举 |
 | `CurveType` | 椭圆曲线类型枚举 |
@@ -152,41 +402,6 @@
 | `OpenCryptoException` | 通用加密异常 |
 | `OpenKeyException` | 密钥相关异常 |
 | `OpenSignatureException` | 签名相关异常 |
-
-## 快速开始
-
-```java
-import cloud.opencode.base.crypto.OpenCrypto;
-
-// AES-GCM 加密
-var cipher = OpenCrypto.aesGcm();
-byte[] key = cipher.generateKey();
-byte[] encrypted = cipher.encrypt(plaintext, key);
-byte[] decrypted = cipher.decrypt(encrypted, key);
-
-// SHA-256 摘要
-byte[] hash = OpenCrypto.sha256().digest("Hello".getBytes());
-
-// Argon2id 密码哈希
-var hasher = OpenCrypto.argon2();
-String hashed = hasher.hash("myPassword");
-boolean matches = hasher.verify("myPassword", hashed);
-
-// Ed25519 签名
-var signer = OpenCrypto.ed25519();
-var keyPair = signer.generateKeyPair();
-byte[] signature = signer.sign(data, keyPair.getPrivate());
-boolean valid = signer.verify(data, signature, keyPair.getPublic());
-
-// HMAC-SHA256
-var mac = OpenCrypto.hmacSha256(secretKey);
-byte[] tag = mac.compute(data);
-
-// X25519 密钥交换
-var kex = OpenCrypto.x25519();
-var kp = kex.generateKeyPair();
-byte[] sharedSecret = kex.exchange(kp.getPrivate(), otherPublicKey);
-```
 
 ## 环境要求
 

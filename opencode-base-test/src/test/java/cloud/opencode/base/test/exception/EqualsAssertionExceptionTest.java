@@ -47,7 +47,7 @@ class EqualsAssertionExceptionTest {
 
             assertThat(ex.getExpected()).isNull();
             assertThat(ex.getActual()).isNull();
-            assertThat(ex.getMessage()).isEqualTo("error message");
+            assertThat(ex.getMessage()).contains("error message");
         }
 
         @Test
@@ -56,7 +56,7 @@ class EqualsAssertionExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             EqualsAssertionException ex = new EqualsAssertionException("error message", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("error message");
+            assertThat(ex.getMessage()).contains("error message");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }

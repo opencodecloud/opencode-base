@@ -2,6 +2,7 @@ package cloud.opencode.base.money;
 
 import cloud.opencode.base.money.calc.AllocationUtil;
 import cloud.opencode.base.money.calc.MoneyCalcUtil;
+import cloud.opencode.base.money.calc.MoneyRounding;
 import cloud.opencode.base.money.exchange.ExchangeRate;
 import cloud.opencode.base.money.exchange.ExchangeRateProvider;
 import cloud.opencode.base.money.format.ChineseUtil;
@@ -9,11 +10,12 @@ import cloud.opencode.base.money.format.MoneyFormatUtil;
 import cloud.opencode.base.money.validation.MoneyValidator;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Collection;
 import java.util.List;
 
 /**
- * OpenMoney
+ * OpenMoney - Facade for money operations
  * 金额工具门面类
  *
  * <p>Facade class for money operations. Provides convenient static methods
@@ -28,11 +30,16 @@ import java.util.List;
  *
  * // Allocate by ratios
  * List<Money> parts = OpenMoney.allocate(Money.of("100"), 1, 2, 3);
- * // [¥16.67, ¥33.33, ¥50.00]
  *
  * // Calculate sum
  * Money total = OpenMoney.sum(List.of(Money.of("100"), Money.of("200")));
- * // ¥300.00
+ *
+ * // Range check
+ * MoneyRange range = OpenMoney.range(Money.of("10"), Money.of("100"));
+ * boolean ok = range.contains(Money.of("50")); // true
+ *
+ * // Rounding
+ * Money rounded = OpenMoney.swedish(Money.of("10.23")); // ¥10.25
  * }</pre>
  *
  * <p><strong>Features | 主要功能:</strong></p>
@@ -40,6 +47,7 @@ import java.util.List;
  *   <li>Facade for money creation, allocation, and calculation - 金额创建、分摊和计算的门面</li>
  *   <li>Convenient static methods for common operations - 常用操作的便捷静态方法</li>
  *   <li>Chinese uppercase conversion - 中文大写转换</li>
+ *   <li>Range and rounding operations - 区间和舍入操作</li>
  * </ul>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -93,6 +101,19 @@ public final class OpenMoney {
      */
     public static Money ofCents(long cents) {
         return Money.ofCents(cents);
+    }
+
+    /**
+     * Create money from minor units for any currency
+     * 从最小货币单位创建金额（支持任意币种）
+     *
+     * @param minorUnits the minor units | 最小单位金额
+     * @param currency the currency | 货币
+     * @return the money | 金额
+     * @since V1.0.3
+     */
+    public static Money ofMinorUnits(long minorUnits, Currency currency) {
+        return Money.ofMinorUnits(minorUnits, currency);
     }
 
     /**
@@ -203,8 +224,8 @@ public final class OpenMoney {
     }
 
     /**
-     * Find maximum money
-     * 找最大金额
+     * Find maximum money in collection
+     * 找集合中最大金额
      *
      * @param moneys the money collection | 金额集合
      * @return the maximum | 最大值
@@ -214,8 +235,8 @@ public final class OpenMoney {
     }
 
     /**
-     * Find minimum money
-     * 找最小金额
+     * Find minimum money in collection
+     * 找集合中最小金额
      *
      * @param moneys the money collection | 金额集合
      * @return the minimum | 最小值
@@ -405,5 +426,134 @@ public final class OpenMoney {
      */
     public static boolean areEqual(Money m1, Money m2) {
         return MoneyCalcUtil.areEqual(m1, m2);
+    }
+
+    // ============ Range | 区间 ============
+
+    /**
+     * Create a money range [min, max]
+     * 创建金额区间 [最小值, 最大值]
+     *
+     * @param min the lower bound | 下界
+     * @param max the upper bound | 上界
+     * @return the money range | 金额区间
+     * @since V1.0.3
+     */
+    public static MoneyRange range(Money min, Money max) {
+        return MoneyRange.of(min, max);
+    }
+
+    // ============ Rounding | 舍入 ============
+
+    /**
+     * Swedish rounding (nearest 0.05)
+     * 瑞典舍入（最近的0.05）
+     *
+     * @param money the money to round | 要舍入的金额
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money swedish(Money money) {
+        return MoneyRounding.swedish(money);
+    }
+
+    /**
+     * Banker's rounding (HALF_EVEN)
+     * 银行家舍入
+     *
+     * @param money the money to round | 要舍入的金额
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money bankers(Money money) {
+        return MoneyRounding.bankers(money);
+    }
+
+    /**
+     * Round to nearest step
+     * 四舍五入到最近的步进值
+     *
+     * @param money the money to round | 要舍入的金额
+     * @param step the rounding step | 舍入步进
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money roundToStep(Money money, BigDecimal step) {
+        return MoneyRounding.roundToStep(money, step);
+    }
+
+    /**
+     * Standard rounding (HALF_UP) to currency scale
+     * 标准舍入（HALF_UP）到货币精度
+     *
+     * @param money the money to round | 要舍入的金额
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money standard(Money money) {
+        return MoneyRounding.standard(money);
+    }
+
+    /**
+     * Ceiling — round up to currency scale
+     * 向上取整到货币精度
+     *
+     * @param money the money to round | 要舍入的金额
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money ceil(Money money) {
+        return MoneyRounding.ceil(money);
+    }
+
+    /**
+     * Floor — round down to currency scale
+     * 向下取整到货币精度
+     *
+     * @param money the money to round | 要舍入的金额
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money floor(Money money) {
+        return MoneyRounding.floor(money);
+    }
+
+    /**
+     * Round up (ceiling) to nearest step
+     * 向上取整到最近的步进值
+     *
+     * @param money the money to round | 要舍入的金额
+     * @param step the rounding step | 舍入步进
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money ceilToStep(Money money, BigDecimal step) {
+        return MoneyRounding.ceilToStep(money, step);
+    }
+
+    /**
+     * Round down (floor) to nearest step
+     * 向下取整到最近的步进值
+     *
+     * @param money the money to round | 要舍入的金额
+     * @param step the rounding step | 舍入步进
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money floorToStep(Money money, BigDecimal step) {
+        return MoneyRounding.floorToStep(money, step);
+    }
+
+    /**
+     * Round with specified rounding mode
+     * 使用指定舍入模式舍入
+     *
+     * @param money the money to round | 要舍入的金额
+     * @param mode the rounding mode | 舍入模式
+     * @return the rounded money | 舍入后的金额
+     * @since V1.0.3
+     */
+    public static Money round(Money money, RoundingMode mode) {
+        return MoneyRounding.round(money, mode);
     }
 }

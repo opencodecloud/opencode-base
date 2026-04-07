@@ -68,9 +68,16 @@ public class LockManager implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(LockManager.class.getName());
 
+    /**
+     * Default maximum number of managed locks to prevent unbounded memory growth.
+     * 默认最大托管锁数量，防止内存无限增长。
+     */
+    private static final int DEFAULT_MAX_LOCKS = 10_000;
+
     private final ConcurrentMap<String, Lock<?>> localLocks = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ReadWriteLock<?>> rwLocks = new ConcurrentHashMap<>();
     private final LockConfig localConfig;
+    private final int maxLocks;
 
     /**
      * Creates a lock manager with default configuration
@@ -87,7 +94,23 @@ public class LockManager implements AutoCloseable {
      * @param localConfig the configuration for local locks | 本地锁配置
      */
     public LockManager(LockConfig localConfig) {
+        this(localConfig, DEFAULT_MAX_LOCKS);
+    }
+
+    /**
+     * Creates a lock manager with specified configuration and maximum lock count
+     * 使用指定配置和最大锁数创建锁管理器
+     *
+     * @param localConfig the configuration for local locks | 本地锁配置
+     * @param maxLocks    maximum number of managed locks | 最大托管锁数
+     * @throws IllegalArgumentException if maxLocks is not positive | 如果maxLocks非正数则抛出
+     */
+    public LockManager(LockConfig localConfig, int maxLocks) {
+        if (maxLocks <= 0) {
+            throw new IllegalArgumentException("maxLocks must be positive, got: " + maxLocks);
+        }
         this.localConfig = localConfig;
+        this.maxLocks = maxLocks;
     }
 
     /**
@@ -99,8 +122,14 @@ public class LockManager implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Lock<Long> getLocalLock(String name) {
-        return (Lock<Long>) localLocks.computeIfAbsent(name,
-                k -> new LocalLock(localConfig));
+        return (Lock<Long>) localLocks.computeIfAbsent(name, k -> {
+            if (localLocks.size() >= maxLocks) {
+                throw new IllegalStateException(
+                        "LockManager capacity exceeded: max " + maxLocks + " locks"
+                                + " | LockManager 容量已超限: 最大 " + maxLocks + " 个锁");
+            }
+            return new LocalLock(localConfig);
+        });
     }
 
     /**
@@ -112,8 +141,14 @@ public class LockManager implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public ReadWriteLock<Long> getLocalReadWriteLock(String name) {
-        return (ReadWriteLock<Long>) rwLocks.computeIfAbsent(name,
-                k -> new LocalReadWriteLock(localConfig));
+        return (ReadWriteLock<Long>) rwLocks.computeIfAbsent(name, k -> {
+            if (rwLocks.size() >= maxLocks) {
+                throw new IllegalStateException(
+                        "LockManager capacity exceeded: max " + maxLocks + " read-write locks"
+                                + " | LockManager 容量已超限: 最大 " + maxLocks + " 个读写锁");
+            }
+            return new LocalReadWriteLock(localConfig);
+        });
     }
 
     /**

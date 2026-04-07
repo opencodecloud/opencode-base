@@ -1,6 +1,5 @@
 package cloud.opencode.base.cache;
 
-import cloud.opencode.base.cache.protection.BloomFilter;
 import cloud.opencode.base.cache.protection.SingleFlight;
 import cloud.opencode.base.cache.util.CacheUtil;
 import org.junit.jupiter.api.*;
@@ -102,15 +101,6 @@ class CacheTest {
     }
 
     @Test
-    void shouldBloomFilterWork() {
-        BloomFilter<String> filter = BloomFilter.create(1000, 0.01);
-        filter.add("exists");
-
-        assertThat(filter.mightContain("exists")).isTrue();
-        assertThat(filter.mightContain("not-exists")).isFalse();
-    }
-
-    @Test
     void shouldSingleFlightMergeRequests() {
         AtomicInteger loadCount = new AtomicInteger();
         SingleFlight<String, String> flight = new SingleFlight<>();
@@ -196,7 +186,8 @@ class CacheTest {
         }
 
         @Test
-        @DisplayName("getIfPresent returns Optional | getIfPresent 返回 Optional")
+        @DisplayName("getIfPresent returns Optional (deprecated, use getOptional) | getIfPresent 返回 Optional")
+        @SuppressWarnings("removal")
         void testGetIfPresent() {
             Cache<String, String> cache = OpenCache.getOrCreate("test-getIfPresent");
             cache.put("key1", "value1");
@@ -206,7 +197,8 @@ class CacheTest {
         }
 
         @Test
-        @DisplayName("getOrNull returns null when missing | getOrNull 缺失时返回 null")
+        @DisplayName("getOrNull returns null when missing (deprecated, use get) | getOrNull 缺失时返回 null")
+        @SuppressWarnings("removal")
         void testGetOrNull() {
             Cache<String, String> cache = OpenCache.getOrCreate("test-getOrNull");
             cache.put("key1", "value1");

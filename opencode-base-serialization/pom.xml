@@ -7,14 +7,14 @@
     <parent>
         <groupId>cloud.opencode.base</groupId>
         <artifactId>opencode-base-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.3</version>
     </parent>
 
     <artifactId>opencode-base-serialization</artifactId>
     <name>OpenCode Base Serialization</name>
     <description>
-        Unified serialization facade with SPI mechanism, supporting JSON, XML, Kryo, Protobuf, and more.
-        统一序列化门面，支持 SPI 可插拔机制，支持 JSON、XML、Kryo、Protobuf 等多种格式。
+        Unified serialization facade with SPI mechanism, supporting JSON, JDK binary, and more.
+        统一序列化门面，支持 SPI 可插拔机制，支持 JSON、JDK 二进制等多种格式。
     </description>
 
     <dependencies>
@@ -37,60 +37,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- JAXB for XML (optional) -->
-        <dependency>
-            <groupId>jakarta.xml.bind</groupId>
-            <artifactId>jakarta.xml.bind-api</artifactId>
-            <version>4.0.2</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>4.0.5</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Kryo (optional) -->
-        <dependency>
-            <groupId>com.esotericsoftware</groupId>
-            <artifactId>kryo</artifactId>
-            <version>5.6.0</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Protobuf (optional) -->
-        <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>4.28.2</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- LZ4 compression (optional) -->
-        <dependency>
-            <groupId>org.lz4</groupId>
-            <artifactId>lz4-java</artifactId>
-            <version>1.8.0</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Snappy compression (optional) -->
-        <dependency>
-            <groupId>org.xerial.snappy</groupId>
-            <artifactId>snappy-java</artifactId>
-            <version>1.1.10.5</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- ZSTD compression (optional) -->
-        <dependency>
-            <groupId>com.github.luben</groupId>
-            <artifactId>zstd-jni</artifactId>
-            <version>1.5.6-4</version>
-            <optional>true</optional>
-        </dependency>
-
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -107,13 +53,6 @@
             <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Jackson for JSON tests -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -122,7 +61,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>@{argLine} --enable-preview -Dnet.bytebuddy.experimental=true</argLine>
+                    <argLine>@{argLine} --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
                 </configuration>
             </plugin>
         

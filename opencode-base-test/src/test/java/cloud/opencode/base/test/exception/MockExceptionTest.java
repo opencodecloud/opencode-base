@@ -25,7 +25,7 @@ class MockExceptionTest {
         void shouldCreateWithErrorCode() {
             MockException ex = new MockException(TestErrorCode.MOCK_SETUP_FAILED);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.MOCK_SETUP_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.MOCK_SETUP_FAILED);
         }
 
         @Test
@@ -33,7 +33,7 @@ class MockExceptionTest {
         void shouldCreateWithErrorCodeAndDetail() {
             MockException ex = new MockException(TestErrorCode.MOCK_CREATION_FAILED, "details");
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.MOCK_CREATION_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.MOCK_CREATION_FAILED);
             assertThat(ex.getMessage()).contains("details");
         }
 
@@ -41,7 +41,7 @@ class MockExceptionTest {
         @DisplayName("Should create with message")
         void shouldCreateWithMessage() {
             MockException ex = new MockException("Custom message");
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
         }
 
         @Test
@@ -50,7 +50,7 @@ class MockExceptionTest {
             Throwable cause = new RuntimeException("root");
             MockException ex = new MockException("Custom message", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -64,7 +64,7 @@ class MockExceptionTest {
         void creationFailedShouldCreateMockCreationException() {
             MockException ex = MockException.creationFailed(String.class);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.MOCK_CREATION_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.MOCK_CREATION_FAILED);
             assertThat(ex.getMessage()).contains("java.lang.String");
         }
 
@@ -73,7 +73,7 @@ class MockExceptionTest {
         void notInterfaceShouldCreateNotInterfaceException() {
             MockException ex = MockException.notInterface(String.class);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.MOCK_NOT_INTERFACE);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.MOCK_NOT_INTERFACE);
             assertThat(ex.getMessage()).contains("java.lang.String");
             assertThat(ex.getMessage()).contains("Only interfaces");
         }
@@ -83,7 +83,7 @@ class MockExceptionTest {
         void verificationFailedShouldCreateVerificationException() {
             MockException ex = MockException.verificationFailed("called once", 3);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.MOCK_VERIFICATION_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.MOCK_VERIFICATION_FAILED);
             assertThat(ex.getMessage()).contains("called once");
             assertThat(ex.getMessage()).contains("3");
         }

@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,9 @@ class GeoHashExceptionTest {
         void testMessageOnlyConstructor() {
             GeoHashException ex = new GeoHashException("GeoHash error");
 
-            assertThat(ex.getMessage()).isEqualTo("GeoHash error");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_GEOHASH);
+            assertThat(ex.getRawMessage()).isEqualTo("GeoHash error");
+            assertThat(ex.getMessage()).contains("GeoHash error");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_GEOHASH);
         }
 
         @Test
@@ -36,9 +38,10 @@ class GeoHashExceptionTest {
             RuntimeException cause = new RuntimeException("cause");
             GeoHashException ex = new GeoHashException("GeoHash error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("GeoHash error");
+            assertThat(ex.getRawMessage()).isEqualTo("GeoHash error");
+            assertThat(ex.getMessage()).contains("GeoHash error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_GEOHASH);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_GEOHASH);
         }
     }
 
@@ -52,6 +55,14 @@ class GeoHashExceptionTest {
             GeoHashException ex = new GeoHashException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            GeoHashException ex = new GeoHashException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

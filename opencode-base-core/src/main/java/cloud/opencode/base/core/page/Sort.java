@@ -80,6 +80,17 @@ public final class Sort {
      */
     public record Order(String property, Direction direction) {
 
+        private static final java.util.regex.Pattern SAFE_PROPERTY =
+                java.util.regex.Pattern.compile("[a-zA-Z_][a-zA-Z0-9_.]*");
+
+        public Order {
+            java.util.Objects.requireNonNull(property, "property must not be null");
+            java.util.Objects.requireNonNull(direction, "direction must not be null");
+            if (property.isBlank()) {
+                throw new IllegalArgumentException("property must not be blank");
+            }
+        }
+
         public static Order asc(String property) {
             return new Order(property, Direction.ASC);
         }
@@ -99,6 +110,10 @@ public final class Sort {
          * @return SQL fragment | SQL 片段
          */
         public String toSql() {
+            if (!SAFE_PROPERTY.matcher(property).matches()) {
+                throw new IllegalArgumentException(
+                        "Unsafe property name for SQL: " + property);
+            }
             return property + " " + direction.name();
         }
     }

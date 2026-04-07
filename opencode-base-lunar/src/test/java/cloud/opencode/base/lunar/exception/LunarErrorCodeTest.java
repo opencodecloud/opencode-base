@@ -123,6 +123,37 @@ class LunarErrorCodeTest {
     }
 
     @Nested
+    @DisplayName("toStringCode方法测试")
+    class ToStringCodeTests {
+
+        @Test
+        @DisplayName("UNKNOWN返回LUNAR_0")
+        void testUnknownStringCode() {
+            assertThat(LunarErrorCode.UNKNOWN.toStringCode()).isEqualTo("LUNAR_0");
+        }
+
+        @Test
+        @DisplayName("CONVERSION_FAILED返回LUNAR_1001")
+        void testConversionFailedStringCode() {
+            assertThat(LunarErrorCode.CONVERSION_FAILED.toStringCode()).isEqualTo("LUNAR_1001");
+        }
+
+        @Test
+        @DisplayName("YEAR_OUT_OF_RANGE返回LUNAR_2001")
+        void testYearOutOfRangeStringCode() {
+            assertThat(LunarErrorCode.YEAR_OUT_OF_RANGE.toStringCode()).isEqualTo("LUNAR_2001");
+        }
+
+        @Test
+        @DisplayName("所有错误码都以LUNAR_开头")
+        void testAllStringCodesPrefix() {
+            for (LunarErrorCode code : LunarErrorCode.values()) {
+                assertThat(code.toStringCode()).startsWith("LUNAR_");
+            }
+        }
+    }
+
+    @Nested
     @DisplayName("valueOf方法测试")
     class ValueOfTests {
 

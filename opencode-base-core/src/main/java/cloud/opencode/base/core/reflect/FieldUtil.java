@@ -168,6 +168,10 @@ public final class FieldUtil {
      * 设置字段值
      */
     public static void setValue(Object obj, Field field, Object value) {
+        if (java.lang.reflect.Modifier.isFinal(field.getModifiers())) {
+            throw new OpenException("Cannot set final field: " + field.getDeclaringClass().getName()
+                    + "." + field.getName());
+        }
         try {
             field.setAccessible(true);
             field.set(obj, value);

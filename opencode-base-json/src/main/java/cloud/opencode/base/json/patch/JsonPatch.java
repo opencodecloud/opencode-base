@@ -96,6 +96,8 @@ public final class JsonPatch {
      * The list of operations
      * 操作列表
      */
+    private static final int MAX_OPERATIONS = 10_000;
+
     private final List<PatchOperation> operations;
 
     private JsonPatch(List<PatchOperation> operations) {
@@ -133,6 +135,11 @@ public final class JsonPatch {
      */
     public JsonNode apply(JsonNode target) {
         Objects.requireNonNull(target, "Target must not be null");
+
+        if (operations.size() > MAX_OPERATIONS) {
+            throw OpenJsonProcessingException.pathError(
+                    "Patch operation count (" + operations.size() + ") exceeds maximum of " + MAX_OPERATIONS);
+        }
 
         JsonNode result = deepCopy(target);
         for (PatchOperation op : operations) {
@@ -274,6 +281,10 @@ public final class JsonPatch {
     }
 
     private JsonNode applyMove(JsonNode target, String from, String path) {
+        if (path.startsWith(from + "/") || path.equals(from)) {
+            throw OpenJsonProcessingException.pathError(
+                    "Move operation: 'from' (" + from + ") must not be a prefix of 'path' (" + path + ")");
+        }
         JsonPointer fromPointer = JsonPointer.parse(from);
         JsonNode value = fromPointer.evaluate(target);
 
@@ -326,17 +337,27 @@ public final class JsonPatch {
         }
     }
 
+    private static final int MAX_COPY_DEPTH = 512;
+
     private JsonNode deepCopy(JsonNode node) {
+        return deepCopy(node, 0);
+    }
+
+    private JsonNode deepCopy(JsonNode node, int depth) {
+        if (depth > MAX_COPY_DEPTH) {
+            throw OpenJsonProcessingException.pathError(
+                    "Deep copy nesting depth exceeds maximum of " + MAX_COPY_DEPTH);
+        }
         if (node.isObject()) {
             JsonNode.ObjectNode copy = JsonNode.object();
             for (String key : node.keys()) {
-                copy.put(key, deepCopy(node.get(key)));
+                copy.put(key, deepCopy(node.get(key), depth + 1));
             }
             return copy;
         } else if (node.isArray()) {
             JsonNode.ArrayNode copy = JsonNode.array();
             for (int i = 0; i < node.size(); i++) {
-                copy.add(deepCopy(node.get(i)));
+                copy.add(deepCopy(node.get(i), depth + 1));
             }
             return copy;
         }

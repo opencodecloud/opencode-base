@@ -3,7 +3,10 @@ package cloud.opencode.base.deepclone;
 import cloud.opencode.base.deepclone.cloner.ReflectiveCloner;
 import cloud.opencode.base.deepclone.cloner.SerializingCloner;
 import cloud.opencode.base.deepclone.cloner.UnsafeCloner;
+import cloud.opencode.base.deepclone.exception.OpenDeepCloneException;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -201,6 +204,119 @@ public final class OpenClone {
      */
     public static <T> CompletableFuture<List<T>> cloneBatchAsync(List<T> originals) {
         return CompletableFuture.supplyAsync(() -> cloneBatch(originals));
+    }
+
+    // ==================== Shallow Clone | 浅拷贝 ====================
+
+    /**
+     * Shallow clones an object (copies field references without deep cloning)
+     * 浅拷贝对象（复制字段引用，不进行深度克隆）
+     *
+     * @param original the original object | 原始对象
+     * @param <T>      the object type | 对象类型
+     * @return the shallow cloned object | 浅拷贝的对象
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T shallowClone(T original) {
+        if (original == null) {
+            return null;
+        }
+        try {
+            Class<?> type = original.getClass();
+            T clone = (T) createNewInstance(type);
+            Class<?> current = type;
+            while (current != null && current != Object.class) {
+                for (Field field : current.getDeclaredFields()) {
+                    int modifiers = field.getModifiers();
+                    if (Modifier.isStatic(modifiers) || field.isSynthetic()) {
+                        continue;
+                    }
+                    field.setAccessible(true);
+                    field.set(clone, field.get(original));
+                }
+                current = current.getSuperclass();
+            }
+            return clone;
+        } catch (Exception e) {
+            throw new OpenDeepCloneException("Shallow clone failed for type: " + original.getClass().getName(), e);
+        }
+    }
+
+    // ==================== Copy To | 合并复制 ====================
+
+    /**
+     * Copies all non-null fields from source to an existing target object
+     * 将源对象的所有非 null 字段复制到已有的目标对象
+     *
+     * @param source the source object | 源对象
+     * @param target the target object | 目标对象
+     * @param <T>    the object type | 对象类型
+     * @return the target object with copied fields | 复制了字段的目标对象
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T copyTo(T source, T target) {
+        if (source == null || target == null) {
+            return target;
+        }
+        try {
+            Class<?> type = source.getClass();
+            Class<?> current = type;
+            while (current != null && current != Object.class) {
+                for (Field field : current.getDeclaredFields()) {
+                    int modifiers = field.getModifiers();
+                    if (Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers) || field.isSynthetic()) {
+                        continue;
+                    }
+                    field.setAccessible(true);
+                    Object value = field.get(source);
+                    if (value != null) {
+                        field.set(target, DEFAULT_CLONER.clone(value));
+                    }
+                }
+                current = current.getSuperclass();
+            }
+            return target;
+        } catch (Exception e) {
+            throw new OpenDeepCloneException("CopyTo failed: " + e.getMessage(), e);
+        }
+    }
+
+    // ==================== Policy-based Clone | 策略克隆 ====================
+
+    /**
+     * Deep clones with a specific clone policy
+     * 使用指定策略进行深度克隆
+     *
+     * @param original the original object | 原始对象
+     * @param policy   the clone policy | 克隆策略
+     * @param <T>      the object type | 对象类型
+     * @return the cloned object | 克隆的对象
+     */
+    public static <T> T cloneWith(T original, ClonePolicy policy) {
+        if (original == null) {
+            return null;
+        }
+        Cloner cloner = builder().policy(policy).build();
+        return cloner.clone(original);
+    }
+
+    // ==================== Internal | 内部方法 ====================
+
+    /**
+     * Creates a new instance, trying default constructor first then Unsafe
+     * 创建新实例，优先尝试默认构造器再回退到 Unsafe
+     */
+    private static Object createNewInstance(Class<?> type) throws Exception {
+        try {
+            var ctor = type.getDeclaredConstructor();
+            ctor.setAccessible(true);
+            return ctor.newInstance();
+        } catch (NoSuchMethodException e) {
+            if (UnsafeCloner.isAvailable()) {
+                return UnsafeCloner.allocateInstanceStatic(type);
+            }
+            throw new OpenDeepCloneException("No default constructor and Unsafe not available for: " + type.getName());
+        }
     }
 
     // ==================== Utility Methods | 工具方法 ====================

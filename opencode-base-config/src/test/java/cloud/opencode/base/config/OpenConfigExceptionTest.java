@@ -95,7 +95,9 @@ class OpenConfigExceptionTest {
 
             assertThat(ex.configKey()).isEqualTo("port");
             assertThat(ex.getMessage()).contains("port");
-            assertThat(ex.getMessage()).contains("abc");
+            // Value is redacted for security — must NOT contain the raw value
+            assertThat(ex.getMessage()).doesNotContain("abc");
+            assertThat(ex.getMessage()).contains("redacted");
             assertThat(ex.getMessage()).contains("Integer");
         }
 

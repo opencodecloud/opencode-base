@@ -59,6 +59,7 @@ public class SafeImageService implements AutoCloseable {
     private final Semaphore semaphore;
     private final ExecutorService executor;
     private final AtomicInteger activeCount;
+    private volatile boolean closed;
 
     /**
      * Create safe image service
@@ -208,6 +209,9 @@ public class SafeImageService implements AutoCloseable {
      * 使用超时和并发控制执行操作
      */
     private <T> T executeWithTimeout(Callable<T> operation) throws ImageException {
+        if (closed) {
+            throw new ImageOperationException("SafeImageService has been closed");
+        }
         if (!semaphore.tryAcquire()) {
             throw ImageResourceException.tooManyRequests();
         }
@@ -238,6 +242,7 @@ public class SafeImageService implements AutoCloseable {
 
     @Override
     public void close() {
+        closed = true;
         executor.shutdown();
         try {
             if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {

@@ -4,6 +4,7 @@ import cloud.opencode.base.io.exception.OpenIOOperationException;
 
 import java.io.*;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -418,19 +419,36 @@ public final class OpenStream {
      */
     public static boolean contentEquals(InputStream input1, InputStream input2) {
         try {
-            BufferedInputStream bis1 = buffer(input1);
-            BufferedInputStream bis2 = buffer(input2);
-            int ch1, ch2;
-            while ((ch1 = bis1.read()) != -1) {
-                ch2 = bis2.read();
-                if (ch1 != ch2) {
+            byte[] buf1 = new byte[DEFAULT_BUFFER_SIZE];
+            byte[] buf2 = new byte[DEFAULT_BUFFER_SIZE];
+            while (true) {
+                int read1 = readFully(input1, buf1);
+                int read2 = readFully(input2, buf2);
+                if (read1 != read2) {
+                    return false;
+                }
+                if (read1 == -1) {
+                    return true;
+                }
+                if (!Arrays.equals(buf1, 0, read1, buf2, 0, read2)) {
                     return false;
                 }
             }
-            return bis2.read() == -1;
         } catch (IOException e) {
             throw OpenIOOperationException.readFailed(e);
         }
+    }
+
+    private static int readFully(InputStream in, byte[] buf) throws IOException {
+        int total = 0;
+        while (total < buf.length) {
+            int read = in.read(buf, total, buf.length - total);
+            if (read == -1) {
+                return total == 0 ? -1 : total;
+            }
+            total += read;
+        }
+        return total;
     }
 
     /**
@@ -443,18 +461,35 @@ public final class OpenStream {
      */
     public static boolean contentEquals(Reader reader1, Reader reader2) {
         try {
-            BufferedReader br1 = reader1 instanceof BufferedReader br ? br : new BufferedReader(reader1);
-            BufferedReader br2 = reader2 instanceof BufferedReader br ? br : new BufferedReader(reader2);
-            int ch1, ch2;
-            while ((ch1 = br1.read()) != -1) {
-                ch2 = br2.read();
-                if (ch1 != ch2) {
+            char[] buf1 = new char[DEFAULT_BUFFER_SIZE];
+            char[] buf2 = new char[DEFAULT_BUFFER_SIZE];
+            while (true) {
+                int read1 = readFullyChars(reader1, buf1);
+                int read2 = readFullyChars(reader2, buf2);
+                if (read1 != read2) {
+                    return false;
+                }
+                if (read1 == -1) {
+                    return true;
+                }
+                if (!Arrays.equals(buf1, 0, read1, buf2, 0, read2)) {
                     return false;
                 }
             }
-            return br2.read() == -1;
         } catch (IOException e) {
             throw OpenIOOperationException.readFailed(e);
         }
+    }
+
+    private static int readFullyChars(Reader reader, char[] buf) throws IOException {
+        int total = 0;
+        while (total < buf.length) {
+            int read = reader.read(buf, total, buf.length - total);
+            if (read == -1) {
+                return total == 0 ? -1 : total;
+            }
+            total += read;
+        }
+        return total;
     }
 }

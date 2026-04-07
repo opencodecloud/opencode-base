@@ -65,6 +65,15 @@ public final class JsonPointer {
 
     private static final Pattern ARRAY_INDEX_PATTERN = Pattern.compile("^(0|[1-9]\\d*)$");
 
+    private static final int CACHE_SIZE = 256;
+    private static final Map<String, JsonPointer> PARSE_CACHE = Collections.synchronizedMap(
+            new LinkedHashMap<>(CACHE_SIZE, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, JsonPointer> eldest) {
+                    return size() > CACHE_SIZE;
+                }
+            });
+
     /**
      * Original pointer string
      * 原始指针字符串
@@ -92,24 +101,25 @@ public final class JsonPointer {
      */
     public static JsonPointer parse(String pointer) {
         Objects.requireNonNull(pointer, "Pointer must not be null");
-
         if (pointer.isEmpty()) {
             return ROOT;
         }
-
+        JsonPointer cached = PARSE_CACHE.get(pointer);
+        if (cached != null) {
+            return cached;
+        }
         if (!pointer.startsWith("/")) {
             throw OpenJsonProcessingException.pathError(
                     "JSON Pointer must start with '/' or be empty: " + pointer);
         }
-
         String[] parts = pointer.substring(1).split("/", -1);
         List<String> tokens = new ArrayList<>(parts.length);
-
         for (String part : parts) {
             tokens.add(unescape(part));
         }
-
-        return new JsonPointer(pointer, List.copyOf(tokens));
+        JsonPointer result = new JsonPointer(pointer, List.copyOf(tokens));
+        PARSE_CACHE.put(pointer, result);
+        return result;
     }
 
     /**
@@ -208,7 +218,14 @@ public final class JsonPointer {
                         "Invalid array index: " + token + " at " +
                                 toPointerString(tokens.subList(0, index + 1)));
             }
-            int arrayIndex = Integer.parseInt(token);
+            int arrayIndex;
+            try {
+                arrayIndex = Integer.parseInt(token);
+            } catch (NumberFormatException e) {
+                throw OpenJsonProcessingException.pathError(
+                        "Array index out of range: " + token + " at " +
+                                toPointerString(tokens.subList(0, index + 1)));
+            }
             if (arrayIndex >= node.size()) {
                 return null;
             }
@@ -221,7 +238,12 @@ public final class JsonPointer {
         if (node.isObject()) {
             return node.get(token);
         } else if (node.isArray() && isArrayIndex(token)) {
-            int arrayIndex = Integer.parseInt(token);
+            int arrayIndex;
+            try {
+                arrayIndex = Integer.parseInt(token);
+            } catch (NumberFormatException e) {
+                return null;
+            }
             if (arrayIndex < node.size()) {
                 return node.get(arrayIndex);
             }
@@ -340,7 +362,13 @@ public final class JsonPointer {
     }
 
     private static boolean isArrayIndex(String token) {
-        return ARRAY_INDEX_PATTERN.matcher(token).matches();
+        if (token.isEmpty() || token.length() > 10) return false;
+        if (token.charAt(0) == '0') return token.length() == 1;
+        for (int i = 0; i < token.length(); i++) {
+            char c = token.charAt(i);
+            if (c < '0' || c > '9') return false;
+        }
+        return true;
     }
 
     private static String toPointerString(List<String> tokens) {

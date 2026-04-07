@@ -83,7 +83,7 @@ class DefaultPooledObjectTest {
         @DisplayName("markBorrowed更新借用信息")
         void testMarkBorrowed() {
             DefaultPooledObject<String> pooled = new DefaultPooledObject<>("test");
-            Instant beforeBorrow = Instant.now();
+            Instant beforeBorrow = Instant.now().minusMillis(1);
 
             pooled.markBorrowed();
 
@@ -109,7 +109,8 @@ class DefaultPooledObjectTest {
         void testMarkReturned() {
             DefaultPooledObject<String> pooled = new DefaultPooledObject<>("test");
             pooled.markBorrowed();
-            Instant beforeReturn = Instant.now();
+            // Allow 1ms tolerance for wall-clock vs monotonic-clock divergence
+            Instant beforeReturn = Instant.now().minusMillis(1);
 
             pooled.markReturned();
 
@@ -185,9 +186,9 @@ class DefaultPooledObjectTest {
         @Test
         @DisplayName("getCreateInstant返回创建时间")
         void testGetCreateInstant() {
-            Instant before = Instant.now();
+            Instant before = Instant.now().minusMillis(1);
             DefaultPooledObject<String> pooled = new DefaultPooledObject<>("test");
-            Instant after = Instant.now();
+            Instant after = Instant.now().plusMillis(1);
 
             assertThat(pooled.getCreateInstant())
                     .isAfterOrEqualTo(before)
@@ -198,7 +199,8 @@ class DefaultPooledObjectTest {
         @DisplayName("getLastBorrowInstant返回最后借用时间")
         void testGetLastBorrowInstant() {
             DefaultPooledObject<String> pooled = new DefaultPooledObject<>("test");
-            Instant before = Instant.now();
+            // Allow 1ms tolerance for wall-clock vs monotonic-clock divergence
+            Instant before = Instant.now().minusMillis(1);
             pooled.markBorrowed();
 
             assertThat(pooled.getLastBorrowInstant()).isAfterOrEqualTo(before);
@@ -208,7 +210,8 @@ class DefaultPooledObjectTest {
         @DisplayName("getLastReturnInstant返回最后归还时间")
         void testGetLastReturnInstant() {
             DefaultPooledObject<String> pooled = new DefaultPooledObject<>("test");
-            Instant before = Instant.now();
+            // Allow 1ms tolerance for wall-clock vs monotonic-clock divergence
+            Instant before = Instant.now().minusMillis(1);
             pooled.markReturned();
 
             assertThat(pooled.getLastReturnInstant()).isAfterOrEqualTo(before);
@@ -218,7 +221,8 @@ class DefaultPooledObjectTest {
         @DisplayName("getLastUseInstant返回最后使用时间")
         void testGetLastUseInstant() {
             DefaultPooledObject<String> pooled = new DefaultPooledObject<>("test");
-            Instant before = Instant.now();
+            // Allow 1ms tolerance for wall-clock vs monotonic-clock divergence
+            Instant before = Instant.now().minusMillis(1);
             pooled.markBorrowed();
 
             assertThat(pooled.getLastUseInstant()).isAfterOrEqualTo(before);

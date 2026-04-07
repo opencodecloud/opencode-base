@@ -1,15 +1,22 @@
 package cloud.opencode.base.lunar.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.io.Serial;
+import java.util.Objects;
+
 /**
  * Lunar Exception
  * 农历异常基类
  *
- * <p>Base exception for all lunar calendar operations.</p>
- * <p>所有农历操作的异常基类。</p>
+ * <p>Base exception for all lunar calendar operations.
+ * Extends {@link OpenException} with component name "Lunar".</p>
+ * <p>所有农历操作的异常基类。继承 {@link OpenException}，组件名为 "Lunar"。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
- *   <li>Error code association - 错误码关联</li>
+ *   <li>Error code association (LunarErrorCode) - 错误码关联</li>
+ *   <li>OpenException hierarchy integration - OpenException 体系集成</li>
  *   <li>Cause chaining support - 原因链支持</li>
  *   <li>Base class for all lunar exceptions - 所有农历异常的基类</li>
  * </ul>
@@ -31,9 +38,18 @@ package cloud.opencode.base.lunar.exception;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-lunar V1.0.0
  */
-public class LunarException extends RuntimeException {
+public class LunarException extends OpenException {
 
-    private final LunarErrorCode errorCode;
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Component name for OpenException
+     * OpenException 的组件名称
+     */
+    private static final String COMPONENT = "Lunar";
+
+    private final LunarErrorCode lunarErrorCode;
 
     /**
      * Create lunar exception
@@ -42,8 +58,8 @@ public class LunarException extends RuntimeException {
      * @param message the error message | 错误消息
      */
     public LunarException(String message) {
-        super(message);
-        this.errorCode = LunarErrorCode.UNKNOWN;
+        super(COMPONENT, LunarErrorCode.UNKNOWN.toStringCode(), message);
+        this.lunarErrorCode = LunarErrorCode.UNKNOWN;
     }
 
     /**
@@ -54,8 +70,8 @@ public class LunarException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public LunarException(String message, LunarErrorCode errorCode) {
-        super(message);
-        this.errorCode = errorCode;
+        super(COMPONENT, Objects.requireNonNull(errorCode, "errorCode must not be null").toStringCode(), message);
+        this.lunarErrorCode = errorCode;
     }
 
     /**
@@ -66,8 +82,8 @@ public class LunarException extends RuntimeException {
      * @param cause the cause | 原因
      */
     public LunarException(String message, Throwable cause) {
-        super(message, cause);
-        this.errorCode = LunarErrorCode.UNKNOWN;
+        super(COMPONENT, LunarErrorCode.UNKNOWN.toStringCode(), message, cause);
+        this.lunarErrorCode = LunarErrorCode.UNKNOWN;
     }
 
     /**
@@ -79,17 +95,17 @@ public class LunarException extends RuntimeException {
      * @param errorCode the error code | 错误码
      */
     public LunarException(String message, Throwable cause, LunarErrorCode errorCode) {
-        super(message, cause);
-        this.errorCode = errorCode;
+        super(COMPONENT, Objects.requireNonNull(errorCode, "errorCode must not be null").toStringCode(), message, cause);
+        this.lunarErrorCode = errorCode;
     }
 
     /**
-     * Get error code
-     * 获取错误码
+     * Get lunar error code
+     * 获取农历错误码
      *
-     * @return the error code | 错误码
+     * @return the lunar error code | 农历错误码
      */
-    public LunarErrorCode getErrorCode() {
-        return errorCode;
+    public LunarErrorCode getLunarErrorCode() {
+        return lunarErrorCode;
     }
 }

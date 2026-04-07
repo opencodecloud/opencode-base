@@ -53,6 +53,8 @@ public record FeatureContext(
     Map<String, Object> attributes
 ) {
 
+    private static final FeatureContext EMPTY = new FeatureContext(null, null, Map.of());
+
     /**
      * Create an empty context
      * 创建空上下文
@@ -60,7 +62,7 @@ public record FeatureContext(
      * @return empty context | 空上下文
      */
     public static FeatureContext empty() {
-        return new FeatureContext(null, null, Map.of());
+        return EMPTY;
     }
 
     /**

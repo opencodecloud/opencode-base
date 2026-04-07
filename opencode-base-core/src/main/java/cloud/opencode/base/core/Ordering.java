@@ -367,9 +367,14 @@ public abstract class Ordering<T> implements Comparator<T> {
      * 返回给定可迭代对象的排序副本。
      */
     public List<T> sortedCopy(Iterable<T> iterable) {
-        List<T> list = new ArrayList<>();
-        for (T element : iterable) {
-            list.add(element);
+        List<T> list;
+        if (iterable instanceof Collection<T> c) {
+            list = new ArrayList<>(c);
+        } else {
+            list = new ArrayList<>();
+            for (T element : iterable) {
+                list.add(element);
+            }
         }
         list.sort(this);
         return list;

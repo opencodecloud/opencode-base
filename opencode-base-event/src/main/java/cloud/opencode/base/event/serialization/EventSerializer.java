@@ -239,13 +239,23 @@ public final class EventSerializer {
             "java.lang.Runtime",
             "java.lang.ProcessBuilder",
             "java.lang.reflect.Proxy",
+            "java.lang.Thread",
+            "java.beans.XMLDecoder",
+            "java.net.URLClassLoader",
             "java.rmi.",
             "javax.naming.",
             "javax.script.",
+            "javax.management.",
+            "javax.el.",
             "sun.",
             "com.sun.",
             "org.apache.commons.collections",
             "org.apache.xalan",
+            "org.apache.bcel",
+            "org.codehaus.groovy",
+            "org.mozilla.javascript",
+            "javassist.",
+            "org.springframework.expression",
     };
 
     @SuppressWarnings("unchecked")
@@ -281,8 +291,8 @@ public final class EventSerializer {
                             return ObjectInputFilter.Status.ALLOWED;
                         }
                     }
-                    // Allow array types of allowed classes
-                    if (className.startsWith("[L")) {
+                    // Allow array types of allowed classes (format: "[Lcom.example.Foo;")
+                    if (className.startsWith("[L") && className.length() > 3 && className.endsWith(";")) {
                         String elementClass = className.substring(2, className.length() - 1);
                         for (String allowed : ALLOWED_PACKAGE_PREFIXES) {
                             if (elementClass.startsWith(allowed)) {
@@ -293,7 +303,8 @@ public final class EventSerializer {
                     // Reject everything else by default
                     return ObjectInputFilter.Status.REJECTED;
                 }
-                return ObjectInputFilter.Status.ALLOWED;
+                // Null class (e.g., proxy, lambda) — reject by default for safety
+                return ObjectInputFilter.Status.REJECTED;
             });
             Object obj = ois.readObject();
             if (!type.isInstance(obj)) {

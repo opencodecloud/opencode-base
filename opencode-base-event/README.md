@@ -11,6 +11,13 @@ Event-driven architecture support with publish/subscribe pattern and virtual thr
 - Event cancellation support
 - Annotation-based listener registration (`@Subscribe`, `@Async`, `@Priority`)
 - Lambda listener registration
+- **Subscription handles** (AutoCloseable) for precise lifecycle management
+- **Dead event detection** -- unhandled events are wrapped as `DeadEvent` and re-dispatched
+- **Event filtering** -- subscribe with `Predicate` to selectively receive events
+- **Interceptor chain** -- pre/post publish hooks for cross-cutting concerns
+- **Sticky events** -- late subscribers receive the last event of a given type
+- **Event bus metrics** -- operational statistics (published, delivered, errors, dead events)
+- **Test utilities** -- `EventCaptor` for capturing and asserting events in tests
 - Data event wrapper for arbitrary payloads
 - Waitable events with timeout support
 - Event sourcing with pluggable event store
@@ -24,6 +31,7 @@ Event-driven architecture support with publish/subscribe pattern and virtual thr
 - Singleton and per-instance modes
 - AutoCloseable lifecycle management
 - Thread-safe
+- Exception hierarchy extends `OpenException` (unified OpenCode exception base)
 
 ## Maven
 
@@ -31,7 +39,7 @@ Event-driven architecture support with publish/subscribe pattern and virtual thr
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-event</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -43,7 +51,9 @@ Event-driven architecture support with publish/subscribe pattern and virtual thr
 | `Event` | Base event class with ID, timestamp, source, and cancellation |
 | `DataEvent` | Generic data-carrying event wrapper |
 | `WaitableEvent` | Event that supports blocking wait for processing completion |
+| `DeadEvent` | Wraps events that have no subscribers (V1.0.3) |
 | `EventListener` | Functional event listener interface |
+| `Subscription` | AutoCloseable subscription handle (V1.0.3) |
 | **Annotations** | |
 | `@Subscribe` | Marks a method as an event listener |
 | `@Async` | Marks a listener for asynchronous execution |
@@ -52,6 +62,8 @@ Event-driven architecture support with publish/subscribe pattern and virtual thr
 | `EventDispatcher` | Event dispatcher interface |
 | `SyncDispatcher` | Synchronous event dispatcher |
 | `AsyncDispatcher` | Asynchronous event dispatcher using virtual threads |
+| **Interceptors** | |
+| `EventInterceptor` | Pre/post publish interceptor interface (V1.0.3) |
 | **Exception Handlers** | |
 | `EventExceptionHandler` | Exception handler interface |
 | `LoggingExceptionHandler` | Logs exceptions during event processing |
@@ -74,8 +86,11 @@ Event-driven architecture support with publish/subscribe pattern and virtual thr
 | `EventRecord` | Stored event record |
 | **Monitor** | |
 | `HeartbeatMonitor` | Heartbeat monitor for event bus health |
+| `EventBusMetrics` | Event bus statistics snapshot (V1.0.3) |
+| **Testing** | |
+| `EventCaptor` | Test utility for capturing and asserting events (V1.0.3) |
 | **Exceptions** | |
-| `EventException` | General event exception |
+| `EventException` | General event exception (extends `OpenException`) |
 | `EventListenerException` | Listener-specific exception |
 | `EventPublishException` | Publish-specific exception |
 | `EventSecurityException` | Security-related exception |
@@ -85,8 +100,7 @@ Event-driven architecture support with publish/subscribe pattern and virtual thr
 ## Quick Start
 
 ```java
-import cloud.opencode.base.event.OpenEvent;
-import cloud.opencode.base.event.Event;
+import cloud.opencode.base.event.*;
 
 // Get default event bus
 OpenEvent eventBus = OpenEvent.getDefault();
@@ -96,38 +110,127 @@ eventBus.on(UserRegisteredEvent.class, event -> {
     System.out.println("User registered: " + event.getUserId());
 });
 
-// Register annotation-based listener
-eventBus.register(new MyEventHandler());
+// Subscribe with Subscription handle (precise unsubscription)
+Subscription sub = eventBus.subscribe(OrderEvent.class, event -> {
+    processOrder(event);
+});
+sub.unsubscribe(); // or use try-with-resources
 
-// Publish event synchronously
+// Subscribe with filter
+eventBus.subscribe(OrderEvent.class,
+    event -> processLargeOrder(event),
+    event -> event.getAmount() > 1000);
+
+// Dead event detection
+eventBus.subscribe(DeadEvent.class, dead -> {
+    log.warn("Unhandled event: {}", dead.getOriginalEvent());
+});
+
+// Sticky events
+eventBus.publishSticky(new ConfigEvent(config));
+// Late subscriber receives immediately:
+eventBus.subscribe(ConfigEvent.class, e -> applyConfig(e));
+
+// Publish event
 eventBus.publish(new UserRegisteredEvent(userId, email));
 
-// Publish event asynchronously
+// Async publish
 eventBus.publishAsync(event)
     .thenRun(() -> System.out.println("Event processed"));
 
-// Publish and wait with timeout
-boolean completed = eventBus.publishAndWait(event, Duration.ofSeconds(5));
+// Metrics
+EventBusMetrics metrics = eventBus.getMetrics();
+System.out.println("Published: " + metrics.totalPublished());
 
-// Publish arbitrary data
-eventBus.publish("Hello, World!");
-
-// Custom event bus with event store
+// Custom event bus with interceptor
 OpenEvent custom = OpenEvent.builder()
     .eventStore(new InMemoryEventStore(10000))
     .exceptionHandler(new LoggingExceptionHandler())
+    .interceptor(event -> { log.info("Publishing: {}", event); return true; })
     .build();
 
-// Annotation-based handler class
-public class MyEventHandler {
-    @Subscribe
-    @Async
-    @Priority(10)
-    public void onUserRegistered(UserRegisteredEvent event) {
-        // Process asynchronously with high priority
-    }
-}
+// Test utility
+EventCaptor<MyEvent> captor = new EventCaptor<>();
+eventBus.subscribe(MyEvent.class, captor);
+eventBus.publish(new MyEvent());
+assertThat(captor.count()).isEqualTo(1);
 ```
+
+## OpenEvent Method Reference
+
+### Factory Methods
+
+| Method | Description |
+|--------|-------------|
+| `OpenEvent.getDefault()` | Get the shared singleton event bus instance |
+| `OpenEvent.create()` | Create a new independent event bus instance |
+| `OpenEvent.builder()` | Create a builder for customized event bus configuration |
+
+### Listener Registration
+
+| Method | Description |
+|--------|-------------|
+| `subscribe(Class<E>, EventListener<E>)` | Subscribe and return a `Subscription` handle |
+| `subscribe(Class<E>, EventListener<E>, Predicate<E>)` | Subscribe with event filter predicate |
+| `subscribe(Class<E>, EventListener<E>, Predicate<E>, boolean, int)` | Subscribe with filter, async flag, and priority |
+| `on(Class<E>, EventListener<E>)` | Register lambda listener (legacy, no return) |
+| `on(Class<E>, EventListener<E>, boolean)` | Register lambda listener with async option |
+| `on(Class<E>, EventListener<E>, boolean, int)` | Register lambda listener with async and priority |
+| `register(Object)` | Register annotation-based subscriber (`@Subscribe`) |
+| `unregister(Object)` | Unregister all listeners from a subscriber |
+
+### Event Publishing
+
+| Method | Description |
+|--------|-------------|
+| `publish(Event)` | Publish event synchronously |
+| `publishAsync(Event)` | Publish event asynchronously, returns `CompletableFuture` |
+| `publish(T)` | Publish arbitrary data wrapped as `DataEvent` |
+| `publish(T, String)` | Publish data with source identifier |
+| `publishAndWait(Event, Duration)` | Publish and block until processing completes or timeout |
+| `publishSticky(Event)` | Publish sticky event (stored + replayed to future subscribers) |
+
+### Sticky Events
+
+| Method | Description |
+|--------|-------------|
+| `publishSticky(Event)` | Publish and store a sticky event (last-one-wins per type) |
+| `getStickyEvent(Class<E>)` | Get the last sticky event of a given type, or null |
+| `removeStickyEvent(Class<E>)` | Remove and return the sticky event of a given type |
+
+### Interceptors
+
+| Method | Description |
+|--------|-------------|
+| `addInterceptor(EventInterceptor)` | Add a pre/post publish interceptor |
+| `removeInterceptor(EventInterceptor)` | Remove an interceptor |
+
+### Metrics
+
+| Method | Description |
+|--------|-------------|
+| `getMetrics()` | Get current metrics snapshot (`EventBusMetrics` record) |
+| `resetMetrics()` | Reset all metric counters to zero |
+
+### Configuration
+
+| Method | Description |
+|--------|-------------|
+| `setEventStore(EventStore)` | Set the event store for event sourcing |
+| `getEventStore()` | Get the current event store |
+| `setExceptionHandler(EventExceptionHandler)` | Set the exception handler |
+| `close()` | Shut down dispatchers and executor, release resources |
+
+### Builder Options
+
+| Method | Description |
+|--------|-------------|
+| `asyncExecutor(ExecutorService)` | Custom async executor |
+| `syncDispatcher(EventDispatcher)` | Custom sync dispatcher |
+| `asyncDispatcher(EventDispatcher)` | Custom async dispatcher |
+| `eventStore(EventStore)` | Event store for event sourcing |
+| `exceptionHandler(EventExceptionHandler)` | Custom exception handler |
+| `interceptor(EventInterceptor)` | Add interceptor during construction |
 
 ## Requirements
 

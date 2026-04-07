@@ -445,4 +445,150 @@ class CaptchaStrengthTest {
             }
         }
     }
+
+    // ==================== Sprint 1 Enhancement Flag Tests ====================
+
+    /**
+     * Tests for Sprint 1 enhancement flags per strength level.
+     * Sprint 1 各强度级别增强标志测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("EASY Enhancement Flags Tests")
+    class EasyEnhancementFlagsTests {
+
+        @Test
+        @DisplayName("EASY has all enhancement flags disabled")
+        void should_haveAllFlagsDisabled_when_easy() {
+            assertThat(CaptchaStrength.EASY.isRandomFontPerChar()).isFalse();
+            assertThat(CaptchaStrength.EASY.isBezierNoiseEnabled()).isFalse();
+            assertThat(CaptchaStrength.EASY.isSineWarpEnabled()).isFalse();
+            assertThat(CaptchaStrength.EASY.isOutlineShadowEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("EASY has charOverlapRatio = 0")
+        void should_haveZeroOverlap_when_easy() {
+            assertThat(CaptchaStrength.EASY.getCharOverlapRatio()).isEqualTo(0.0f);
+        }
+    }
+
+    /**
+     * Tests for HARD enhancement flags.
+     * HARD 增强标志测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("HARD Enhancement Flags Tests")
+    class HardEnhancementFlagsTests {
+
+        @Test
+        @DisplayName("HARD has randomFontPerChar enabled")
+        void should_enableRandomFont_when_hard() {
+            assertThat(CaptchaStrength.HARD.isRandomFontPerChar()).isTrue();
+        }
+
+        @Test
+        @DisplayName("HARD has bezierNoiseEnabled enabled")
+        void should_enableBezierNoise_when_hard() {
+            assertThat(CaptchaStrength.HARD.isBezierNoiseEnabled()).isTrue();
+        }
+
+        @Test
+        @DisplayName("HARD has outlineShadowEnabled enabled")
+        void should_enableOutlineShadow_when_hard() {
+            assertThat(CaptchaStrength.HARD.isOutlineShadowEnabled()).isTrue();
+        }
+
+        @Test
+        @DisplayName("HARD has charOverlapRatio = 0.1")
+        void should_haveOverlap0point1_when_hard() {
+            assertThat(CaptchaStrength.HARD.getCharOverlapRatio()).isEqualTo(0.1f);
+        }
+    }
+
+    /**
+     * Tests for EXTREME enhancement flags.
+     * EXTREME 增强标志测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("EXTREME Enhancement Flags Tests")
+    class ExtremeEnhancementFlagsTests {
+
+        @Test
+        @DisplayName("EXTREME has all enhancement flags enabled")
+        void should_haveAllFlagsEnabled_when_extreme() {
+            assertThat(CaptchaStrength.EXTREME.isRandomFontPerChar()).isTrue();
+            assertThat(CaptchaStrength.EXTREME.isBezierNoiseEnabled()).isTrue();
+            assertThat(CaptchaStrength.EXTREME.isSineWarpEnabled()).isTrue();
+            assertThat(CaptchaStrength.EXTREME.isOutlineShadowEnabled()).isTrue();
+        }
+
+        @Test
+        @DisplayName("EXTREME has charOverlapRatio = 0.2")
+        void should_haveOverlap0point2_when_extreme() {
+            assertThat(CaptchaStrength.EXTREME.getCharOverlapRatio()).isEqualTo(0.2f);
+        }
+    }
+
+    /**
+     * Tests for applyTo() setting Sprint 1 new fields to Builder.
+     * applyTo() 设置 Sprint 1 新字段到 Builder 测试。
+     *
+     * @author Leon Soo
+     * @since JDK 25, opencode-base-captcha V1.0.3
+     */
+    @Nested
+    @DisplayName("ApplyTo Sprint 1 New Fields Tests")
+    class ApplyToNewFieldsTests {
+
+        @Test
+        @DisplayName("applyTo sets all enhancement flags for EXTREME")
+        void should_setAllNewFields_when_applyToExtreme() {
+            CaptchaConfig config = CaptchaStrength.EXTREME
+                .applyTo(CaptchaConfig.builder())
+                .build();
+
+            assertThat(config.isRandomFontPerChar()).isTrue();
+            assertThat(config.isBezierNoiseEnabled()).isTrue();
+            assertThat(config.isSineWarpEnabled()).isTrue();
+            assertThat(config.isOutlineShadowEnabled()).isTrue();
+            assertThat(config.getCharOverlapRatio()).isEqualTo(0.2f);
+        }
+
+        @Test
+        @DisplayName("applyTo sets all enhancement flags for EASY")
+        void should_setAllNewFieldsDisabled_when_applyToEasy() {
+            CaptchaConfig config = CaptchaStrength.EASY
+                .applyTo(CaptchaConfig.builder())
+                .build();
+
+            assertThat(config.isRandomFontPerChar()).isFalse();
+            assertThat(config.isBezierNoiseEnabled()).isFalse();
+            assertThat(config.isSineWarpEnabled()).isFalse();
+            assertThat(config.isOutlineShadowEnabled()).isFalse();
+            assertThat(config.getCharOverlapRatio()).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("each strength produces config with its enhancement flags via applyTo")
+        void should_produceCorrectEnhancementFlags_when_eachStrengthApplied() {
+            for (CaptchaStrength strength : CaptchaStrength.values()) {
+                CaptchaConfig config = strength.applyTo(CaptchaConfig.builder()).build();
+
+                assertThat(config.isRandomFontPerChar()).isEqualTo(strength.isRandomFontPerChar());
+                assertThat(config.isBezierNoiseEnabled()).isEqualTo(strength.isBezierNoiseEnabled());
+                assertThat(config.isSineWarpEnabled()).isEqualTo(strength.isSineWarpEnabled());
+                assertThat(config.isOutlineShadowEnabled()).isEqualTo(strength.isOutlineShadowEnabled());
+                assertThat(config.getCharOverlapRatio()).isEqualTo(strength.getCharOverlapRatio());
+            }
+        }
+    }
 }

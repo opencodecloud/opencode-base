@@ -209,7 +209,7 @@ public final class StringFunctions {
         functions.put("lpad", args -> {
             if (args.length < 2 || args[0] == null) return args.length > 0 ? args[0] : null;
             String s = args[0].toString();
-            int length = toInt(args[1]);
+            int length = toSafeLength(args[1]);
             String pad = args.length >= 3 ? toString(args[2]) : " ";
             if (pad.isEmpty()) pad = " ";
             while (s.length() < length) {
@@ -221,7 +221,7 @@ public final class StringFunctions {
         functions.put("rpad", args -> {
             if (args.length < 2 || args[0] == null) return args.length > 0 ? args[0] : null;
             String s = args[0].toString();
-            int length = toInt(args[1]);
+            int length = toSafeLength(args[1]);
             String pad = args.length >= 3 ? toString(args[2]) : " ";
             if (pad.isEmpty()) pad = " ";
             while (s.length() < length) {
@@ -233,7 +233,8 @@ public final class StringFunctions {
         // Repeat
         functions.put("repeat", args -> {
             if (args.length < 2 || args[0] == null) return "";
-            return args[0].toString().repeat(Math.max(0, toInt(args[1])));
+            int count = toSafeLength(args[1]);
+            return args[0].toString().repeat(Math.max(0, count));
         });
 
         // Reverse
@@ -275,9 +276,17 @@ public final class StringFunctions {
         functions.put("format", args -> {
             if (args.length < 1) return "";
             String format = toString(args[0]);
+            if (format.length() > MAX_STRING_RESULT_LENGTH) {
+                throw OpenExpressionException.evaluationError(
+                        "Format string length " + format.length() + " exceeds maximum " + MAX_STRING_RESULT_LENGTH);
+            }
             Object[] formatArgs = new Object[args.length - 1];
             System.arraycopy(args, 1, formatArgs, 0, formatArgs.length);
-            return String.format(format, formatArgs);
+            try {
+                return String.format(format, formatArgs);
+            } catch (java.util.IllegalFormatException e) {
+                throw OpenExpressionException.evaluationError("Invalid format string: " + e.getMessage(), e);
+            }
         });
 
         return functions;
@@ -287,14 +296,37 @@ public final class StringFunctions {
         return value == null ? "" : value.toString();
     }
 
+    /** Maximum result length for string operations to prevent memory exhaustion. */
+    private static final int MAX_STRING_RESULT_LENGTH = 10_000_000;
+
     private static int toInt(Object value) {
         if (value == null) return 0;
-        if (value instanceof Number n) return n.intValue();
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (NumberFormatException e) {
-            return 0;
+        if (value instanceof Number n) {
+            long l = n.longValue();
+            if (l > Integer.MAX_VALUE || l < Integer.MIN_VALUE) {
+                throw OpenExpressionException.evaluationError(
+                        "Integer value out of range: " + l);
+            }
+            return (int) l;
         }
+        try {
+            return Integer.parseInt(value.toString().trim());
+        } catch (NumberFormatException e) {
+            throw OpenExpressionException.typeError("integer", value);
+        }
+    }
+
+    /**
+     * Convert to int with upper bound for string length operations.
+     * Prevents memory exhaustion via lpad/rpad/repeat with huge values.
+     */
+    private static int toSafeLength(Object value) {
+        int length = toInt(value);
+        if (length > MAX_STRING_RESULT_LENGTH) {
+            throw OpenExpressionException.evaluationError(
+                    "String operation length " + length + " exceeds maximum " + MAX_STRING_RESULT_LENGTH);
+        }
+        return length;
     }
 
     /**

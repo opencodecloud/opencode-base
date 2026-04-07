@@ -66,6 +66,7 @@ public final class RuleBuilder {
     private int priority = Rule.DEFAULT_PRIORITY;
     private String group;
     private boolean enabled = true;
+    private boolean terminal = false;
     private final List<Condition> conditions = new ArrayList<>();
     private final List<Action> actions = new ArrayList<>();
 
@@ -143,6 +144,29 @@ public final class RuleBuilder {
      */
     public RuleBuilder enabled(boolean enabled) {
         this.enabled = enabled;
+        return this;
+    }
+
+    /**
+     * Marks the rule as terminal (stops engine execution when fired)
+     * 将规则标记为终止规则（触发时停止引擎执行）
+     *
+     * @return this builder | 此构建器
+     */
+    public RuleBuilder terminal() {
+        this.terminal = true;
+        return this;
+    }
+
+    /**
+     * Sets whether the rule is terminal
+     * 设置规则是否为终止规则
+     *
+     * @param terminal whether terminal | 是否为终止规则
+     * @return this builder | 此构建器
+     */
+    public RuleBuilder terminal(boolean terminal) {
+        this.terminal = terminal;
         return this;
     }
 
@@ -265,6 +289,6 @@ public final class RuleBuilder {
                 ? actions.getFirst()
                 : new CompositeAction(actions);
 
-        return new DefaultRule(name, description, priority, group, enabled, finalCondition, finalAction);
+        return new DefaultRule(name, description, priority, group, enabled, finalCondition, finalAction, terminal);
     }
 }

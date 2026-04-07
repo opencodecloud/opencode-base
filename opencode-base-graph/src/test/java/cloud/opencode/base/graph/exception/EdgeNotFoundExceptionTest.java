@@ -29,7 +29,7 @@ class EdgeNotFoundExceptionTest {
             assertThat(ex.getMessage()).contains("Edge not found");
             assertThat(ex.getMessage()).contains("A");
             assertThat(ex.getMessage()).contains("B");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.EDGE_NOT_FOUND);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.EDGE_NOT_FOUND);
         }
     }
 
@@ -85,8 +85,8 @@ class EdgeNotFoundExceptionTest {
         void testErrorCode() {
             EdgeNotFoundException ex = new EdgeNotFoundException("A", "B");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.EDGE_NOT_FOUND);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(1002);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.EDGE_NOT_FOUND);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(1002);
         }
     }
 }

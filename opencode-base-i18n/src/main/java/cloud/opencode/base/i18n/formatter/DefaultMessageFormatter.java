@@ -98,10 +98,8 @@ public class DefaultMessageFormatter implements MessageFormatter {
             return template;
         }
 
-        MessageFormat format = getMessageFormat(template, locale);
-        synchronized (format) {
-            return format.format(args);
-        }
+        MessageFormat format = (MessageFormat) getMessageFormat(template, locale).clone();
+        return format.format(args);
     }
 
     @Override
@@ -150,7 +148,7 @@ public class DefaultMessageFormatter implements MessageFormatter {
             return new MessageFormat(template, locale);
         }
 
-        String cacheKey = template + "_" + locale.toString();
+        String cacheKey = template + '\0' + locale.toLanguageTag();
 
         // Check if already cached
         MessageFormat cached = cache.get(cacheKey);

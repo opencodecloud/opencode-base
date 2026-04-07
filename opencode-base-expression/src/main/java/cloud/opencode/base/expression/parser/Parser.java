@@ -15,22 +15,57 @@ import java.util.*;
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>Recursive descent parsing with operator precedence - 带运算符优先级的递归下降解析</li>
- *   <li>Support for ternary, logical, comparison, arithmetic, power operators - 支持三元、逻辑、比较、算术、幂运算符</li>
+ *   <li>Support for ternary, elvis, logical, comparison, arithmetic, power operators - 支持三元、Elvis、逻辑、比较、算术、幂运算符</li>
+ *   <li>Bitwise operators: {@code &, |, ^, ~, <<, >>} - 位运算符</li>
+ *   <li>In and between operators for membership and range tests - in和between运算符用于成员和范围测试</li>
+ *   <li>Lambda expressions: {@code x -> expr} - Lambda表达式</li>
+ *   <li>Map literals: {@code #{key: value}} - Map字面量</li>
+ *   <li>String interpolation: {@code "text ${expr}"} - 字符串插值</li>
  *   <li>Property access, method calls, index access - 属性访问、方法调用、索引访问</li>
  *   <li>Collection filter (.?[]) and projection (.![]) - 集合过滤和投影</li>
  *   <li>Null-safe navigation (?.) - 空安全导航</li>
  *   <li>Maximum nesting depth limit (200) - 最大嵌套深度限制（200）</li>
  * </ul>
  *
+ * <p><strong>Operator Precedence (low to high) | 运算符优先级（低到高）:</strong></p>
+ * <ol>
+ *   <li>Ternary: {@code ? :}</li>
+ *   <li>Elvis: {@code ?:}</li>
+ *   <li>Logical OR: {@code ||, or}</li>
+ *   <li>Logical AND: {@code &&, and}</li>
+ *   <li>Bitwise OR: {@code |}</li>
+ *   <li>Bitwise XOR: {@code ^}</li>
+ *   <li>Bitwise AND: {@code &}</li>
+ *   <li>Equality: {@code ==, !=, matches}</li>
+ *   <li>Relational: {@code <, <=, >, >=, in, between, instanceof}</li>
+ *   <li>Shift: {@code <<, >>}</li>
+ *   <li>Additive: {@code +, -}</li>
+ *   <li>Multiplicative: {@code *, /, %}</li>
+ *   <li>Power: {@code **}</li>
+ *   <li>Unary: {@code !, -, +, ~}</li>
+ *   <li>Postfix: {@code ., ?., [], .?[], .![]}</li>
+ *   <li>Primary: literals, identifiers, functions, lambdas, map literals</li>
+ * </ol>
+ *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
  * Node ast = Parser.parse("price * (1 - discount)");
  * Object result = ast.evaluate(ctx);
  *
- * // Or step by step
- * List<Token> tokens = Tokenizer.tokenize("a + b");
- * Parser parser = new Parser(tokens);
- * Node node = parser.parse();
+ * // Elvis operator
+ * Node elvis = Parser.parse("name ?: 'default'");
+ *
+ * // In operator
+ * Node in = Parser.parse("x in {1, 2, 3}");
+ *
+ * // Between operator
+ * Node between = Parser.parse("age between 18 and 65");
+ *
+ * // Lambda
+ * Node lambda = Parser.parse("filter(list, x -> x > 3)");
+ *
+ * // Map literal
+ * Node map = Parser.parse("#{name: 'Jon', age: 30}");
  * }</pre>
  *
  * <p><strong>Security | 安全性:</strong></p>
@@ -98,8 +133,10 @@ public class Parser {
         }
     }
 
+    // ==================== Precedence levels (low to high) ====================
+
     private Node parseTernary() {
-        Node condition = parseOr();
+        Node condition = parseElvis();
 
         if (match(TokenType.QUESTION)) {
             Node trueExpr = parseExpression();
@@ -109,6 +146,17 @@ public class Parser {
         }
 
         return condition;
+    }
+
+    private Node parseElvis() {
+        Node left = parseOr();
+
+        if (match(TokenType.ELVIS)) {
+            Node right = parseElvis(); // right-associative
+            return ElvisNode.of(left, right);
+        }
+
+        return left;
     }
 
     private Node parseOr() {
@@ -123,28 +171,61 @@ public class Parser {
     }
 
     private Node parseAnd() {
-        Node left = parseEquality();
+        Node left = parseBitwiseOr();
 
         while (match(TokenType.AND)) {
-            Node right = parseEquality();
+            Node right = parseBitwiseOr();
             left = BinaryOpNode.of(left, "&&", right);
         }
 
         return left;
     }
 
+    private Node parseBitwiseOr() {
+        Node left = parseBitwiseXor();
+
+        while (match(TokenType.BIT_OR)) {
+            Node right = parseBitwiseXor();
+            left = BitwiseOpNode.of(left, "|", right);
+        }
+
+        return left;
+    }
+
+    private Node parseBitwiseXor() {
+        Node left = parseBitwiseAnd();
+
+        while (match(TokenType.BIT_XOR)) {
+            Node right = parseBitwiseAnd();
+            left = BitwiseOpNode.of(left, "^", right);
+        }
+
+        return left;
+    }
+
+    private Node parseBitwiseAnd() {
+        Node left = parseEquality();
+
+        while (match(TokenType.BIT_AND)) {
+            Node right = parseEquality();
+            left = BitwiseOpNode.of(left, "&", right);
+        }
+
+        return left;
+    }
+
     private Node parseEquality() {
-        Node left = parseComparison();
+        Node left = parseRelational();
 
         while (true) {
             if (match(TokenType.EQ)) {
-                Node right = parseComparison();
+                Node right = parseRelational();
                 left = BinaryOpNode.of(left, "==", right);
             } else if (match(TokenType.NE)) {
-                Node right = parseComparison();
+                Node right = parseRelational();
                 left = BinaryOpNode.of(left, "!=", right);
             } else if (match(TokenType.MATCHES)) {
-                Node right = parseComparison();
+                Node right = parseRelational();
                 left = BinaryOpNode.of(left, "matches", right);
             } else {
                 break;
@@ -154,22 +235,51 @@ public class Parser {
         return left;
     }
 
-    private Node parseComparison() {
-        Node left = parseAdditive();
+    private Node parseRelational() {
+        Node left = parseShift();
 
         while (true) {
             if (match(TokenType.LT)) {
-                Node right = parseAdditive();
+                Node right = parseShift();
                 left = BinaryOpNode.of(left, "<", right);
             } else if (match(TokenType.LE)) {
-                Node right = parseAdditive();
+                Node right = parseShift();
                 left = BinaryOpNode.of(left, "<=", right);
             } else if (match(TokenType.GT)) {
-                Node right = parseAdditive();
+                Node right = parseShift();
                 left = BinaryOpNode.of(left, ">", right);
             } else if (match(TokenType.GE)) {
-                Node right = parseAdditive();
+                Node right = parseShift();
                 left = BinaryOpNode.of(left, ">=", right);
+            } else if (match(TokenType.INSTANCEOF)) {
+                Node right = parseShift();
+                left = BinaryOpNode.of(left, "instanceof", right);
+            } else if (match(TokenType.IN)) {
+                Node right = parseShift();
+                left = InNode.of(left, right);
+            } else if (match(TokenType.BETWEEN)) {
+                Node lower = parseShift();
+                consumeAndKeyword("Expected 'and' after 'between' lower bound");
+                Node upper = parseShift();
+                left = BetweenNode.of(left, lower, upper);
+            } else {
+                break;
+            }
+        }
+
+        return left;
+    }
+
+    private Node parseShift() {
+        Node left = parseAdditive();
+
+        while (true) {
+            if (match(TokenType.LSHIFT)) {
+                Node right = parseAdditive();
+                left = BitwiseOpNode.of(left, "<<", right);
+            } else if (match(TokenType.RSHIFT)) {
+                Node right = parseAdditive();
+                left = BitwiseOpNode.of(left, ">>", right);
             } else {
                 break;
             }
@@ -220,10 +330,13 @@ public class Parser {
     private Node parsePower() {
         Node left = parseUnary();
 
-        // Power is right-associative: 2**3**2 = 2**(3**2) = 512, not (2**3)**2 = 64
+        // Power is right-associative: 2**3**2 = 2**(3**2) = 512
         if (match(TokenType.POWER)) {
-            Node right = parsePower(); // Recurse to achieve right-associativity
-            left = BinaryOpNode.of(left, "**", right);
+            enterDepth();
+            try {
+                Node right = parsePower();
+                left = BinaryOpNode.of(left, "**", right);
+            } finally { depth--; }
         }
 
         return left;
@@ -231,14 +344,42 @@ public class Parser {
 
     private Node parseUnary() {
         if (match(TokenType.NOT)) {
-            Node operand = parseUnary();
-            return UnaryOpNode.of("!", operand);
+            enterDepth();
+            try {
+                Node operand = parseUnary();
+                return UnaryOpNode.of("!", operand);
+            } finally { depth--; }
         }
         if (match(TokenType.MINUS)) {
-            Node operand = parseUnary();
-            return UnaryOpNode.of("-", operand);
+            enterDepth();
+            try {
+                Node operand = parseUnary();
+                return UnaryOpNode.of("-", operand);
+            } finally { depth--; }
+        }
+        if (match(TokenType.PLUS)) {
+            enterDepth();
+            try {
+                Node operand = parseUnary();
+                return UnaryOpNode.of("+", operand);
+            } finally { depth--; }
+        }
+        if (match(TokenType.BIT_NOT)) {
+            enterDepth();
+            try {
+                Node operand = parseUnary();
+                return BitwiseOpNode.ofNot(operand);
+            } finally { depth--; }
         }
         return parsePostfix();
+    }
+
+    private void enterDepth() {
+        if (++depth > MAX_DEPTH) {
+            depth--;
+            throw OpenExpressionException.parseError(
+                "Maximum expression nesting depth (" + MAX_DEPTH + ") exceeded", current().position());
+        }
     }
 
     private Node parsePostfix() {
@@ -246,41 +387,32 @@ public class Parser {
 
         while (true) {
             if (match(TokenType.DOT)) {
-                // Property access or method call
                 Token name = consume(TokenType.IDENTIFIER, "Expected property name after '.'");
                 if (match(TokenType.LPAREN)) {
-                    // Method call
                     List<Node> args = parseArguments();
                     consume(TokenType.RPAREN, "Expected ')' after method arguments");
                     node = MethodCallNode.of(node, name.stringValue(), args);
                 } else {
-                    // Property access
                     node = PropertyAccessNode.of(node, name.stringValue(), false);
                 }
             } else if (match(TokenType.SAFE_NAV)) {
-                // Null-safe property access or method call
                 Token name = consume(TokenType.IDENTIFIER, "Expected property name after '?.'");
                 if (match(TokenType.LPAREN)) {
-                    // Method call with null-safe
                     List<Node> args = parseArguments();
                     consume(TokenType.RPAREN, "Expected ')' after method arguments");
                     node = MethodCallNode.of(node, name.stringValue(), args, true);
                 } else {
-                    // Null-safe property access
                     node = PropertyAccessNode.of(node, name.stringValue(), true);
                 }
             } else if (match(TokenType.LBRACKET)) {
-                // Index access
                 Node index = parseExpression();
                 consume(TokenType.RBRACKET, "Expected ']' after index");
                 node = IndexAccessNode.of(node, index);
             } else if (match(TokenType.FILTER)) {
-                // Collection filter: .?[predicate]
                 Node predicate = parseExpression();
                 consume(TokenType.RBRACKET, "Expected ']' after filter predicate");
                 node = CollectionFilterNode.of(node, predicate);
             } else if (match(TokenType.PROJECT)) {
-                // Collection projection: .![expression]
                 Node projection = parseExpression();
                 consume(TokenType.RBRACKET, "Expected ']' after projection expression");
                 node = CollectionProjectNode.of(node, projection);
@@ -310,15 +442,27 @@ public class Parser {
             return LiteralNode.ofNull();
         }
 
+        // Map literal #{key: value, ...}
+        if (match(TokenType.MAP_LBRACE)) {
+            return parseMapLiteral();
+        }
+
         // Variables with #
         if (match(TokenType.HASH)) {
             Token name = consume(TokenType.IDENTIFIER, "Expected variable name after '#'");
             return IdentifierNode.of("#" + name.stringValue());
         }
 
-        // Identifiers (can be variable or function call)
+        // Identifiers (can be variable, function call, or lambda parameter)
         if (match(TokenType.IDENTIFIER)) {
             String name = previous().stringValue();
+
+            // Check for lambda: identifier -> expr
+            if (match(TokenType.ARROW)) {
+                Node body = parseExpression();
+                return LambdaNode.of(name, body);
+            }
+
             if (match(TokenType.LPAREN)) {
                 // Function call
                 List<Node> args = parseArguments();
@@ -328,7 +472,7 @@ public class Parser {
             return IdentifierNode.of(name);
         }
 
-        // Parenthesized expression
+        // Parenthesized expression or lambda with parens
         if (match(TokenType.LPAREN)) {
             Node expr = parseExpression();
             consume(TokenType.RPAREN, "Expected ')' after expression");
@@ -350,6 +494,20 @@ public class Parser {
         throw OpenExpressionException.parseError("Unexpected token: " + current(), current().position());
     }
 
+    private Node parseMapLiteral() {
+        List<Map.Entry<Node, Node>> entries = new ArrayList<>();
+        if (!check(TokenType.RBRACE)) {
+            do {
+                Node key = parseExpression();
+                consume(TokenType.COLON, "Expected ':' after map key");
+                Node value = parseExpression();
+                entries.add(new AbstractMap.SimpleImmutableEntry<>(key, value));
+            } while (match(TokenType.COMMA));
+        }
+        consume(TokenType.RBRACE, "Expected '}' after map entries");
+        return MapLiteralNode.of(entries);
+    }
+
     private List<Node> parseArguments() {
         List<Node> args = new ArrayList<>();
         if (!check(TokenType.RPAREN)) {
@@ -360,7 +518,8 @@ public class Parser {
         return args;
     }
 
-    // Helper methods
+
+    // ==================== Helper methods ====================
 
     private boolean match(TokenType type) {
         if (check(type)) {
@@ -372,6 +531,28 @@ public class Parser {
 
     private boolean check(TokenType type) {
         return !isAtEnd() && current().type() == type;
+    }
+
+    /**
+     * Consume the 'and' keyword separator used in 'between...and' syntax.
+     * Accepts: IDENTIFIER with value "and" (case-insensitive), or AND token
+     * produced from the keyword 'and' (length >= 3, distinguishing from '&&' which has length 2).
+     */
+    private void consumeAndKeyword(String message) {
+        if (!isAtEnd()) {
+            Token cur = current();
+            // Accept 'and' as an IDENTIFIER (should not happen since 'and' is tokenized as AND, but for safety)
+            if (cur.type() == TokenType.IDENTIFIER && "and".equalsIgnoreCase(cur.stringValue())) {
+                advance();
+                return;
+            }
+            // Accept AND token only when produced from the word "and" (length >= 3), not "&&" (length 2)
+            if (cur.type() == TokenType.AND && cur.length() >= 3) {
+                advance();
+                return;
+            }
+        }
+        throw OpenExpressionException.parseError(message, current().position());
     }
 
     private Token advance() {

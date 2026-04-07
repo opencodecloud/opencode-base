@@ -73,6 +73,12 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
     private final DefaultAsyncCache<K, V> asyncView;
     private final CacheMetrics cacheMetrics;
 
+    // Lock for all eviction policy operations to ensure thread safety
+    // 所有淘汰策略操作的锁，确保线程安全
+    // ReentrantLock allows tryLock() for non-blocking read-path degradation
+    // ReentrantLock 允许 tryLock() 实现读路径的非阻塞降级
+    private final java.util.concurrent.locks.ReentrantLock evictionLock = new java.util.concurrent.locks.ReentrantLock();
+
     // For expiration tracking - using single map with holder for atomicity
     private final ConcurrentHashMap<K, ExpirationInfo> expirationInfo = new ConcurrentHashMap<>();
 
@@ -84,13 +90,17 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
      * Expiration info holder for atomic operations
      * 过期信息持有者，用于原子操作
      */
-    private record ExpirationInfo(long expirationTime, long customTtlMs) {
+    private record ExpirationInfo(long expirationTime, long customTtlMs, long creationTime) {
         static ExpirationInfo of(long expirationTime) {
-            return new ExpirationInfo(expirationTime, -1);
+            return new ExpirationInfo(expirationTime, -1, System.currentTimeMillis());
+        }
+
+        static ExpirationInfo ofWithCreation(long expirationTime, long creationTime) {
+            return new ExpirationInfo(expirationTime, -1, creationTime);
         }
 
         static ExpirationInfo ofCustomTtl(long expirationTime, long customTtlMs) {
-            return new ExpirationInfo(expirationTime, customTtlMs);
+            return new ExpirationInfo(expirationTime, customTtlMs, System.currentTimeMillis());
         }
 
         boolean isExpired() {
@@ -211,31 +221,90 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
 
     @Override
     public V get(K key, Function<? super K, ? extends V> loader) {
-        V value = get(key);
-        if (value != null) {
-            return value;
+        Objects.requireNonNull(key, "key cannot be null");
+        Objects.requireNonNull(loader, "loader cannot be null");
+
+        // Fast path: check for non-expired cached value
+        ValueHolder<V> existing = store.get(key);
+        if (existing != null && !isExpired(key, existing)) {
+            recordAccess(key, existing);
+            statsCounter.recordHits(1);
+            return existing.value;
         }
 
+        // Use store.compute to guarantee atomicity: the same key won't be loaded concurrently
         long startTime = System.nanoTime();
-        try {
-            value = loader.apply(key);
-            long loadTime = System.nanoTime() - startTime;
-            if (value != null) {
-                put(key, value);
-                statsCounter.recordLoadSuccess(loadTime);
-                if (cacheMetrics != null) {
-                    cacheMetrics.recordLoadLatency(loadTime);
-                }
+        @SuppressWarnings("unchecked")
+        V[] result = (V[]) new Object[1];
+        boolean[] loaded = {false};
+
+        // Deferred expired-entry holder — eviction policy notification is deferred
+        // to outside the compute lambda to avoid acquiring evictionLock while
+        // holding the ConcurrentHashMap bin lock (nested lock elimination).
+        // 延迟过期条目持有者 — 将淘汰策略通知延迟到 compute lambda 外部，
+        // 避免在持有 ConcurrentHashMap bin 锁时获取 evictionLock（消除嵌套锁）。
+        @SuppressWarnings("unchecked")
+        ValueHolder<V>[] expiredHolder = new ValueHolder[1];
+
+        store.compute(key, (k, old) -> {
+            // Double-check: another thread may have loaded while we waited
+            if (old != null && !isExpired(k, old)) {
+                result[0] = old.value;
+                return old;
             }
-            return value;
-        } catch (Exception e) {
-            long loadTime = System.nanoTime() - startTime;
-            statsCounter.recordLoadFailure(loadTime);
+            // Mark expired entry for deferred cleanup outside compute
+            // 标记过期条目，稍后在 compute 外部清理
+            if (old != null) {
+                expiredHolder[0] = old;
+                expirationInfo.remove(k);
+            }
+            // Load the value
+            loaded[0] = true;
+            V value = loader.apply(k);
+            if (value == null) {
+                result[0] = null;
+                return null; // Don't cache null
+            }
+            ValueHolder<V> holder = new ValueHolder<>(value);
+            result[0] = value;
+            return holder;
+        });
+
+        // Handle expired entry outside compute — evictionLock is no longer nested
+        // inside ConcurrentHashMap bin lock
+        // 在 compute 外部处理过期条目 — evictionLock 不再嵌套在 CHM bin 锁内
+        if (expiredHolder[0] != null) {
+            evictionLock.lock();
+            try {
+                evictionPolicy.onRemoval(key);
+            } finally {
+                evictionLock.unlock();
+            }
+            if (config.removalListener() != null) {
+                notifyRemovalListenerSafely(key, expiredHolder[0].value, RemovalCause.EXPIRED);
+            }
+        }
+
+        long loadTime = System.nanoTime() - startTime;
+        if (loaded[0]) {
+            if (result[0] != null) {
+                recordWrite(key, result[0]);
+                updateExpiration(key);
+                statsCounter.recordLoadSuccess(loadTime);
+            } else {
+                statsCounter.recordMisses(1);
+            }
             if (cacheMetrics != null) {
                 cacheMetrics.recordLoadLatency(loadTime);
             }
-            throw e;
+        } else {
+            // Value was found in double-check (cache hit)
+            if (result[0] != null) {
+                recordAccess(key, store.get(key));
+                statsCounter.recordHits(1);
+            }
         }
+        return result[0];
     }
 
     @Override
@@ -332,9 +401,11 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         ValueHolder<V> oldHolder = store.put(key, new ValueHolder<>(value));
         recordWrite(key, value);
 
-        // Set custom TTL for this entry atomically
-        expirationInfo.put(key, ExpirationInfo.ofCustomTtl(
-                System.currentTimeMillis() + ttl.toMillis(), ttl.toMillis()));
+        // Set custom TTL for this entry atomically (overflow-safe)
+        long nowMs = System.currentTimeMillis();
+        long ttlMs = ttl.toMillis();
+        long expirationTime = safeAddMs(nowMs, ttlMs);
+        expirationInfo.put(key, ExpirationInfo.ofCustomTtl(expirationTime, ttlMs));
 
         if (oldHolder != null && config.removalListener() != null) {
             notifyRemovalListenerSafely(key, oldHolder.value, RemovalCause.REPLACED);
@@ -363,8 +434,10 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         ValueHolder<V> existing = store.putIfAbsent(key, new ValueHolder<>(value));
         if (existing == null) {
             recordWrite(key, value);
-            expirationInfo.put(key, ExpirationInfo.ofCustomTtl(
-                    System.currentTimeMillis() + ttl.toMillis(), ttl.toMillis()));
+            long nowMs = System.currentTimeMillis();
+            long ttlMs = ttl.toMillis();
+            long expirationTime = safeAddMs(nowMs, ttlMs);
+            expirationInfo.put(key, ExpirationInfo.ofCustomTtl(expirationTime, ttlMs));
             return true;
         }
         return false;
@@ -381,15 +454,19 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         @SuppressWarnings("unchecked")
         V[] result = (V[]) new Object[1];
 
+        // Deferred holders to avoid nested locks (evictionLock inside CHM bin lock)
+        // 延迟持有者，避免嵌套锁（evictionLock 在 CHM bin 锁内）
+        @SuppressWarnings("unchecked")
+        ValueHolder<V>[] expiredHolder = new ValueHolder[1];
+        @SuppressWarnings("unchecked")
+        V[] removedValue = (V[]) new Object[1];
+        RemovalCause[] removedCause = new RemovalCause[1];
+
         store.compute(key, (k, holder) -> {
             if (holder == null || isExpired(k, holder)) {
-                // Expired entry - clean up expiration info
                 if (holder != null) {
+                    expiredHolder[0] = holder;
                     expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                    }
                 }
                 result[0] = null;
                 return null;
@@ -399,12 +476,9 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
             V newValue = remappingFunction.apply(k, oldValue);
 
             if (newValue == null) {
-                // Remove entry
+                removedValue[0] = oldValue;
+                removedCause[0] = RemovalCause.EXPLICIT;
                 expirationInfo.remove(k);
-                evictionPolicy.onRemoval(k);
-                if (config.removalListener() != null) {
-                    notifyRemovalListenerSafely(k, oldValue, RemovalCause.EXPLICIT);
-                }
                 result[0] = null;
                 return null;
             }
@@ -419,6 +493,15 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
             return new ValueHolder<>(newValue);
         });
 
+        // Handle deferred expired/removed entries outside compute
+        // 在 compute 外部处理延迟的过期/移除条目
+        if (expiredHolder[0] != null) {
+            handleExpiredEntry(key, expiredHolder[0]);
+        }
+        if (removedValue[0] != null) {
+            handleRemovedEntry(key, removedValue[0], removedCause[0]);
+        }
+
         return result[0];
     }
 
@@ -431,29 +514,32 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         @SuppressWarnings("unchecked")
         V[] result = (V[]) new Object[1];
 
+        // Deferred holders to avoid nested locks (evictionLock inside CHM bin lock)
+        // 延迟持有者，避免嵌套锁（evictionLock 在 CHM bin 锁内）
+        @SuppressWarnings("unchecked")
+        ValueHolder<V>[] expiredHolder = new ValueHolder[1];
+        @SuppressWarnings("unchecked")
+        V[] removedValue = (V[]) new Object[1];
+        RemovalCause[] removedCause = new RemovalCause[1];
+        boolean[] hadOldValue = {false};
+
         store.compute(key, (k, holder) -> {
             V oldValue = null;
 
             if (holder != null && !isExpired(k, holder)) {
                 oldValue = holder.value;
             } else if (holder != null) {
-                // Expired - clean up
+                expiredHolder[0] = holder;
                 expirationInfo.remove(k);
-                evictionPolicy.onRemoval(k);
-                if (config.removalListener() != null) {
-                    notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                }
             }
 
             V newValue = remappingFunction.apply(k, oldValue);
 
             if (newValue == null) {
                 if (oldValue != null) {
+                    removedValue[0] = oldValue;
+                    removedCause[0] = RemovalCause.EXPLICIT;
                     expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, oldValue, RemovalCause.EXPLICIT);
-                    }
                 }
                 result[0] = null;
                 return null;
@@ -462,12 +548,22 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
             ensureCapacity();
             recordWrite(k, newValue);
             updateExpiration(k);
-            if (holder != null && oldValue != null && config.removalListener() != null) {
+            hadOldValue[0] = holder != null && oldValue != null;
+            if (hadOldValue[0] && config.removalListener() != null) {
                 notifyRemovalListenerSafely(k, oldValue, RemovalCause.REPLACED);
             }
             result[0] = newValue;
             return new ValueHolder<>(newValue);
         });
+
+        // Handle deferred expired/removed entries outside compute
+        // 在 compute 外部处理延迟的过期/移除条目
+        if (expiredHolder[0] != null) {
+            handleExpiredEntry(key, expiredHolder[0]);
+        }
+        if (removedValue[0] != null) {
+            handleRemovedEntry(key, removedValue[0], removedCause[0]);
+        }
 
         return result[0];
     }
@@ -484,7 +580,12 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
 
         // Clean up associated state
         expirationInfo.remove(key);
-        evictionPolicy.onRemoval(key);
+        evictionLock.lock();
+        try {
+            evictionPolicy.onRemoval(key);
+        } finally {
+            evictionLock.unlock();
+        }
 
         if (isExpiredHolder(holder, key)) {
             if (config.removalListener() != null) {
@@ -508,15 +609,16 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         @SuppressWarnings("unchecked")
         V[] result = (V[]) new Object[1];
 
+        // Deferred holder to avoid nested lock (evictionLock inside CHM bin lock)
+        // 延迟持有者，避免嵌套锁（evictionLock 在 CHM bin 锁内）
+        @SuppressWarnings("unchecked")
+        ValueHolder<V>[] expiredHolder = new ValueHolder[1];
+
         store.compute(key, (k, holder) -> {
             if (holder == null || isExpired(k, holder)) {
                 if (holder != null) {
-                    // Expired - clean up
+                    expiredHolder[0] = holder;
                     expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                    }
                 }
                 result[0] = null;
                 return null;
@@ -532,6 +634,12 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
             return new ValueHolder<>(value);
         });
 
+        // Handle deferred expired entry outside compute
+        // 在 compute 外部处理延迟的过期条目
+        if (expiredHolder[0] != null) {
+            handleExpiredEntry(key, expiredHolder[0]);
+        }
+
         return result[0];
     }
 
@@ -544,15 +652,16 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         // Use ConcurrentHashMap.compute() for atomic compare-and-replace to avoid TOCTOU race
         boolean[] replaced = new boolean[]{false};
 
+        // Deferred holder to avoid nested lock (evictionLock inside CHM bin lock)
+        // 延迟持有者，避免嵌套锁（evictionLock 在 CHM bin 锁内）
+        @SuppressWarnings("unchecked")
+        ValueHolder<V>[] expiredHolder = new ValueHolder[1];
+
         store.compute(key, (k, holder) -> {
             if (holder == null || isExpired(k, holder)) {
                 if (holder != null) {
-                    // Expired - clean up
+                    expiredHolder[0] = holder;
                     expirationInfo.remove(k);
-                    evictionPolicy.onRemoval(k);
-                    if (config.removalListener() != null) {
-                        notifyRemovalListenerSafely(k, holder.value, RemovalCause.EXPIRED);
-                    }
                 }
                 replaced[0] = false;
                 return null;
@@ -571,7 +680,110 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
             return holder; // Keep existing value
         });
 
+        // Handle deferred expired entry outside compute
+        // 在 compute 外部处理延迟的过期条目
+        if (expiredHolder[0] != null) {
+            handleExpiredEntry(key, expiredHolder[0]);
+        }
+
         return replaced[0];
+    }
+
+    // ==================== CAS Operations ====================
+
+    @Override
+    public boolean replaceIf(K key, java.util.function.Predicate<V> condition, V newValue) {
+        Objects.requireNonNull(key, "key cannot be null");
+        Objects.requireNonNull(condition, "condition cannot be null");
+        Objects.requireNonNull(newValue, "newValue cannot be null");
+
+        boolean[] replaced = new boolean[]{false};
+
+        // Deferred holder to avoid nested lock (evictionLock inside CHM bin lock)
+        // 延迟持有者，避免嵌套锁（evictionLock 在 CHM bin 锁内）
+        @SuppressWarnings("unchecked")
+        ValueHolder<V>[] expiredHolder = new ValueHolder[1];
+
+        store.compute(key, (k, holder) -> {
+            if (holder == null || isExpired(k, holder)) {
+                if (holder != null) {
+                    expiredHolder[0] = holder;
+                    expirationInfo.remove(k);
+                }
+                replaced[0] = false;
+                return null;
+            }
+
+            if (condition.test(holder.value)) {
+                recordWrite(k, newValue);
+                updateExpiration(k);
+                if (config.removalListener() != null) {
+                    notifyRemovalListenerSafely(k, holder.value, RemovalCause.REPLACED);
+                }
+                replaced[0] = true;
+                return new ValueHolder<>(newValue);
+            }
+            replaced[0] = false;
+            return holder;
+        });
+
+        // Handle deferred expired entry outside compute
+        // 在 compute 外部处理延迟的过期条目
+        if (expiredHolder[0] != null) {
+            handleExpiredEntry(key, expiredHolder[0]);
+        }
+
+        return replaced[0];
+    }
+
+    @Override
+    public java.util.Optional<V> computeIfMatch(K key, java.util.function.Predicate<V> condition,
+                                                  java.util.function.Function<V, V> remapper) {
+        Objects.requireNonNull(key, "key cannot be null");
+        Objects.requireNonNull(condition, "condition cannot be null");
+        Objects.requireNonNull(remapper, "remapper cannot be null");
+
+        @SuppressWarnings("unchecked")
+        V[] result = (V[]) new Object[1];
+
+        // Deferred holder to avoid nested lock (evictionLock inside CHM bin lock)
+        // 延迟持有者，避免嵌套锁（evictionLock 在 CHM bin 锁内）
+        @SuppressWarnings("unchecked")
+        ValueHolder<V>[] expiredHolder = new ValueHolder[1];
+
+        store.compute(key, (k, holder) -> {
+            if (holder == null || isExpired(k, holder)) {
+                if (holder != null) {
+                    expiredHolder[0] = holder;
+                    expirationInfo.remove(k);
+                }
+                result[0] = null;
+                return null;
+            }
+
+            if (condition.test(holder.value)) {
+                V newValue = remapper.apply(holder.value);
+                if (newValue != null) {
+                    recordWrite(k, newValue);
+                    updateExpiration(k);
+                    if (config.removalListener() != null) {
+                        notifyRemovalListenerSafely(k, holder.value, RemovalCause.REPLACED);
+                    }
+                    result[0] = newValue;
+                    return new ValueHolder<>(newValue);
+                }
+            }
+            result[0] = null;
+            return holder;
+        });
+
+        // Handle deferred expired entry outside compute
+        // 在 compute 外部处理延迟的过期条目
+        if (expiredHolder[0] != null) {
+            handleExpiredEntry(key, expiredHolder[0]);
+        }
+
+        return java.util.Optional.ofNullable(result[0]);
     }
 
     // ==================== Invalidation ====================
@@ -699,10 +911,58 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
 
     // ==================== Private Helper Methods ====================
 
+    /**
+     * Handle an expired entry found during a compute/replace operation.
+     * Cleans up expiration info, notifies eviction policy, and notifies listeners.
+     * 处理在 compute/replace 操作中发现的过期条目。清理过期信息、通知淘汰策略并通知监听器。
+     *
+     * @param key the key of the expired entry | 过期条目的键
+     * @param holder the value holder of the expired entry | 过期条目的值持有者
+     */
+    private void handleExpiredEntry(K key, ValueHolder<V> holder) {
+        expirationInfo.remove(key);
+        evictionLock.lock();
+        try {
+            evictionPolicy.onRemoval(key);
+        } finally {
+            evictionLock.unlock();
+        }
+        if (config.removalListener() != null) {
+            notifyRemovalListenerSafely(key, holder.value, RemovalCause.EXPIRED);
+        }
+    }
+
+    /**
+     * Handle a removed entry during a compute/replace operation.
+     * Cleans up expiration info, notifies eviction policy, and notifies listeners.
+     * 处理在 compute/replace 操作中移除的条目。清理过期信息、通知淘汰策略并通知监听器。
+     *
+     * @param key the key of the removed entry | 移除条目的键
+     * @param oldValue the old value of the removed entry | 移除条目的旧值
+     * @param cause the removal cause | 移除原因
+     */
+    private void handleRemovedEntry(K key, V oldValue, RemovalCause cause) {
+        expirationInfo.remove(key);
+        evictionLock.lock();
+        try {
+            evictionPolicy.onRemoval(key);
+        } finally {
+            evictionLock.unlock();
+        }
+        if (config.removalListener() != null) {
+            notifyRemovalListenerSafely(key, oldValue, cause);
+        }
+    }
+
     private void remove(K key, RemovalCause cause) {
         ValueHolder<V> removed = store.remove(key);
         expirationInfo.remove(key);
-        evictionPolicy.onRemoval(key);
+        evictionLock.lock();
+        try {
+            evictionPolicy.onRemoval(key);
+        } finally {
+            evictionLock.unlock();
+        }
 
         if (removed != null && config.removalListener() != null) {
             notifyRemovalListenerSafely(key, removed.value, cause);
@@ -748,7 +1008,14 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
 
         // Create lazy map view that doesn't materialize all entries
         Map<K, CacheEntry<K, V>> lazyMap = new LazyEntryMap<K, V>(lazyEntries, store.size());
-        evictionPolicy.selectVictim(lazyMap).ifPresent(key -> remove(key, RemovalCause.SIZE));
+        Optional<K> victim;
+        evictionLock.lock();
+        try {
+            victim = evictionPolicy.selectVictim(lazyMap);
+        } finally {
+            evictionLock.unlock();
+        }
+        victim.ifPresent(key -> remove(key, RemovalCause.SIZE));
     }
 
     /**
@@ -781,26 +1048,67 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
     }
 
     private void recordAccess(K key, ValueHolder<V> holder) {
+        if (holder == null) {
+            return;
+        }
         holder.lastAccessTime = System.currentTimeMillis();
         holder.accessCount.incrementAndGet();
 
+        // CacheEntry creation moved outside lock — pure object construction, no shared state
+        // CacheEntry 创建移到锁外 — 纯对象构造，不涉及共享状态
         CacheEntry<K, V> entry = new CacheEntry<>(key, holder.value,
                 holder.createTime, holder.lastAccessTime,
                 holder.accessCount.get(), 1);
-        evictionPolicy.recordAccess(entry);
 
-        // Update TTI expiration if configured
+        // Try non-blocking lock — skip eviction tracking if contended
+        // 尝试非阻塞锁 — 如果有竞争则跳过淘汰策略追踪
+        if (evictionLock.tryLock()) {
+            try {
+                evictionPolicy.recordAccess(entry);
+            } finally {
+                evictionLock.unlock();
+            }
+        }
+        // If tryLock fails, access is not recorded in eviction policy.
+        // This is acceptable: LRU/LFU policies tolerate occasional missed accesses.
+        // 如果 tryLock 失败，此次访问不会记录到淘汰策略中。
+        // 这是可接受的: LRU/LFU 策略容忍偶尔的漏记。
+
+        // Update TTI expiration if configured (access-only, not a write)
         if (config.expireAfterAccess() != null) {
-            updateExpiration(key);
+            updateExpiration(key, false);
         }
     }
 
     private void recordWrite(K key, V value) {
+        // CacheEntry creation outside lock — pure object construction
+        // CacheEntry 创建在锁外 — 纯对象构造
         CacheEntry<K, V> entry = new CacheEntry<>(key, value);
-        evictionPolicy.recordWrite(entry);
+        // Write path uses blocking lock — writes must be recorded to prevent
+        // newly inserted entries from being incorrectly evicted
+        // 写路径使用阻塞锁 — 写操作必须记录，否则新条目可能被错误淘汰
+        evictionLock.lock();
+        try {
+            evictionPolicy.recordWrite(entry);
+        } finally {
+            evictionLock.unlock();
+        }
     }
 
+    /**
+     * Update expiration for a new write (put/replace/compute).
+     * Resets creation time to now.
+     */
     private void updateExpiration(K key) {
+        updateExpiration(key, true);
+    }
+
+    /**
+     * Update expiration, optionally resetting creation time.
+     * @param key the cache key
+     * @param isWrite true if this is a write (put/replace), false if access-only (get)
+     */
+    private void updateExpiration(K key, boolean isWrite) {
         Duration ttl = config.expireAfterWrite();
         Duration tti = config.expireAfterAccess();
 
@@ -809,16 +1117,44 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
         }
 
         long now = System.currentTimeMillis();
-        long expirationTime;
-        if (ttl != null && tti != null) {
-            expirationTime = now + Math.min(ttl.toMillis(), tti.toMillis());
-        } else if (ttl != null) {
-            expirationTime = now + ttl.toMillis();
-        } else {
-            expirationTime = now + tti.toMillis();
-        }
 
-        expirationInfo.put(key, ExpirationInfo.of(expirationTime));
+        if (ttl != null && tti != null) {
+            // When both TTL and TTI are configured:
+            // - TTL is absolute from creation time (not reset on access)
+            // - TTI is relative to current access time
+            // Take the minimum of the two absolute expiration times.
+            long creationTime;
+            if (isWrite) {
+                creationTime = now;
+            } else {
+                ExpirationInfo existing = expirationInfo.get(key);
+                creationTime = (existing != null) ? existing.creationTime() : now;
+            }
+            long ttlExpiration = safeAddMs(creationTime, ttl.toMillis());
+            long ttiExpiration = safeAddMs(now, tti.toMillis());
+            long expirationTime = Math.min(ttlExpiration, ttiExpiration);
+            expirationInfo.put(key, ExpirationInfo.ofWithCreation(expirationTime, creationTime));
+        } else if (ttl != null) {
+            // TTL only: set from now on writes (this path is only reached on writes
+            // since recordAccess only calls updateExpiration when TTI is configured)
+            expirationInfo.put(key, ExpirationInfo.of(safeAddMs(now, ttl.toMillis())));
+        } else {
+            // TTI only: always relative to current access time
+            expirationInfo.put(key, ExpirationInfo.of(safeAddMs(now, tti.toMillis())));
+        }
+    }
+
+    /**
+     * Overflow-safe addition of base milliseconds and offset milliseconds.
+     * Returns {@link Long#MAX_VALUE} on overflow to represent "never expires".
+     * 溢出安全的毫秒加法。溢出时返回 Long.MAX_VALUE 表示"永不过期"。
+     *
+     * @param baseMs  base time in milliseconds | 基础毫秒时间
+     * @param offsetMs offset in milliseconds | 偏移毫秒
+     * @return sum or Long.MAX_VALUE on overflow | 和，溢出时为 Long.MAX_VALUE
+     */
+    private static long safeAddMs(long baseMs, long offsetMs) {
+        return (Long.MAX_VALUE - baseMs < offsetMs) ? Long.MAX_VALUE : baseMs + offsetMs;
     }
 
     private boolean isExpired(K key, ValueHolder<V> holder) {
@@ -904,6 +1240,24 @@ public final class DefaultCache<K, V> implements Cache<K, V>, AutoCloseable {
     }
 
     private class ConcurrentMapView extends AbstractMap<K, V> implements ConcurrentMap<K, V> {
+
+        /**
+         * Stream-based forEach that iterates the underlying store directly,
+         * avoiding the full-copy snapshot created by {@link #entrySet()}.
+         * 基于流的 forEach，直接遍历底层 store，避免 entrySet() 创建的全量拷贝。
+         *
+         * @param action the action to perform on each non-expired entry | 对每个未过期条目执行的操作
+         */
+        @Override
+        public void forEach(java.util.function.BiConsumer<? super K, ? super V> action) {
+            Objects.requireNonNull(action, "action cannot be null");
+            store.forEach((k, holder) -> {
+                if (!isExpired(k, holder)) {
+                    action.accept(k, holder.value);
+                }
+            });
+        }
+
         @Override
         public V get(Object key) {
             @SuppressWarnings("unchecked")

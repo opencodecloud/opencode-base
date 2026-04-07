@@ -5,6 +5,7 @@ import cloud.opencode.base.crypto.codec.HexCodec;
 import cloud.opencode.base.crypto.exception.OpenCryptoException;
 import cloud.opencode.base.crypto.exception.OpenKeyException;
 import cloud.opencode.base.crypto.key.KeyGenerator;
+import cloud.opencode.base.crypto.util.SecureEraser;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -110,13 +111,13 @@ public final class ChaChaCipher implements AeadCipher {
         if (nonce != null && nonce.length != NONCE_LENGTH) {
             throw new OpenCryptoException("ChaCha20-Poly1305 nonce must be " + NONCE_LENGTH + " bytes (96 bits)");
         }
-        this.nonce = nonce;
+        this.nonce = nonce != null ? nonce.clone() : null;
         return this;
     }
 
     @Override
     public ChaChaCipher setAad(byte[] aad) {
-        this.aad = aad;
+        this.aad = aad != null ? aad.clone() : null;
         return this;
     }
 
@@ -191,7 +192,8 @@ public final class ChaChaCipher implements AeadCipher {
 
     @Override
     public OutputStream encryptStream(OutputStream output) {
-        throw new UnsupportedOperationException("Stream encryption not yet implemented for ChaCha20-Poly1305");
+        throw new UnsupportedOperationException(
+                "Streaming AEAD encryption is not supported for ChaCha20-Poly1305 - use byte array methods (encrypt/encryptBase64/encryptHex) instead");
     }
 
     @Override
@@ -259,7 +261,8 @@ public final class ChaChaCipher implements AeadCipher {
 
     @Override
     public InputStream decryptStream(InputStream input) {
-        throw new UnsupportedOperationException("Stream decryption not yet implemented for ChaCha20-Poly1305");
+        throw new UnsupportedOperationException(
+                "Streaming AEAD decryption is not supported for ChaCha20-Poly1305 - use byte array methods (decrypt/decryptBase64/decryptHex) instead");
     }
 
     @Override
@@ -302,7 +305,12 @@ public final class ChaChaCipher implements AeadCipher {
      */
     public SecretKey getKey() {
         if (key == null) return null;
-        return new SecretKeySpec(key.getEncoded().clone(), key.getAlgorithm());
+        byte[] keyBytes = key.getEncoded();
+        try {
+            return new SecretKeySpec(keyBytes.clone(), key.getAlgorithm());
+        } finally {
+            SecureEraser.erase(keyBytes);
+        }
     }
 
     /**

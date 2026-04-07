@@ -6,7 +6,6 @@ import cloud.opencode.base.money.Money;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.Objects;
 
 /**
@@ -65,10 +64,13 @@ public final class MoneyCalcUtil {
         if (moneys == null || moneys.isEmpty()) {
             return Money.zero();
         }
-        return moneys.stream()
-            .filter(Objects::nonNull)
-            .reduce(Money::add)
-            .orElse(Money.zero());
+        Money total = null;
+        for (Money m : moneys) {
+            if (m != null) {
+                total = (total == null) ? m : total.add(m);
+            }
+        }
+        return total != null ? total : Money.zero();
     }
 
     /**
@@ -83,10 +85,13 @@ public final class MoneyCalcUtil {
         if (moneys == null || moneys.isEmpty()) {
             return Money.zero(currency);
         }
-        return moneys.stream()
-            .filter(Objects::nonNull)
-            .reduce(Money::add)
-            .orElse(Money.zero(currency));
+        Money total = null;
+        for (Money m : moneys) {
+            if (m != null) {
+                total = (total == null) ? m : total.add(m);
+            }
+        }
+        return total != null ? total : Money.zero(currency);
     }
 
     /**
@@ -123,10 +128,17 @@ public final class MoneyCalcUtil {
      * @return the maximum | 最大值
      */
     public static Money max(Collection<Money> moneys) {
-        return moneys.stream()
-            .filter(Objects::nonNull)
-            .max(Comparator.naturalOrder())
-            .orElseThrow(() -> new IllegalArgumentException("Collection is empty"));
+        Objects.requireNonNull(moneys, "Collection must not be null");
+        Money result = null;
+        for (Money m : moneys) {
+            if (m != null) {
+                result = (result == null || m.compareTo(result) > 0) ? m : result;
+            }
+        }
+        if (result == null) {
+            throw new IllegalArgumentException("Collection is empty");
+        }
+        return result;
     }
 
     /**
@@ -137,10 +149,17 @@ public final class MoneyCalcUtil {
      * @return the minimum | 最小值
      */
     public static Money min(Collection<Money> moneys) {
-        return moneys.stream()
-            .filter(Objects::nonNull)
-            .min(Comparator.naturalOrder())
-            .orElseThrow(() -> new IllegalArgumentException("Collection is empty"));
+        Objects.requireNonNull(moneys, "Collection must not be null");
+        Money result = null;
+        for (Money m : moneys) {
+            if (m != null) {
+                result = (result == null || m.compareTo(result) < 0) ? m : result;
+            }
+        }
+        if (result == null) {
+            throw new IllegalArgumentException("Collection is empty");
+        }
+        return result;
     }
 
     /**
@@ -153,6 +172,8 @@ public final class MoneyCalcUtil {
      * @return the percentage (0-1) | 百分比（0-1）
      */
     public static BigDecimal percentage(Money part, Money total, int scale) {
+        Objects.requireNonNull(part, "Part must not be null");
+        Objects.requireNonNull(total, "Total must not be null");
         if (total.isZero()) {
             return BigDecimal.ZERO;
         }
@@ -180,8 +201,13 @@ public final class MoneyCalcUtil {
      * @return the discounted money | 折后金额
      */
     public static Money applyDiscount(Money money, BigDecimal discountRate) {
+        Objects.requireNonNull(money, "Money must not be null");
+        Objects.requireNonNull(discountRate, "Discount rate must not be null");
+        if (discountRate.compareTo(BigDecimal.ZERO) < 0 || discountRate.compareTo(BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("Discount rate must be in [0, 1]: " + discountRate);
+        }
         BigDecimal multiplier = BigDecimal.ONE.subtract(discountRate);
-        return money.multiply(multiplier).round();
+        return money.multiply(multiplier);
     }
 
     /**
@@ -193,6 +219,9 @@ public final class MoneyCalcUtil {
      * @return the discounted money | 折后金额
      */
     public static Money applyDiscountPercent(Money money, int discountPercent) {
+        if (discountPercent < 0 || discountPercent > 100) {
+            throw new IllegalArgumentException("Discount percent must be in [0, 100]: " + discountPercent);
+        }
         return applyDiscount(money, BigDecimal.valueOf(discountPercent).divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
     }
 
@@ -205,7 +234,12 @@ public final class MoneyCalcUtil {
      * @return the tax amount | 税额
      */
     public static Money calculateTax(Money money, BigDecimal taxRate) {
-        return money.multiply(taxRate).round();
+        Objects.requireNonNull(money, "Money must not be null");
+        Objects.requireNonNull(taxRate, "Tax rate must not be null");
+        if (taxRate.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Tax rate must not be negative: " + taxRate);
+        }
+        return money.multiply(taxRate);
     }
 
     /**
@@ -217,6 +251,7 @@ public final class MoneyCalcUtil {
      * @return the money with tax | 含税金额
      */
     public static Money addTax(Money money, BigDecimal taxRate) {
+        Objects.requireNonNull(money, "Money must not be null");
         return money.add(calculateTax(money, taxRate));
     }
 
@@ -229,6 +264,11 @@ public final class MoneyCalcUtil {
      * @return the pre-tax money | 税前金额
      */
     public static Money removeTax(Money moneyWithTax, BigDecimal taxRate) {
+        Objects.requireNonNull(moneyWithTax, "Money must not be null");
+        Objects.requireNonNull(taxRate, "Tax rate must not be null");
+        if (taxRate.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Tax rate must not be negative: " + taxRate);
+        }
         BigDecimal divisor = BigDecimal.ONE.add(taxRate);
         return moneyWithTax.divide(divisor);
     }
@@ -242,6 +282,11 @@ public final class MoneyCalcUtil {
      * @return the rounded money | 四舍五入后的金额
      */
     public static Money roundToNearest(Money money, BigDecimal nearest) {
+        Objects.requireNonNull(money, "Money must not be null");
+        Objects.requireNonNull(nearest, "Nearest must not be null");
+        if (nearest.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Nearest must be positive: " + nearest);
+        }
         BigDecimal rounded = money.amount()
             .divide(nearest, 0, RoundingMode.HALF_UP)
             .multiply(nearest);

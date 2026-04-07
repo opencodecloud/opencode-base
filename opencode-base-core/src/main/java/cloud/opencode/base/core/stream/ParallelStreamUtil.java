@@ -73,7 +73,7 @@ public final class ParallelStreamUtil {
      * </p>
      */
     public static int getRecommendedThreshold() {
-        return DEFAULT_THRESHOLD * AVAILABLE_PROCESSORS;
+        return (int) Math.min((long) DEFAULT_THRESHOLD * AVAILABLE_PROCESSORS, Integer.MAX_VALUE);
     }
 
     /**

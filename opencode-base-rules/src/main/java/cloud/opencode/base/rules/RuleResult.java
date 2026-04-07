@@ -241,9 +241,9 @@ public record RuleResult(
         private final boolean success;
         private final List<String> firedRules = new ArrayList<>();
         private final List<String> skippedRules = new ArrayList<>();
-        private final List<String> failedRules = new ArrayList<>();
-        private final Map<String, Object> results = new HashMap<>();
-        private final List<RuleError> errors = new ArrayList<>();
+        private List<String> failedRules;
+        private Map<String, Object> results;
+        private List<RuleError> errors;
         private Duration executionTime = Duration.ZERO;
 
         private Builder(boolean success) {
@@ -284,6 +284,8 @@ public record RuleResult(
          * @return this builder | 此构建器
          */
         public Builder failed(String ruleName, String message, Throwable cause) {
+            if (failedRules == null) failedRules = new ArrayList<>();
+            if (errors == null) errors = new ArrayList<>();
             failedRules.add(ruleName);
             errors.add(new RuleError(ruleName, message, cause));
             return this;
@@ -298,6 +300,7 @@ public record RuleResult(
          * @return this builder | 此构建器
          */
         public Builder result(String key, Object value) {
+            if (results == null) results = new HashMap<>();
             results.put(key, value);
             return this;
         }
@@ -310,7 +313,10 @@ public record RuleResult(
          * @return this builder | 此构建器
          */
         public Builder results(Map<String, Object> results) {
-            this.results.putAll(results);
+            if (!results.isEmpty()) {
+                if (this.results == null) this.results = new HashMap<>();
+                this.results.putAll(results);
+            }
             return this;
         }
 
@@ -337,10 +343,10 @@ public record RuleResult(
                     success,
                     List.copyOf(firedRules),
                     List.copyOf(skippedRules),
-                    List.copyOf(failedRules),
-                    Map.copyOf(results),
+                    failedRules != null ? List.copyOf(failedRules) : List.of(),
+                    results != null ? Map.copyOf(results) : Map.of(),
                     executionTime,
-                    List.copyOf(errors)
+                    errors != null ? List.copyOf(errors) : List.of()
             );
         }
     }

@@ -207,17 +207,20 @@ public final class SslContextBuilder {
      * @throws OpenCryptoException if loading fails - 如果加载失败
      */
     public SslContextBuilder keyStore(Path path, String password, String type) {
+        char[] pwChars = password.toCharArray();
         try (InputStream is = Files.newInputStream(path)) {
             KeyStore keyStore = KeyStore.getInstance(type);
-            keyStore.load(is, password.toCharArray());
+            keyStore.load(is, pwChars);
 
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(
                     KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(keyStore, password.toCharArray());
+            kmf.init(keyStore, pwChars);
             this.keyManagers = kmf.getKeyManagers();
             return this;
         } catch (IOException | GeneralSecurityException e) {
             throw new OpenCryptoException("Failed to load keystore from: " + path, e);
+        } finally {
+            java.util.Arrays.fill(pwChars, '\0');
         }
     }
 
@@ -245,17 +248,20 @@ public final class SslContextBuilder {
      * @throws OpenCryptoException if loading fails - 如果加载失败
      */
     public SslContextBuilder keyStore(InputStream inputStream, String password, String type) {
+        char[] pwChars = password.toCharArray();
         try {
             KeyStore keyStore = KeyStore.getInstance(type);
-            keyStore.load(inputStream, password.toCharArray());
+            keyStore.load(inputStream, pwChars);
 
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(
                     KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(keyStore, password.toCharArray());
+            kmf.init(keyStore, pwChars);
             this.keyManagers = kmf.getKeyManagers();
             return this;
         } catch (GeneralSecurityException | IOException e) {
             throw new OpenCryptoException("Failed to load keystore from stream", e);
+        } finally {
+            java.util.Arrays.fill(pwChars, '\0');
         }
     }
 
@@ -283,9 +289,10 @@ public final class SslContextBuilder {
      * @throws OpenCryptoException if loading fails - 如果加载失败
      */
     public SslContextBuilder trustStore(Path path, String password, String type) {
+        char[] pwChars = password.toCharArray();
         try (InputStream is = Files.newInputStream(path)) {
             KeyStore trustStore = KeyStore.getInstance(type);
-            trustStore.load(is, password.toCharArray());
+            trustStore.load(is, pwChars);
 
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(
                     TrustManagerFactory.getDefaultAlgorithm());
@@ -294,6 +301,8 @@ public final class SslContextBuilder {
             return this;
         } catch (IOException | GeneralSecurityException e) {
             throw new OpenCryptoException("Failed to load truststore from: " + path, e);
+        } finally {
+            java.util.Arrays.fill(pwChars, '\0');
         }
     }
 
@@ -321,9 +330,10 @@ public final class SslContextBuilder {
      * @throws OpenCryptoException if loading fails - 如果加载失败
      */
     public SslContextBuilder trustStore(InputStream inputStream, String password, String type) {
+        char[] pwChars = password.toCharArray();
         try {
             KeyStore trustStore = KeyStore.getInstance(type);
-            trustStore.load(inputStream, password.toCharArray());
+            trustStore.load(inputStream, pwChars);
 
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(
                     TrustManagerFactory.getDefaultAlgorithm());
@@ -332,6 +342,8 @@ public final class SslContextBuilder {
             return this;
         } catch (GeneralSecurityException | IOException e) {
             throw new OpenCryptoException("Failed to load truststore from stream", e);
+        } finally {
+            java.util.Arrays.fill(pwChars, '\0');
         }
     }
 
@@ -548,15 +560,19 @@ public final class SslContextBuilder {
                 .replaceAll("-----END.*?-----", "")
                 .replaceAll("\\s+", "");
         byte[] der = Base64.getDecoder().decode(cleaned);
-        PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(der);
-        for (String alg : new String[]{"RSA", "EC", "Ed25519", "Ed448", "DSA"}) {
-            try {
-                return KeyFactory.getInstance(alg).generatePrivate(spec);
-            } catch (InvalidKeySpecException | NoSuchAlgorithmException ignored) {
-                // Try next algorithm
+        try {
+            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(der);
+            for (String alg : new String[]{"RSA", "EC", "Ed25519", "Ed448", "DSA"}) {
+                try {
+                    return KeyFactory.getInstance(alg).generatePrivate(spec);
+                } catch (InvalidKeySpecException | NoSuchAlgorithmException ignored) {
+                    // Try next algorithm
+                }
             }
+            throw new InvalidKeySpecException("Unsupported private key format (tried RSA, EC, Ed25519, Ed448, DSA)");
+        } finally {
+            java.util.Arrays.fill(der, (byte) 0);
         }
-        throw new InvalidKeySpecException("Unsupported private key format (tried RSA, EC, Ed25519, Ed448, DSA)");
     }
 
     /**

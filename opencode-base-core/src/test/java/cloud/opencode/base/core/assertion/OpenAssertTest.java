@@ -297,10 +297,10 @@ class OpenAssertTest {
         }
 
         @Test
-        @DisplayName("noNullElements null 数组返回 null")
+        @DisplayName("noNullElements null 数组抛异常")
         void testNoNullElementsNullArray() {
-            String[] result = OpenAssert.noNullElements((String[]) null, "Has null elements");
-            assertThat(result).isNull();
+            assertThatThrownBy(() -> OpenAssert.noNullElements((String[]) null, "Has null elements"))
+                    .isInstanceOf(OpenIllegalArgumentException.class);
         }
     }
 

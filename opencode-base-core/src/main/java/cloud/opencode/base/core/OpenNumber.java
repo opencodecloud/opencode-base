@@ -70,8 +70,10 @@ public final class OpenNumber {
      * @param str the string | 字符串
      * @return true if it is a number | 如果是数字返回 true
      */
+    private static final int MAX_NUMBER_STRING_LENGTH = 10_000;
+
     public static boolean isNumber(String str) {
-        if (str == null || str.isEmpty()) {
+        if (str == null || str.isEmpty() || str.length() > MAX_NUMBER_STRING_LENGTH) {
             return false;
         }
         try {
@@ -337,8 +339,12 @@ public final class OpenNumber {
         if (str == null || str.isEmpty()) {
             return defaultValue;
         }
+        String trimmed = str.trim();
+        if (trimmed.length() > MAX_NUMBER_STRING_LENGTH) {
+            return defaultValue;
+        }
         try {
-            return new BigDecimal(str.trim());
+            return new BigDecimal(trimmed);
         } catch (NumberFormatException e) {
             return defaultValue;
         }
@@ -355,8 +361,12 @@ public final class OpenNumber {
         if (str == null || str.isEmpty()) {
             return null;
         }
+        String trimmed = str.trim();
+        if (trimmed.length() > MAX_NUMBER_STRING_LENGTH) {
+            return null;
+        }
         try {
-            return new BigInteger(str.trim());
+            return new BigInteger(trimmed);
         } catch (NumberFormatException e) {
             return null;
         }
@@ -767,6 +777,9 @@ public final class OpenNumber {
                 number instanceof Short || number instanceof Byte) {
             return BigDecimal.valueOf(number.longValue());
         }
+        if (number instanceof Float) {
+            return new BigDecimal(number.toString());
+        }
         return BigDecimal.valueOf(number.doubleValue());
     }
 
@@ -874,8 +887,14 @@ public final class OpenNumber {
     }
 
     /**
-     * Formats a BigDecimal value as a currency string.
-     * 格式化为货币
+     * Formats a BigDecimal value as a currency string using the JVM's default Locale.
+     * 使用 JVM 默认 Locale 将 BigDecimal 值格式化为货币字符串。
+     *
+     * <p><b>API Note:</b> The output depends on the JVM's default Locale ({@link java.util.Locale#getDefault()}).
+     * Results may differ across servers with different Locale settings.
+     * For explicit Locale control, use {@link java.text.NumberFormat#getCurrencyInstance(java.util.Locale)}.
+     * 输出取决于 JVM 默认 Locale，不同服务器上的结果可能不同。
+     * 如需显式指定 Locale，请使用 {@link java.text.NumberFormat#getCurrencyInstance(java.util.Locale)}。</p>
      *
      * @param value BigDecimal value | BigDecimal 值
      * @return currency string | 货币字符串

@@ -32,4 +32,8 @@ module cloud.opencode.base.oauth2 {
     exports cloud.opencode.base.oauth2.pkce;
     exports cloud.opencode.base.oauth2.provider;
     exports cloud.opencode.base.oauth2.token;
+    exports cloud.opencode.base.oauth2.introspection;
+    exports cloud.opencode.base.oauth2.par;
+    exports cloud.opencode.base.oauth2.security;
+    exports cloud.opencode.base.oauth2.discovery;
 }

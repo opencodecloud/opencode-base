@@ -217,7 +217,7 @@ public final class OpenArray {
         }
 
         Class<?> type = array1.getClass().getComponentType();
-        T[] result = (T[]) Array.newInstance(type, array1.length + array2.length);
+        T[] result = (T[]) Array.newInstance(type, Math.addExact(array1.length, array2.length));
         System.arraycopy(array1, 0, result, 0, array1.length);
         System.arraycopy(array2, 0, result, array1.length, array2.length);
         return result;
@@ -239,12 +239,15 @@ public final class OpenArray {
         if (array == null) {
             return values;
         }
+        if (index < 0 || index > array.length) {
+            throw new IndexOutOfBoundsException("Index: " + index + ", Length: " + array.length);
+        }
         if (values == null || values.length == 0) {
             return array.clone();
         }
 
         Class<?> type = array.getClass().getComponentType();
-        T[] result = (T[]) Array.newInstance(type, array.length + values.length);
+        T[] result = (T[]) Array.newInstance(type, Math.addExact(array.length, values.length));
 
         if (index > 0) {
             System.arraycopy(array, 0, result, 0, Math.min(index, array.length));
@@ -269,11 +272,14 @@ public final class OpenArray {
         if (array == null) {
             return values;
         }
+        if (index < 0 || index > array.length) {
+            throw new IndexOutOfBoundsException("Index: " + index + ", Length: " + array.length);
+        }
         if (values == null || values.length == 0) {
             return array.clone();
         }
 
-        int[] result = new int[array.length + values.length];
+        int[] result = new int[Math.addExact(array.length, values.length)];
         if (index > 0) {
             System.arraycopy(array, 0, result, 0, Math.min(index, array.length));
         }

@@ -25,7 +25,7 @@ class AssertionExceptionTest {
         void shouldCreateWithErrorCode() {
             AssertionException ex = new AssertionException(TestErrorCode.ASSERTION_FAILED);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.ASSERTION_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.ASSERTION_FAILED);
             assertThat(ex.getMessage()).contains("Assertion failed");
         }
 
@@ -34,7 +34,7 @@ class AssertionExceptionTest {
         void shouldCreateWithErrorCodeAndDetail() {
             AssertionException ex = new AssertionException(TestErrorCode.ASSERTION_EQUALS, "expected 1 but was 2");
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.ASSERTION_EQUALS);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.ASSERTION_EQUALS);
             assertThat(ex.getMessage()).contains("expected 1 but was 2");
         }
 
@@ -43,7 +43,7 @@ class AssertionExceptionTest {
         void shouldCreateWithMessage() {
             AssertionException ex = new AssertionException("Custom message");
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
         }
 
         @Test
@@ -52,7 +52,7 @@ class AssertionExceptionTest {
             Throwable cause = new RuntimeException("root");
             AssertionException ex = new AssertionException("Custom message", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Custom message");
+            assertThat(ex.getMessage()).contains("Custom message");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -66,7 +66,7 @@ class AssertionExceptionTest {
         void failedShouldCreateAssertionFailedException() {
             AssertionException ex = AssertionException.failed("test message");
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.ASSERTION_FAILED);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.ASSERTION_FAILED);
             assertThat(ex.getMessage()).contains("test message");
         }
 
@@ -75,7 +75,7 @@ class AssertionExceptionTest {
         void nullAssertionShouldCreateNullAssertionException() {
             AssertionException ex = AssertionException.nullAssertion();
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.ASSERTION_NULL);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.ASSERTION_NULL);
         }
 
         @Test
@@ -83,7 +83,7 @@ class AssertionExceptionTest {
         void notEqualShouldCreateEqualityAssertionException() {
             AssertionException ex = AssertionException.notEqual("expected", "actual");
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.ASSERTION_EQUALS);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.ASSERTION_EQUALS);
             assertThat(ex.getMessage()).contains("expected");
             assertThat(ex.getMessage()).contains("actual");
         }
@@ -93,7 +93,7 @@ class AssertionExceptionTest {
         void timeoutShouldCreateTimeoutAssertionException() {
             AssertionException ex = AssertionException.timeout(1000, 1500);
 
-            assertThat(ex.getErrorCode()).isEqualTo(TestErrorCode.ASSERTION_TIMEOUT);
+            assertThat(ex.getTestErrorCode()).isEqualTo(TestErrorCode.ASSERTION_TIMEOUT);
             assertThat(ex.getMessage()).contains("1000ms");
             assertThat(ex.getMessage()).contains("1500ms");
         }

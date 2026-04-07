@@ -436,13 +436,20 @@ class CacheEventDispatcherTest {
         @Test
         @DisplayName("metrics tracks errors")
         void metricsTracksErrors() {
-            dispatcher.addListener(event -> {
-                throw new RuntimeException("test error");
-            });
-            dispatcher.dispatch(CacheEvent.put("cache", "key", "value"));
+            var julLogger = java.util.logging.Logger.getLogger(CacheEventDispatcher.class.getName());
+            var savedLevel = julLogger.getLevel();
+            julLogger.setLevel(java.util.logging.Level.OFF);
+            try {
+                dispatcher.addListener(event -> {
+                    throw new RuntimeException("test error");
+                });
+                dispatcher.dispatch(CacheEvent.put("cache", "key", "value"));
 
-            CacheEventDispatcher.Metrics metrics = dispatcher.getMetrics();
-            assertEquals(1, metrics.errors());
+                CacheEventDispatcher.Metrics metrics = dispatcher.getMetrics();
+                assertEquals(1, metrics.errors());
+            } finally {
+                julLogger.setLevel(savedLevel);
+            }
         }
 
         @Test
@@ -475,6 +482,21 @@ class CacheEventDispatcherTest {
     @Nested
     @DisplayName("Error Handler Tests")
     class ErrorHandlerTests {
+
+        private java.util.logging.Logger julLogger;
+        private java.util.logging.Level originalLevel;
+
+        @BeforeEach
+        void suppressWarnings() {
+            julLogger = java.util.logging.Logger.getLogger(CacheEventDispatcher.class.getName());
+            originalLevel = julLogger.getLevel();
+            julLogger.setLevel(java.util.logging.Level.OFF);
+        }
+
+        @AfterEach
+        void restoreWarnings() {
+            julLogger.setLevel(originalLevel);
+        }
 
         @Test
         @DisplayName("default error handler logs and continues")

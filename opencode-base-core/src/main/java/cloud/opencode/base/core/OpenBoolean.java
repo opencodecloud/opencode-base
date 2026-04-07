@@ -228,7 +228,7 @@ public final class OpenBoolean {
      */
     public static boolean and(boolean... values) {
         if (values == null || values.length == 0) {
-            return false;
+            return true;
         }
         for (boolean value : values) {
             if (!value) {

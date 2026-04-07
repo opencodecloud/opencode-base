@@ -1,6 +1,6 @@
 # OpenCode Base Lock
 
-面向 JDK 25+ 的统一锁抽象，支持本地锁和分布式锁。提供可重入锁、读写锁、自旋锁、分段锁、命名锁、带死锁预防的锁组以及分布式锁 SPI。
+面向 JDK 25+ 的统一锁抽象，支持本地锁和分布式锁。提供可重入锁、读写锁、戳记锁、自旋锁、分段锁、重试锁、TTL锁、可观察锁、命名锁、带死锁预防的锁组以及分布式锁 SPI。
 
 ## Maven 依赖
 
@@ -8,7 +8,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-lock</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -18,8 +18,12 @@
 - 通过 `LockGuard` 支持 try-with-resources 自动释放
 - 本地可重入锁，支持公平/非公平模式
 - 读写锁，支持并发读取和独占写入
+- 戳记锁，通过乐观读为读密集型工作负载提供更高吞吐量
 - 自旋锁，适用于极短临界区
 - 分段锁，基于键的细粒度锁定
+- 重试锁，支持可配置的指数退避重试策略
+- TTL锁，过期检测用于长期持有锁的监控
+- 可观察锁，带事件监听器的锁操作监控
 - 命名锁工厂，带条纹的字符串键锁定
 - 锁组，通过一致排序预防死锁
 - 锁管理器，集中管理锁生命周期
@@ -41,7 +45,7 @@
 | `ReadWriteLock<T>` | 读写锁接口，允许并发读取和独占写入 |
 | `LockGuard<T>` | 可自动关闭的锁守卫，用于 try-with-resources 模式 |
 | `LockConfig` | 锁配置：超时、公平性、自旋次数及其他选项 |
-| `LockType` | 锁类型枚举：REENTRANT、READ_WRITE、SPIN、SEGMENT |
+| `LockType` | 锁类型枚举：REENTRANT、READ_WRITE、STAMPED、SPIN、SEGMENT |
 
 ### 本地锁
 
@@ -49,8 +53,19 @@
 |---|------|
 | `LocalLock` | 基于 `ReentrantLock` 的本地可重入锁实现 |
 | `LocalReadWriteLock` | 基于 `ReentrantReadWriteLock` 的本地读写锁实现 |
-| `SegmentLock<K>` | 将键映射到独立锁段以减少争用的细粒度锁 |
+| `StampedLockAdapter` | StampedLock 包装器，提供安全的乐观读支持 |
 | `SpinLock` | 适用于极短临界区（纳秒级）的自旋锁 |
+| `SegmentLock<K>` | 将键映射到独立锁段以减少争用的细粒度锁 |
+| `RetryLock<T>` | 为任意锁添加可配置指数退避重试的装饰器 |
+| `TtlLock` | 带 TTL 自动过期的锁，防止挂起线程导致永久死锁 |
+
+### 事件
+
+| 类 | 说明 |
+|---|------|
+| `LockEvent` | 锁生命周期事件记录（ACQUIRED、RELEASED、TIMEOUT、ERROR） |
+| `LockListener` | 锁事件回调函数式接口 |
+| `ObservableLock<T>` | 为任意锁添加事件通知的装饰器 |
 
 ### 分布式锁
 
@@ -127,12 +142,33 @@ ReadWriteLock<Long> rwLock = OpenLock.readWriteLock();
 String data = rwLock.executeRead(() -> loadData());
 rwLock.executeWrite(() -> saveData(newData));
 
+// 戳记锁（乐观读，最适合读密集型场景）
+StampedLockAdapter stampedLock = OpenLock.stampedLock();
+String cached = stampedLock.optimisticRead(() -> readFromCache());
+stampedLock.executeWrite(() -> updateCache(newData));
+
 // 短临界区自旋锁
 Lock<Long> spinLock = OpenLock.spinLock();
 
 // 基于键的分段锁
 SegmentLock<String> segmentLock = OpenLock.segmentLock(32);
 segmentLock.execute("user:123", () -> updateUser("123"));
+
+// 指数退避重试锁
+Lock<Long> retryLock = OpenLock.retryLock(existingLock)
+    .maxRetries(5)
+    .retryDelay(Duration.ofMillis(200))
+    .backoffMultiplier(1.5)
+    .build();
+
+// TTL 锁（自动过期，防止永久死锁）
+Lock<Long> ttlLock = OpenLock.ttlLock(Duration.ofSeconds(30));
+ttlLock.execute(() -> processTask());
+
+// 可观察锁（带事件监听器）
+Lock<Long> observable = OpenLock.observableLock("myLock",
+    event -> log.info("锁事件: {}", event));
+observable.execute(() -> doWork());
 
 // 命名锁工厂
 NamedLockFactory factory = OpenLock.namedLockFactory();

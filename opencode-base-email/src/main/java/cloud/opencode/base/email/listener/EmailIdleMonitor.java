@@ -1,27 +1,26 @@
 package cloud.opencode.base.email.listener;
 
+import cloud.opencode.base.email.Attachment;
 import cloud.opencode.base.email.EmailFlags;
 import cloud.opencode.base.email.EmailReceiveConfig;
 import cloud.opencode.base.email.ReceivedEmail;
 import cloud.opencode.base.email.attachment.ByteArrayAttachment;
 import cloud.opencode.base.email.exception.EmailErrorCode;
 import cloud.opencode.base.email.exception.EmailReceiveException;
-import cloud.opencode.base.email.Attachment;
-import jakarta.mail.*;
-import jakarta.mail.event.MessageCountAdapter;
-import jakarta.mail.event.MessageCountEvent;
-import jakarta.mail.internet.InternetAddress;
-import jakarta.mail.internet.MimeMessage;
+import cloud.opencode.base.email.protocol.ProtocolException;
+import cloud.opencode.base.email.protocol.imap.ImapClient;
+import cloud.opencode.base.email.protocol.mime.MimeParser;
+import cloud.opencode.base.email.protocol.mime.ParsedMessage;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Email IDLE Monitor
@@ -71,7 +70,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class EmailIdleMonitor implements AutoCloseable {
 
     private static final System.Logger logger = System.getLogger(EmailIdleMonitor.class.getName());
-    private static final int MAX_MIME_DEPTH = 50;
+
+    /** Pattern to match IMAP untagged EXISTS response, e.g. "* 5 EXISTS" */
+    private static final Pattern EXISTS_PATTERN = Pattern.compile("\\* (\\d+) EXISTS");
+
+    /** Maximum reconnect delay cap to prevent unbounded sleep (5 minutes). */
+    private static final long MAX_RECONNECT_DELAY_MS = 5 * 60 * 1000L;
 
     private final EmailReceiveConfig config;
     private final String folderName;
@@ -80,9 +84,8 @@ public class EmailIdleMonitor implements AutoCloseable {
     private final int maxReconnectAttempts;
     private final Duration reconnectDelay;
 
-    private Session session;
-    private Store store;
-    private Folder folder;
+    private ImapClient client;
+    private int previousCount;
     private ExecutorService executor;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean stopping = new AtomicBoolean(false);
@@ -91,7 +94,7 @@ public class EmailIdleMonitor implements AutoCloseable {
     private EmailIdleMonitor(Builder builder) {
         this.config = builder.config;
         this.folderName = builder.folder;
-        this.listeners = new ArrayList<>(builder.listeners);
+        this.listeners = new CopyOnWriteArrayList<>(builder.listeners);
         this.idleTimeout = builder.idleTimeout;
         this.maxReconnectAttempts = builder.maxReconnectAttempts;
         this.reconnectDelay = builder.reconnectDelay;
@@ -148,16 +151,7 @@ public class EmailIdleMonitor implements AutoCloseable {
         stopping.set(true);
         running.set(false);
 
-        // Interrupt idle
-        if (folder != null && folder.isOpen()) {
-            try {
-                // Close folder to interrupt IDLE
-                folder.close(false);
-            } catch (MessagingException e) {
-                // Ignore
-            }
-        }
-
+        // Close client to interrupt IDLE
         disconnect();
 
         if (executor != null) {
@@ -186,9 +180,7 @@ public class EmailIdleMonitor implements AutoCloseable {
      */
     public void addListener(EmailListener listener) {
         if (listener != null) {
-            synchronized (listeners) {
-                listeners.add(listener);
-            }
+            listeners.add(listener);
         }
     }
 
@@ -199,9 +191,7 @@ public class EmailIdleMonitor implements AutoCloseable {
      * @param listener the listener to remove | 要移除的监听器
      */
     public void removeListener(EmailListener listener) {
-        synchronized (listeners) {
-            listeners.remove(listener);
-        }
+        listeners.remove(listener);
     }
 
     @Override
@@ -224,7 +214,7 @@ public class EmailIdleMonitor implements AutoCloseable {
                     } else {
                         performPoll();
                     }
-                } catch (MessagingException e) {
+                } catch (ProtocolException e) {
                     if (!stopping.get()) {
                         handleError(e);
                         if (!attemptReconnect()) {
@@ -242,154 +232,171 @@ public class EmailIdleMonitor implements AutoCloseable {
         }
     }
 
-    private void connect() throws MessagingException {
-        Properties props = new Properties();
-        String protocol = config.getStoreProtocol();
+    private void connect() throws ProtocolException {
+        client = new ImapClient(
+                config.host(),
+                config.port(),
+                config.ssl(),
+                config.starttls(),
+                config.connectionTimeout(),
+                idleTimeout
+        );
 
-        props.put("mail.store.protocol", protocol);
-        props.put("mail." + protocol + ".host", config.host());
-        props.put("mail." + protocol + ".port", String.valueOf(config.port()));
+        client.connect();
 
-        if (config.ssl()) {
-            props.put("mail." + protocol + ".ssl.enable", "true");
+        if (config.hasOAuth2()) {
+            client.authenticateXOAuth2(config.username(), config.oauth2Token());
+        } else {
+            client.login(config.username(), config.password());
         }
 
-        if (config.starttls()) {
-            props.put("mail." + protocol + ".starttls.enable", "true");
-            props.put("mail." + protocol + ".starttls.required", "true");
-        }
-
-        props.put("mail." + protocol + ".connectiontimeout",
-                String.valueOf(config.connectionTimeout().toMillis()));
-        props.put("mail." + protocol + ".timeout",
-                String.valueOf(idleTimeout.toMillis()));
-
-        session = Session.getInstance(props);
-        session.setDebug(config.debug());
-
-        store = session.getStore(protocol);
-        store.connect(config.host(), config.port(), config.username(), config.password());
-
-        folder = store.getFolder(folderName);
-        folder.open(Folder.READ_WRITE);
-
-        // Add message count listener
-        folder.addMessageCountListener(new MessageCountAdapter() {
-            @Override
-            public void messagesAdded(MessageCountEvent e) {
-                for (Message message : e.getMessages()) {
-                    try {
-                        ReceivedEmail email = parseMessage(message);
-                        notifyNewEmail(email);
-                    } catch (Exception ex) {
-                        notifyError(ex);
-                    }
-                }
-            }
-
-            @Override
-            public void messagesRemoved(MessageCountEvent e) {
-                for (Message message : e.getMessages()) {
-                    try {
-                        if (message instanceof MimeMessage mimeMessage) {
-                            notifyEmailDeleted(mimeMessage.getMessageID());
-                        }
-                    } catch (Exception ex) {
-                        notifyError(ex);
-                    }
-                }
-            }
-        });
+        int[] counts = client.select(folderName);
+        previousCount = counts[0];
 
         reconnectAttempts.set(0);
     }
 
     private void disconnect() {
-        if (folder != null) {
+        if (client != null) {
             try {
-                if (folder.isOpen()) {
-                    folder.close(false);
-                }
-            } catch (MessagingException e) {
+                client.close();
+            } catch (Exception e) {
                 // Ignore
             }
-            folder = null;
-        }
-
-        if (store != null) {
-            try {
-                if (store.isConnected()) {
-                    store.close();
-                }
-            } catch (MessagingException e) {
-                // Ignore
-            }
-            store = null;
+            client = null;
         }
     }
 
     private boolean supportsIdle() {
-        // Use reflection to check for IDLE support without direct dependency on implementation
-        try {
-            var imapFolderClass = Class.forName("org.eclipse.angus.mail.imap.IMAPFolder");
-            if (imapFolderClass.isInstance(folder)) {
-                var storeMethod = imapFolderClass.getMethod("getStore");
-                var store = storeMethod.invoke(folder);
-                var hasCapabilityMethod = store.getClass().getMethod("hasCapability", String.class);
-                return (Boolean) hasCapabilityMethod.invoke(store, "IDLE");
-            }
-        } catch (Exception e) {
-            // Fallback: try legacy com.sun.mail package
-            try {
-                var imapFolderClass = Class.forName("com.sun.mail.imap.IMAPFolder");
-                if (imapFolderClass.isInstance(folder)) {
-                    var storeMethod = imapFolderClass.getMethod("getStore");
-                    var store = storeMethod.invoke(folder);
-                    var hasCapabilityMethod = store.getClass().getMethod("hasCapability", String.class);
-                    return (Boolean) hasCapabilityMethod.invoke(store, "IDLE");
+        return client.hasCapability("IDLE");
+    }
+
+    private void performIdle() throws ProtocolException {
+        List<String> responses = client.idle(idleTimeout);
+
+        for (String resp : responses) {
+            Matcher matcher = EXISTS_PATTERN.matcher(resp);
+            if (matcher.find()) {
+                int newTotal = Integer.parseInt(matcher.group(1));
+                if (newTotal > previousCount) {
+                    fetchAndNotifyNew(previousCount, newTotal);
+                    previousCount = newTotal;
                 }
-            } catch (Exception ex) {
-                // IDLE not supported
             }
-        }
-        return false;
-    }
-
-    private void performIdle() throws MessagingException {
-        // Use reflection to call idle() without direct dependency on implementation
-        try {
-            var idleMethod = folder.getClass().getMethod("idle");
-            idleMethod.invoke(folder);
-        } catch (Exception e) {
-            if (e.getCause() instanceof MessagingException me) {
-                throw me;
-            }
-            throw new MessagingException("Failed to perform IDLE", e);
         }
     }
 
-    private void performPoll() throws MessagingException {
+    private void performPoll() throws ProtocolException {
         // Fallback polling for servers that don't support IDLE
-        int count = folder.getMessageCount();
         try {
             Thread.sleep(idleTimeout.toMillis());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return;
         }
 
-        // Check for new messages
-        int newCount = folder.getMessageCount();
-        if (newCount > count) {
-            for (int i = count + 1; i <= newCount; i++) {
-                try {
-                    Message message = folder.getMessage(i);
-                    ReceivedEmail email = parseMessage(message);
+        // NOOP to keep connection alive and get updated counts
+        client.noop();
+
+        // Re-select to get current message count
+        int[] counts = client.select(folderName);
+        int newCount = counts[0];
+
+        if (newCount > previousCount) {
+            fetchAndNotifyNew(previousCount, newCount);
+            previousCount = newCount;
+        }
+    }
+
+    private void fetchAndNotifyNew(int fromCount, int toCount) {
+        for (int i = fromCount + 1; i <= toCount; i++) {
+            try {
+                String fetchResp = client.fetch(i, "(BODY[] RFC822.SIZE)");
+                String rawMessage = extractBodyFromFetch(fetchResp);
+                if (rawMessage != null) {
+                    ParsedMessage pm = MimeParser.parse(rawMessage);
+                    ReceivedEmail email = buildReceivedEmail(pm, i);
                     notifyNewEmail(email);
-                } catch (Exception e) {
-                    notifyError(e);
                 }
+            } catch (Exception e) {
+                notifyError(e);
             }
         }
+    }
+
+    /**
+     * Extracts the raw message body from an IMAP FETCH response.
+     * The FETCH response wraps the literal message content between
+     * a literal size indicator and the closing parenthesis.
+     */
+    private String extractBodyFromFetch(String fetchResponse) {
+        if (fetchResponse == null || fetchResponse.isEmpty()) {
+            return null;
+        }
+        // The FETCH response contains the raw message as a literal.
+        // Find the first blank line separator after the FETCH metadata line,
+        // which begins the actual RFC 2822 message content.
+        // Typical format:
+        //   * N FETCH (BODY[] {SIZE}\r\n<raw message>\r\n)\r\n
+        // We look for the literal content between {size}\r\n and the trailing )
+        int braceStart = fetchResponse.indexOf('{');
+        if (braceStart < 0) {
+            // No literal marker; the whole response may be the content
+            return fetchResponse;
+        }
+        int braceEnd = fetchResponse.indexOf('}', braceStart);
+        if (braceEnd < 0) {
+            return fetchResponse;
+        }
+        // Skip past the closing brace and the CRLF that follows it
+        int contentStart = braceEnd + 1;
+        if (contentStart < fetchResponse.length() && fetchResponse.charAt(contentStart) == '\r') {
+            contentStart++;
+        }
+        if (contentStart < fetchResponse.length() && fetchResponse.charAt(contentStart) == '\n') {
+            contentStart++;
+        }
+        // The content ends at the last closing parenthesis
+        int contentEnd = fetchResponse.lastIndexOf(')');
+        if (contentEnd <= contentStart) {
+            contentEnd = fetchResponse.length();
+        }
+        return fetchResponse.substring(contentStart, contentEnd).strip();
+    }
+
+    private ReceivedEmail buildReceivedEmail(ParsedMessage pm, int messageNumber) {
+        ReceivedEmail.Builder builder = ReceivedEmail.builder()
+                .folder(folderName)
+                .messageNumber(messageNumber)
+                .messageId(pm.messageId())
+                .from(pm.from())
+                .fromName(pm.fromName())
+                .to(pm.to() != null ? pm.to() : List.of())
+                .cc(pm.cc() != null ? pm.cc() : List.of())
+                .bcc(pm.bcc() != null ? pm.bcc() : List.of())
+                .replyTo(pm.replyTo())
+                .subject(pm.subject())
+                .textContent(pm.textContent())
+                .htmlContent(pm.htmlContent())
+                .sentDate(pm.sentDate())
+                .receivedDate(pm.receivedDate())
+                .size(pm.size())
+                .headers(pm.headers() != null ? pm.headers() : Map.of())
+                .flags(EmailFlags.UNREAD);
+
+        // Convert ParsedAttachments to Attachments
+        if (pm.attachments() != null && !pm.attachments().isEmpty()) {
+            List<Attachment> attachments = new ArrayList<>(pm.attachments().size());
+            for (ParsedMessage.ParsedAttachment pa : pm.attachments()) {
+                if (pa.fileName() != null) {
+                    attachments.add(ByteArrayAttachment.of(
+                            pa.fileName(), pa.data(), pa.contentType()));
+                }
+            }
+            builder.attachments(attachments);
+        }
+
+        return builder.build();
     }
 
     private boolean attemptReconnect() {
@@ -406,12 +413,14 @@ public class EmailIdleMonitor implements AutoCloseable {
         notifyReconnecting(attempt);
 
         try {
-            Thread.sleep(reconnectDelay.toMillis() * attempt);
+            long delayMs = Math.min(reconnectDelay.toMillis() * attempt, MAX_RECONNECT_DELAY_MS);
+            Thread.sleep(delayMs);
             disconnect();
             connect();
             notifyReconnected();
             return true;
         } catch (Exception e) {
+            notifyError(e); // don't swallow reconnect failures
             return false;
         }
     }
@@ -422,200 +431,82 @@ public class EmailIdleMonitor implements AutoCloseable {
         }
     }
 
-    private ReceivedEmail parseMessage(Message message) throws MessagingException {
-        ReceivedEmail.Builder builder = ReceivedEmail.builder()
-                .folder(folderName)
-                .messageNumber(message.getMessageNumber());
-
-        if (message instanceof MimeMessage mimeMessage) {
-            builder.messageId(mimeMessage.getMessageID());
-        }
-
-        Address[] from = message.getFrom();
-        if (from != null && from.length > 0) {
-            if (from[0] instanceof InternetAddress ia) {
-                builder.from(ia.getAddress());
-                builder.fromName(ia.getPersonal());
-            } else {
-                builder.from(from[0].toString());
-            }
-        }
-
-        builder.to(parseAddresses(message.getRecipients(Message.RecipientType.TO)));
-        builder.cc(parseAddresses(message.getRecipients(Message.RecipientType.CC)));
-        builder.subject(message.getSubject());
-
-        if (message.getSentDate() != null) {
-            builder.sentDate(message.getSentDate().toInstant());
-        }
-        if (message.getReceivedDate() != null) {
-            builder.receivedDate(message.getReceivedDate().toInstant());
-        }
-
-        builder.flags(EmailFlags.from(message.getFlags()));
-        builder.size(message.getSize());
-
-        // Parse content
-        parseContent(message, builder);
-
-        return builder.build();
-    }
-
-    private List<String> parseAddresses(Address[] addresses) {
-        if (addresses == null) return List.of();
-        List<String> result = new ArrayList<>();
-        for (Address addr : addresses) {
-            if (addr instanceof InternetAddress ia) {
-                result.add(ia.getAddress());
-            } else {
-                result.add(addr.toString());
-            }
-        }
-        return result;
-    }
-
-    private void parseContent(Part part, ReceivedEmail.Builder builder) throws MessagingException {
-        try {
-            List<Attachment> attachments = new ArrayList<>();
-            parseContentRecursive(part, builder, attachments, 0);
-            builder.attachments(attachments);
-        } catch (IOException e) {
-            throw new MessagingException("Failed to parse content", e);
-        }
-    }
-
-    private void parseContentRecursive(Part part, ReceivedEmail.Builder builder,
-                                        List<Attachment> attachments, int depth) throws MessagingException, IOException {
-        if (depth > MAX_MIME_DEPTH) {
-            return;
-        }
-
-        Object content = part.getContent();
-
-        if (part.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            if (builder.build().textContent() == null) {
-                builder.textContent(content.toString());
-            }
-        } else if (part.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            if (builder.build().htmlContent() == null) {
-                builder.htmlContent(content.toString());
-            }
-        } else if (content instanceof Multipart multipart) {
-            for (int i = 0; i < multipart.getCount(); i++) {
-                parseContentRecursive(multipart.getBodyPart(i), builder, attachments, depth + 1);
-            }
-        } else if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())
-                || part.getFileName() != null) {
-            String fileName = part.getFileName();
-            if (fileName != null) {
-                try (InputStream is = part.getInputStream()) {
-                    byte[] data = readAllBytes(is);
-                    attachments.add(ByteArrayAttachment.of(fileName, data, part.getContentType()));
-                }
-            }
-        }
-    }
-
-    private byte[] readAllBytes(InputStream is) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        while ((bytesRead = is.read(buffer)) != -1) {
-            baos.write(buffer, 0, bytesRead);
-        }
-        return baos.toByteArray();
-    }
-
     // ==================== Notification Methods ====================
 
     private void notifyNewEmail(ReceivedEmail email) {
-        synchronized (listeners) {
-            for (EmailListener listener : listeners) {
-                try {
-                    listener.onNewEmail(email);
-                } catch (Exception e) {
-                    // Log and continue | 记录日志并继续
-                    logger.log(System.Logger.Level.WARNING,
-                            "Listener threw exception in onNewEmail", e);
-                }
+        for (EmailListener listener : listeners) {
+            try {
+                listener.onNewEmail(email);
+            } catch (Exception e) {
+                // Log and continue | 记录日志并继续
+                logger.log(System.Logger.Level.WARNING,
+                        "Listener threw exception in onNewEmail", e);
             }
         }
     }
 
     private void notifyEmailDeleted(String messageId) {
-        synchronized (listeners) {
-            for (EmailListener listener : listeners) {
-                try {
-                    listener.onEmailDeleted(messageId);
-                } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                            "Listener threw exception in onEmailDeleted", e);
-                }
+        for (EmailListener listener : listeners) {
+            try {
+                listener.onEmailDeleted(messageId);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING,
+                        "Listener threw exception in onEmailDeleted", e);
             }
         }
     }
 
     private void notifyError(Throwable error) {
-        synchronized (listeners) {
-            for (EmailListener listener : listeners) {
-                try {
-                    listener.onError(error);
-                } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                            "Listener threw exception in onError", e);
-                }
+        for (EmailListener listener : listeners) {
+            try {
+                listener.onError(error);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING,
+                        "Listener threw exception in onError", e);
             }
         }
     }
 
     private void notifyMonitoringStarted() {
-        synchronized (listeners) {
-            for (EmailListener listener : listeners) {
-                try {
-                    listener.onMonitoringStarted(folderName);
-                } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                            "Listener threw exception in onMonitoringStarted", e);
-                }
+        for (EmailListener listener : listeners) {
+            try {
+                listener.onMonitoringStarted(folderName);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING,
+                        "Listener threw exception in onMonitoringStarted", e);
             }
         }
     }
 
     private void notifyMonitoringStopped() {
-        synchronized (listeners) {
-            for (EmailListener listener : listeners) {
-                try {
-                    listener.onMonitoringStopped(folderName);
-                } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                            "Listener threw exception in onMonitoringStopped", e);
-                }
+        for (EmailListener listener : listeners) {
+            try {
+                listener.onMonitoringStopped(folderName);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING,
+                        "Listener threw exception in onMonitoringStopped", e);
             }
         }
     }
 
     private void notifyReconnecting(int attempt) {
-        synchronized (listeners) {
-            for (EmailListener listener : listeners) {
-                try {
-                    listener.onReconnecting(attempt);
-                } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                            "Listener threw exception in onReconnecting", e);
-                }
+        for (EmailListener listener : listeners) {
+            try {
+                listener.onReconnecting(attempt);
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING,
+                        "Listener threw exception in onReconnecting", e);
             }
         }
     }
 
     private void notifyReconnected() {
-        synchronized (listeners) {
-            for (EmailListener listener : listeners) {
-                try {
-                    listener.onReconnected();
-                } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                            "Listener threw exception in onReconnected", e);
-                }
+        for (EmailListener listener : listeners) {
+            try {
+                listener.onReconnected();
+            } catch (Exception e) {
+                logger.log(System.Logger.Level.WARNING,
+                        "Listener threw exception in onReconnected", e);
             }
         }
     }

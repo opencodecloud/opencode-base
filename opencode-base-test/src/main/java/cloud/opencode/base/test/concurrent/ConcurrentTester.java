@@ -222,7 +222,7 @@ public final class ConcurrentTester {
         List<Throwable> errors
     ) {
         public int totalIterations() {
-            return threads * iterationsPerThread;
+            return Math.multiplyExact(threads, iterationsPerThread);
         }
 
         public double throughput() {

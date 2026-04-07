@@ -29,9 +29,9 @@ class EventStoreExceptionTest {
         void testMessageOnlyConstructor() {
             EventStoreException ex = new EventStoreException("Store error");
 
-            assertThat(ex.getMessage()).isEqualTo("Store error");
+            assertThat(ex.getRawMessage()).isEqualTo("Store error");
             assertThat(ex.getCause()).isNull();
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.STORE_ERROR);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.STORE_ERROR);
         }
 
         @Test
@@ -41,9 +41,9 @@ class EventStoreExceptionTest {
 
             EventStoreException ex = new EventStoreException("Store error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Store error");
+            assertThat(ex.getRawMessage()).isEqualTo("Store error");
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.STORE_ERROR);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.STORE_ERROR);
         }
 
         @Test
@@ -55,10 +55,10 @@ class EventStoreExceptionTest {
             EventStoreException ex = new EventStoreException(
                     "Store error", cause, event, EventErrorCode.PERSIST_FAILED);
 
-            assertThat(ex.getMessage()).isEqualTo("Store error");
+            assertThat(ex.getRawMessage()).isEqualTo("Store error");
             assertThat(ex.getCause()).isEqualTo(cause);
             assertThat(ex.getEvent()).isEqualTo(event);
-            assertThat(ex.getErrorCode()).isEqualTo(EventErrorCode.PERSIST_FAILED);
+            assertThat(ex.getEventErrorCode()).isEqualTo(EventErrorCode.PERSIST_FAILED);
         }
     }
 

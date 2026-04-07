@@ -4,6 +4,9 @@ import cloud.opencode.base.functional.async.AsyncFunctionUtil;
 import cloud.opencode.base.functional.async.LazyAsync;
 import cloud.opencode.base.functional.function.CheckedBiConsumer;
 import cloud.opencode.base.functional.function.CheckedBiFunction;
+import cloud.opencode.base.functional.function.CheckedConsumer;
+import cloud.opencode.base.functional.function.CheckedFunction;
+import cloud.opencode.base.functional.function.CheckedRunnable;
 import cloud.opencode.base.functional.function.FunctionUtil;
 import cloud.opencode.base.functional.monad.*;
 import cloud.opencode.base.functional.optics.Lens;
@@ -19,6 +22,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -582,5 +586,100 @@ public final class OpenFunctional {
      */
     public static java.util.Map<String, Object> recordToMap(Record record) {
         return RecordUtil.toMap(record);
+    }
+
+    // ==================== Checked Consumer & Runnable | 可抛异常消费者与运行器 ====================
+
+    /**
+     * Create a CheckedConsumer
+     * 创建可抛异常的消费者
+     *
+     * @param c   the checked consumer - 可抛异常消费者
+     * @param <T> input type - 输入类型
+     * @return CheckedConsumer
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T> CheckedConsumer<T> checkedConsumer(CheckedConsumer<T> c) {
+        return c;
+    }
+
+    /**
+     * Convert CheckedConsumer to standard Consumer
+     * 将 CheckedConsumer 转换为标准 Consumer
+     *
+     * @param c   the checked consumer - 可抛异常消费者
+     * @param <T> input type - 输入类型
+     * @return standard Consumer
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T> Consumer<T> uncheckedConsumer(CheckedConsumer<T> c) {
+        return c.unchecked();
+    }
+
+    /**
+     * Create a CheckedRunnable
+     * 创建可抛异常的运行器
+     *
+     * @param r the checked runnable - 可抛异常运行器
+     * @return CheckedRunnable
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static CheckedRunnable checkedRunnable(CheckedRunnable r) {
+        return r;
+    }
+
+    /**
+     * Convert CheckedRunnable to standard Runnable
+     * 将 CheckedRunnable 转换为标准 Runnable
+     *
+     * @param r the checked runnable - 可抛异常运行器
+     * @return standard Runnable
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static Runnable uncheckedRunnable(CheckedRunnable r) {
+        return r.unchecked();
+    }
+
+    // ==================== Lifting | 函数提升 ====================
+
+    /**
+     * Lift a checked function to return Option
+     * 将可抛异常函数提升为返回 Option
+     *
+     * @param f   the checked function - 可抛异常函数
+     * @param <T> input type - 输入类型
+     * @param <R> result type - 结果类型
+     * @return function returning Option
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T, R> Function<T, Option<R>> lift(CheckedFunction<T, R> f) {
+        return FunctionUtil.lift(f);
+    }
+
+    /**
+     * Lift a checked function to return Try
+     * 将可抛异常函数提升为返回 Try
+     *
+     * @param f   the checked function - 可抛异常函数
+     * @param <T> input type - 输入类型
+     * @param <R> result type - 结果类型
+     * @return function returning Try
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T, R> Function<T, Try<R>> liftTry(CheckedFunction<T, R> f) {
+        return FunctionUtil.liftTry(f);
+    }
+
+    // ==================== Unit | Unit 类型 ====================
+
+    /**
+     * Get the Unit instance
+     * 获取 Unit 实例
+     *
+     * @return Unit.INSTANCE
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static Unit unit() {
+        return Unit.INSTANCE;
     }
 }

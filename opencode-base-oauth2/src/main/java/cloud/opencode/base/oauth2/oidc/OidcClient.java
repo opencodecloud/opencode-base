@@ -6,6 +6,8 @@ import cloud.opencode.base.oauth2.exception.OAuth2ErrorCode;
 import cloud.opencode.base.oauth2.exception.OAuth2Exception;
 import cloud.opencode.base.oauth2.pkce.PkceChallenge;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -228,12 +230,26 @@ public class OidcClient implements AutoCloseable {
             }
         }
 
-        // Validate issuer
+        // Validate iat (issued-at must not be in the future)
+        if (oidcConfig.validateExpiration()) {
+            Instant iat = claims.iat();
+            if (iat != null) {
+                Instant maxAllowed = Instant.now().plus(oidcConfig.clockSkew());
+                if (iat.isAfter(maxAllowed)) {
+                    throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_INVALID,
+                            "ID token issued in the future");
+                }
+            }
+        }
+
+        // Validate issuer (constant-time comparison to prevent timing side-channel)
         if (oidcConfig.canValidateIssuer()) {
             String issuer = claims.iss();
-            if (issuer == null || !issuer.equals(oidcConfig.issuer())) {
+            if (issuer == null || !MessageDigest.isEqual(
+                    issuer.getBytes(StandardCharsets.UTF_8),
+                    oidcConfig.issuer().getBytes(StandardCharsets.UTF_8))) {
                 throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_INVALID,
-                        "Invalid issuer: expected " + oidcConfig.issuer() + ", got " + issuer);
+                        "ID token issuer mismatch");
             }
         }
 
@@ -246,12 +262,14 @@ public class OidcClient implements AutoCloseable {
             }
         }
 
-        // Validate nonce
+        // Validate nonce (constant-time comparison to prevent timing attacks)
         if (oidcConfig.validateNonce() && expectedNonce != null) {
             String tokenNonce = claims.nonce();
-            if (tokenNonce == null || !tokenNonce.equals(expectedNonce)) {
+            if (tokenNonce == null || !MessageDigest.isEqual(
+                    tokenNonce.getBytes(StandardCharsets.UTF_8),
+                    expectedNonce.getBytes(StandardCharsets.UTF_8))) {
                 throw new OAuth2Exception(OAuth2ErrorCode.TOKEN_INVALID,
-                        "Invalid nonce: expected " + expectedNonce + ", got " + tokenNonce);
+                        "ID token nonce mismatch");
             }
         }
 

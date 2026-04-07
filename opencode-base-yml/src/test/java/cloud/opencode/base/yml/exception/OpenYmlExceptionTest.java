@@ -1,5 +1,6 @@
 package cloud.opencode.base.yml.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-yml V1.0.0
+ * @since JDK 25, opencode-base-yml V1.0.3
  */
 @DisplayName("OpenYmlException Tests")
 class OpenYmlExceptionTest {
@@ -25,7 +26,16 @@ class OpenYmlExceptionTest {
         void shouldSetMessageCorrectly() {
             OpenYmlException exception = new OpenYmlException("Test error message");
 
-            assertThat(exception.getMessage()).isEqualTo("Test error message");
+            assertThat(exception.getRawMessage()).isEqualTo("Test error message");
+            assertThat(exception.getMessage()).contains("Test error message");
+        }
+
+        @Test
+        @DisplayName("should set component to yml")
+        void shouldSetComponentToYml() {
+            OpenYmlException exception = new OpenYmlException("Test error");
+
+            assertThat(exception.getComponent()).isEqualTo("yml");
         }
 
         @Test
@@ -51,6 +61,44 @@ class OpenYmlExceptionTest {
 
             assertThat(exception.getCause()).isNull();
         }
+
+        @Test
+        @DisplayName("should have no error code")
+        void shouldHaveNoErrorCode() {
+            OpenYmlException exception = new OpenYmlException("Test error");
+
+            assertThat(exception.getErrorCode()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("Constructor with error code and message")
+    class ErrorCodeAndMessageConstructorTests {
+
+        @Test
+        @DisplayName("should set error code correctly")
+        void shouldSetErrorCodeCorrectly() {
+            OpenYmlException exception = new OpenYmlException("YML_001", "Test error");
+
+            assertThat(exception.getErrorCode()).isEqualTo("YML_001");
+        }
+
+        @Test
+        @DisplayName("should include error code in getMessage")
+        void shouldIncludeErrorCodeInGetMessage() {
+            OpenYmlException exception = new OpenYmlException("YML_001", "Test error");
+
+            assertThat(exception.getMessage()).contains("YML_001");
+            assertThat(exception.getMessage()).contains("Test error");
+        }
+
+        @Test
+        @DisplayName("should set component to yml")
+        void shouldSetComponentToYml() {
+            OpenYmlException exception = new OpenYmlException("YML_001", "Test error");
+
+            assertThat(exception.getComponent()).isEqualTo("yml");
+        }
     }
 
     @Nested
@@ -62,7 +110,7 @@ class OpenYmlExceptionTest {
         void shouldFormatMessageWithLocation() {
             OpenYmlException exception = new OpenYmlException("Syntax error", 10, 5);
 
-            assertThat(exception.getMessage()).isEqualTo("Syntax error (line: 10, column: 5)");
+            assertThat(exception.getRawMessage()).isEqualTo("Syntax error (line: 10, column: 5)");
         }
 
         @Test
@@ -86,7 +134,7 @@ class OpenYmlExceptionTest {
         void shouldHandleZeroLineAndColumn() {
             OpenYmlException exception = new OpenYmlException("Error at start", 0, 0);
 
-            assertThat(exception.getMessage()).isEqualTo("Error at start (line: 0, column: 0)");
+            assertThat(exception.getRawMessage()).isEqualTo("Error at start (line: 0, column: 0)");
             assertThat(exception.getLine()).isEqualTo(0);
             assertThat(exception.getColumn()).isEqualTo(0);
         }
@@ -96,7 +144,7 @@ class OpenYmlExceptionTest {
         void shouldNotFormatMessageWhenLineIsNegative() {
             OpenYmlException exception = new OpenYmlException("Error", -1, 5);
 
-            assertThat(exception.getMessage()).isEqualTo("Error");
+            assertThat(exception.getRawMessage()).isEqualTo("Error");
         }
 
         @Test
@@ -104,7 +152,7 @@ class OpenYmlExceptionTest {
         void shouldNotFormatMessageWhenColumnIsNegative() {
             OpenYmlException exception = new OpenYmlException("Error", 10, -1);
 
-            assertThat(exception.getMessage()).isEqualTo("Error");
+            assertThat(exception.getRawMessage()).isEqualTo("Error");
         }
     }
 
@@ -118,7 +166,8 @@ class OpenYmlExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             OpenYmlException exception = new OpenYmlException("Wrapped error", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Wrapped error");
+            assertThat(exception.getRawMessage()).isEqualTo("Wrapped error");
+            assertThat(exception.getMessage()).contains("Wrapped error");
         }
 
         @Test
@@ -160,7 +209,7 @@ class OpenYmlExceptionTest {
             Throwable cause = new RuntimeException("Root cause");
             OpenYmlException exception = new OpenYmlException("Parse error", cause, 5, 10);
 
-            assertThat(exception.getMessage()).isEqualTo("Parse error (line: 5, column: 10)");
+            assertThat(exception.getRawMessage()).isEqualTo("Parse error (line: 5, column: 10)");
         }
 
         @Test
@@ -272,7 +321,6 @@ class OpenYmlExceptionTest {
         @Test
         @DisplayName("should return false when only line is negative")
         void shouldReturnFalseWhenOnlyLineIsNegative() {
-            // Using full constructor but with negative line
             OpenYmlException exception = new OpenYmlException("Error", -1, 5);
 
             assertThat(exception.hasLocation()).isFalse();
@@ -281,7 +329,6 @@ class OpenYmlExceptionTest {
         @Test
         @DisplayName("should return false when only column is negative")
         void shouldReturnFalseWhenOnlyColumnIsNegative() {
-            // Using full constructor but with negative column
             OpenYmlException exception = new OpenYmlException("Error", 5, -1);
 
             assertThat(exception.hasLocation()).isFalse();
@@ -293,11 +340,27 @@ class OpenYmlExceptionTest {
     class InheritanceTests {
 
         @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            OpenYmlException exception = new OpenYmlException("Test");
+
+            assertThat(exception).isInstanceOf(OpenException.class);
+        }
+
+        @Test
         @DisplayName("should extend RuntimeException")
         void shouldExtendRuntimeException() {
             OpenYmlException exception = new OpenYmlException("Test");
 
             assertThat(exception).isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        @DisplayName("should be catchable as OpenException")
+        void shouldBeCatchableAsOpenException() {
+            assertThatThrownBy(() -> {
+                throw new OpenYmlException("Test");
+            }).isInstanceOf(OpenException.class);
         }
 
         @Test
@@ -318,15 +381,59 @@ class OpenYmlExceptionTest {
     }
 
     @Nested
+    @DisplayName("Component and error code")
+    class ComponentAndErrorCodeTests {
+
+        @Test
+        @DisplayName("should always have component yml")
+        void shouldAlwaysHaveComponentYml() {
+            OpenYmlException e1 = new OpenYmlException("msg");
+            OpenYmlException e2 = new OpenYmlException("msg", new RuntimeException());
+            OpenYmlException e3 = new OpenYmlException("msg", 1, 2);
+            OpenYmlException e4 = new OpenYmlException("msg", new RuntimeException(), 1, 2);
+
+            assertThat(e1.getComponent()).isEqualTo("yml");
+            assertThat(e2.getComponent()).isEqualTo("yml");
+            assertThat(e3.getComponent()).isEqualTo("yml");
+            assertThat(e4.getComponent()).isEqualTo("yml");
+        }
+
+        @Test
+        @DisplayName("should include component in formatted message")
+        void shouldIncludeComponentInFormattedMessage() {
+            OpenYmlException exception = new OpenYmlException("Test error");
+
+            assertThat(exception.getMessage()).startsWith("[yml]");
+        }
+
+        @Test
+        @DisplayName("should include error code when provided")
+        void shouldIncludeErrorCodeWhenProvided() {
+            OpenYmlException exception = new OpenYmlException("YML_TEST_001", "Test error");
+
+            assertThat(exception.getMessage()).contains("(YML_TEST_001)");
+            assertThat(exception.getErrorCode()).isEqualTo("YML_TEST_001");
+        }
+
+        @Test
+        @DisplayName("should have null error code when not provided")
+        void shouldHaveNullErrorCodeWhenNotProvided() {
+            OpenYmlException exception = new OpenYmlException("Test error");
+
+            assertThat(exception.getErrorCode()).isNull();
+        }
+    }
+
+    @Nested
     @DisplayName("Edge cases")
     class EdgeCaseTests {
 
         @Test
         @DisplayName("should handle null message")
         void shouldHandleNullMessage() {
-            OpenYmlException exception = new OpenYmlException(null);
+            OpenYmlException exception = new OpenYmlException((String) null);
 
-            assertThat(exception.getMessage()).isNull();
+            assertThat(exception.getRawMessage()).isNull();
         }
 
         @Test
@@ -334,7 +441,7 @@ class OpenYmlExceptionTest {
         void shouldHandleEmptyMessage() {
             OpenYmlException exception = new OpenYmlException("");
 
-            assertThat(exception.getMessage()).isEmpty();
+            assertThat(exception.getRawMessage()).isEmpty();
         }
 
         @Test

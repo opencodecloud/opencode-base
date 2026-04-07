@@ -1,5 +1,7 @@
 package cloud.opencode.base.yml.exception;
 
+import java.io.Serial;
+
 /**
  * YAML Security Exception - Thrown when security violation is detected
  * YAML 安全异常 - 当检测到安全违规时抛出
@@ -11,6 +13,7 @@ package cloud.opencode.base.yml.exception;
  * <ul>
  *   <li>Categorized violation types (alias, depth, size, type, recursion) - 分类违规类型（别名、深度、大小、类型、递归）</li>
  *   <li>Factory methods for common security violations - 常见安全违规的工厂方法</li>
+ *   <li>Error code YML_SECURITY_001 - 错误码 YML_SECURITY_001</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -31,9 +34,18 @@ package cloud.opencode.base.yml.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-yml V1.0.0
+ * @since JDK 25, opencode-base-yml V1.0.3
  */
 public class YmlSecurityException extends OpenYmlException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Default error code for security exceptions.
+     * 安全异常的默认错误码。
+     */
+    private static final String ERROR_CODE = "YML_SECURITY_001";
 
     private final SecurityViolationType type;
 
@@ -45,7 +57,7 @@ public class YmlSecurityException extends OpenYmlException {
      * @param message the detail message | 详细消息
      */
     public YmlSecurityException(SecurityViolationType type, String message) {
-        super("YAML Security violation [" + type + "]: " + message);
+        super(ERROR_CODE, "YAML Security violation [" + type + "]: " + message);
         this.type = type;
     }
 
@@ -58,7 +70,7 @@ public class YmlSecurityException extends OpenYmlException {
      * @param cause   the cause | 原因
      */
     public YmlSecurityException(SecurityViolationType type, String message, Throwable cause) {
-        super("YAML Security violation [" + type + "]: " + message, cause);
+        super(ERROR_CODE, "YAML Security violation [" + type + "]: " + message, cause);
         this.type = type;
     }
 

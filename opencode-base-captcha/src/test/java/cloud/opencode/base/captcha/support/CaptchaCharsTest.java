@@ -690,6 +690,22 @@ class CaptchaCharsTest {
             assertThat(result).isGreaterThanOrEqualTo(-10);
             assertThat(result).isLessThan(10);
         }
+
+        @Test
+        @DisplayName("randomInt returns min when min equals max")
+        void randomIntReturnsMinWhenMinEqualsMax() {
+            int result = CaptchaChars.randomInt(5, 5);
+
+            assertThat(result).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("randomInt returns min when max is less than min")
+        void randomIntReturnsMinWhenMaxLessThanMin() {
+            int result = CaptchaChars.randomInt(10, 3);
+
+            assertThat(result).isEqualTo(10);
+        }
     }
 
     @Nested

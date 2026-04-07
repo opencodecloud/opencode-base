@@ -16,10 +16,8 @@ import java.util.function.Function;
  * 响应式缓存 - 支持响应式流的缓存（JDK 9+ Flow API）
  *
  * <p>Provides reactive programming support for cache operations using JDK's
- * built-in Flow API. Also supports Project Reactor (Mono/Flux) via reflection
- * when available.</p>
- * <p>使用 JDK 内置的 Flow API 为缓存操作提供响应式编程支持。当 Project Reactor
- * 可用时，也通过反射支持 Mono/Flux。</p>
+ * built-in Flow API and {@link CompletableFuture}.</p>
+ * <p>使用 JDK 内置的 Flow API 和 {@link CompletableFuture} 为缓存操作提供响应式编程支持。</p>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
  * <pre>{@code
@@ -36,11 +34,7 @@ import java.util.function.Function;
  *         public void onComplete() { }
  *     });
  *
- * // If Project Reactor is available
- * Mono<User> mono = reactiveCache.asMono("user:1");
- * Flux<User> flux = reactiveCache.valuesFlux();
- *
- * // Reactive load
+ * // Reactive load via CompletableFuture
  * reactiveCache.getOrLoad("user:1", key -> loadUser(key))
  *     .thenAccept(user -> process(user));
  * }</pre>
@@ -51,7 +45,6 @@ import java.util.function.Function;
  * <ul>
  *   <li>JDK Flow API integration - JDK Flow API 集成</li>
  *   <li>CompletableFuture-based async operations - 基于 CompletableFuture 的异步操作</li>
- *   <li>Optional Project Reactor support - 可选 Project Reactor 支持</li>
  *   <li>Reactive load support - 响应式加载支持</li>
  * </ul>
  *
@@ -416,39 +409,6 @@ public final class ReactiveCache<K, V> {
         return CompletableFuture.supplyAsync(delegate::stats);
     }
 
-    // ==================== Project Reactor Integration (via reflection) ====================
-
-    /**
-     * Get value as Reactor Mono (if available)
-     * 获取值作为 Reactor Mono（如果可用）
-     *
-     * @param key the key | 键
-     * @return Mono object or throws if Reactor not available | Mono 对象，Reactor 不可用时抛异常
-     */
-    public Object asMono(K key) {
-        return ReactorAdapter.toMono(getMono(key));
-    }
-
-    /**
-     * Get all values as Reactor Flux (if available)
-     * 获取所有值作为 Reactor Flux（如果可用）
-     *
-     * @return Flux object or throws if Reactor not available | Flux 对象，Reactor 不可用时抛异常
-     */
-    public Object asFlux() {
-        return ReactorAdapter.toFlux(valuesFlux());
-    }
-
-    /**
-     * Check if Project Reactor is available
-     * 检查 Project Reactor 是否可用
-     *
-     * @return true if available | 可用返回 true
-     */
-    public static boolean isReactorAvailable() {
-        return ReactorAdapter.isAvailable();
-    }
-
     /**
      * Get the underlying cache
      * 获取底层缓存
@@ -457,71 +417,5 @@ public final class ReactiveCache<K, V> {
      */
     public Cache<K, V> getDelegate() {
         return delegate;
-    }
-}
-
-/**
- * Adapter for Project Reactor integration via reflection
- */
-class ReactorAdapter {
-    private static final boolean REACTOR_AVAILABLE;
-
-    static {
-        REACTOR_AVAILABLE = isClassAvailable("reactor.core.publisher.Mono");
-    }
-
-    private static boolean isClassAvailable(String className) {
-        try {
-            Class.forName(className);
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
-    }
-
-    static boolean isAvailable() {
-        return REACTOR_AVAILABLE;
-    }
-
-    /**
-     * Convert JDK Flow.Publisher to Reactor Mono
-     */
-    static <T> Object toMono(Flow.Publisher<T> publisher) {
-        if (!REACTOR_AVAILABLE) {
-            throw new UnsupportedOperationException(
-                    "Project Reactor is not available. Add reactor-core dependency.");
-        }
-
-        try {
-            // Mono.from(Publisher) using JdkFlowAdapter
-            Class<?> adapterClass = Class.forName("reactor.adapter.JdkFlowAdapter");
-            Object flowPublisher = adapterClass
-                    .getMethod("flowPublisherToFlux", Flow.Publisher.class)
-                    .invoke(null, publisher);
-
-            // Convert Flux to Mono.next()
-            return flowPublisher.getClass().getMethod("next").invoke(flowPublisher);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to convert to Mono", e);
-        }
-    }
-
-    /**
-     * Convert JDK Flow.Publisher to Reactor Flux
-     */
-    static <T> Object toFlux(Flow.Publisher<T> publisher) {
-        if (!REACTOR_AVAILABLE) {
-            throw new UnsupportedOperationException(
-                    "Project Reactor is not available. Add reactor-core dependency.");
-        }
-
-        try {
-            Class<?> adapterClass = Class.forName("reactor.adapter.JdkFlowAdapter");
-            return adapterClass
-                    .getMethod("flowPublisherToFlux", Flow.Publisher.class)
-                    .invoke(null, publisher);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to convert to Flux", e);
-        }
     }
 }

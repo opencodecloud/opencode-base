@@ -1,6 +1,8 @@
 package cloud.opencode.base.functional.function;
 
 import cloud.opencode.base.functional.exception.OpenFunctionalException;
+import cloud.opencode.base.functional.monad.Option;
+import cloud.opencode.base.functional.monad.Try;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -271,9 +273,13 @@ public final class FunctionUtil {
      * 使用指定最大缓存大小记忆化函数
      *
      * <p>Uses LRU (Least Recently Used) eviction when cache is full.
-     * Thread-safe: Uses explicit synchronization for atomic operations.</p>
+     * Thread-safe: Computation runs outside the lock to avoid blocking other keys.
+     * Note: For the same uncached key, concurrent callers may compute simultaneously;
+     * only the first result is cached (subsequent results are discarded).</p>
      * <p>缓存满时使用 LRU（最近最少使用）淘汰策略。
-     * 线程安全：使用显式同步确保原子操作。</p>
+     * 线程安全：计算在锁外执行以避免阻塞其他 key。
+     * 注意：对于同一个未缓存的 key，并发调用者可能同时计算；
+     * 仅第一个结果被缓存（后续结果被丢弃）。</p>
      *
      * <p><strong>Example | 示例:</strong></p>
      * <pre>
@@ -289,9 +295,14 @@ public final class FunctionUtil {
      * @throws IllegalArgumentException if maxSize is not positive
      */
     public static <T, R> Function<T, R> memoize(Function<T, R> f, int maxSize) {
+        java.util.Objects.requireNonNull(f, "function must not be null");
         if (maxSize <= 0) {
             throw new IllegalArgumentException("maxSize must be positive: " + maxSize);
         }
+
+        // Sentinel to distinguish "not cached" from "cached null"
+        @SuppressWarnings("unchecked")
+        final R sentinel = (R) new Object();
 
         // Use LinkedHashMap with access-order for LRU eviction
         // ReentrantLock required for thread-safe access to non-concurrent LinkedHashMap
@@ -304,20 +315,25 @@ public final class FunctionUtil {
         final ReentrantLock cacheLock = new ReentrantLock();
 
         return t -> {
+            // Fast path: check cache under lock (short hold)
             cacheLock.lock();
             try {
-                R result = cache.get(t);
-                if (result != null) {
-                    return result;
+                R cached = cache.getOrDefault(t, sentinel);
+                if (cached != sentinel) {
+                    return cached;
                 }
-                // Check if key exists with null value
-                if (cache.containsKey(t)) {
-                    return null;
-                }
-                // Compute and cache
-                result = f.apply(t);
-                cache.put(t, result);
-                return result;
+            } finally {
+                cacheLock.unlock();
+            }
+
+            // Compute outside lock to avoid blocking other keys
+            R result = f.apply(t);
+
+            // Store result under lock
+            cacheLock.lock();
+            try {
+                cache.putIfAbsent(t, result);
+                return cache.get(t);
             } finally {
                 cacheLock.unlock();
             }
@@ -333,6 +349,7 @@ public final class FunctionUtil {
      * @return memoized supplier - 记忆化后的 Supplier
      */
     public static <T> Supplier<T> memoize(Supplier<T> supplier) {
+        java.util.Objects.requireNonNull(supplier, "supplier must not be null");
         return new Supplier<>() {
             private final ReentrantLock lock = new ReentrantLock();
             private volatile T value;
@@ -444,5 +461,131 @@ public final class FunctionUtil {
     public static <T> java.util.function.Predicate<T> not(
             java.util.function.Predicate<T> predicate) {
         return predicate.negate();
+    }
+
+    // ==================== Lift | 提升 ====================
+
+    /**
+     * Lift a checked function to return Option instead of throwing
+     * 将受检函数提升为返回 Option 而非抛出异常
+     *
+     * <p>On success, returns Option.some(result). On exception, returns Option.none().</p>
+     * <p>成功时返回 Option.some(result)。异常时返回 Option.none()。</p>
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>
+     * Function&lt;String, Option&lt;Integer&gt;&gt; safeParse = FunctionUtil.lift(Integer::parseInt);
+     * safeParse.apply("123");  // Option.some(123)
+     * safeParse.apply("abc");  // Option.none()
+     * </pre>
+     *
+     * @param f   checked function to lift - 要提升的受检函数
+     * @param <T> input type - 输入类型
+     * @param <R> result type - 结果类型
+     * @return function returning Option - 返回 Option 的函数
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T, R> Function<T, Option<R>> lift(CheckedFunction<T, R> f) {
+        return t -> {
+            try {
+                return Option.of(f.apply(t));
+            } catch (Exception e) {
+                return Option.none();
+            }
+        };
+    }
+
+    /**
+     * Lift a checked function to return Try instead of throwing
+     * 将受检函数提升为返回 Try 而非抛出异常
+     *
+     * <p>On success, returns Try.success(result). On exception, returns Try.failure(exception).</p>
+     * <p>成功时返回 Try.success(result)。异常时返回 Try.failure(exception)。</p>
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>
+     * Function&lt;String, Try&lt;Integer&gt;&gt; safeParse = FunctionUtil.liftTry(Integer::parseInt);
+     * safeParse.apply("123");  // Try.success(123)
+     * safeParse.apply("abc");  // Try.failure(NumberFormatException)
+     * </pre>
+     *
+     * @param f   checked function to lift - 要提升的受检函数
+     * @param <T> input type - 输入类型
+     * @param <R> result type - 结果类型
+     * @return function returning Try - 返回 Try 的函数
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T, R> Function<T, Try<R>> liftTry(CheckedFunction<T, R> f) {
+        return t -> {
+            try {
+                return Try.success(f.apply(t));
+            } catch (Exception e) {
+                return Try.failure(e);
+            }
+        };
+    }
+
+    /**
+     * Lift a checked bi-function to return Option instead of throwing
+     * 将受检双参函数提升为返回 Option 而非抛出异常
+     *
+     * <p>On success, returns Option.some(result). On exception, returns Option.none().</p>
+     * <p>成功时返回 Option.some(result)。异常时返回 Option.none()。</p>
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>
+     * BiFunction&lt;String, Integer, Option&lt;String&gt;&gt; safeSub =
+     *     FunctionUtil.liftBi((s, len) -&gt; s.substring(0, len));
+     * safeSub.apply("hello", 3);   // Option.some("hel")
+     * safeSub.apply("hello", 100); // Option.none()
+     * </pre>
+     *
+     * @param f   checked bi-function to lift - 要提升的受检双参函数
+     * @param <T> first input type - 第一个输入类型
+     * @param <U> second input type - 第二个输入类型
+     * @param <R> result type - 结果类型
+     * @return bi-function returning Option - 返回 Option 的双参函数
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T, U, R> BiFunction<T, U, Option<R>> liftBi(CheckedBiFunction<T, U, R> f) {
+        return (t, u) -> {
+            try {
+                return Option.of(f.apply(t, u));
+            } catch (Exception e) {
+                return Option.none();
+            }
+        };
+    }
+
+    /**
+     * Lift a checked bi-function to return Try instead of throwing
+     * 将受检双参函数提升为返回 Try 而非抛出异常
+     *
+     * <p>On success, returns Try.success(result). On exception, returns Try.failure(exception).</p>
+     * <p>成功时返回 Try.success(result)。异常时返回 Try.failure(exception)。</p>
+     *
+     * <p><strong>Example | 示例:</strong></p>
+     * <pre>
+     * BiFunction&lt;String, Integer, Try&lt;String&gt;&gt; safeSub =
+     *     FunctionUtil.liftBiTry((s, len) -&gt; s.substring(0, len));
+     * safeSub.apply("hello", 3);   // Try.success("hel")
+     * safeSub.apply("hello", 100); // Try.failure(StringIndexOutOfBoundsException)
+     * </pre>
+     *
+     * @param f   checked bi-function to lift - 要提升的受检双参函数
+     * @param <T> first input type - 第一个输入类型
+     * @param <U> second input type - 第二个输入类型
+     * @param <R> result type - 结果类型
+     * @return bi-function returning Try - 返回 Try 的双参函数
+     * @since JDK 25, opencode-base-functional V1.0.3
+     */
+    public static <T, U, R> BiFunction<T, U, Try<R>> liftBiTry(CheckedBiFunction<T, U, R> f) {
+        return (t, u) -> {
+            try {
+                return Try.success(f.apply(t, u));
+            } catch (Exception e) {
+                return Try.failure(e);
+            }
+        };
     }
 }

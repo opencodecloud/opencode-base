@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,8 +27,9 @@ class GeoSecurityExceptionTest {
         void testMessageOnlyConstructor() {
             GeoSecurityException ex = new GeoSecurityException("Security violation");
 
-            assertThat(ex.getMessage()).isEqualTo("Security violation");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
+            assertThat(ex.getRawMessage()).isEqualTo("Security violation");
+            assertThat(ex.getMessage()).contains("Security violation");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
         }
 
         @Test
@@ -35,8 +37,9 @@ class GeoSecurityExceptionTest {
         void testMessageAndErrorCodeConstructor() {
             GeoSecurityException ex = new GeoSecurityException("Invalid timestamp", GeoErrorCode.INVALID_TIMESTAMP);
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid timestamp");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid timestamp");
+            assertThat(ex.getMessage()).contains("Invalid timestamp");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
         }
     }
 
@@ -50,7 +53,7 @@ class GeoSecurityExceptionTest {
             GeoSecurityException ex = GeoSecurityException.locationSpoofing();
 
             assertThat(ex.getMessage()).contains("Location spoofing");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.LOCATION_SPOOFING);
         }
 
         @Test
@@ -59,7 +62,7 @@ class GeoSecurityExceptionTest {
             GeoSecurityException ex = GeoSecurityException.invalidTimestamp();
 
             assertThat(ex.getMessage()).contains("timestamp");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_TIMESTAMP);
         }
 
         @Test
@@ -68,7 +71,7 @@ class GeoSecurityExceptionTest {
             GeoSecurityException ex = GeoSecurityException.impossibleSpeed(1500.0);
 
             assertThat(ex.getMessage()).contains("1500").contains("km/h");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.IMPOSSIBLE_SPEED);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.IMPOSSIBLE_SPEED);
         }
     }
 
@@ -82,6 +85,14 @@ class GeoSecurityExceptionTest {
             GeoSecurityException ex = new GeoSecurityException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            GeoSecurityException ex = new GeoSecurityException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
     }
 }

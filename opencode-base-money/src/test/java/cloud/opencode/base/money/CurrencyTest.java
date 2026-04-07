@@ -25,9 +25,9 @@ class CurrencyTest {
     class EnumValuesTests {
 
         @Test
-        @DisplayName("包含12种货币")
+        @DisplayName("包含23种货币")
         void testCurrencyCount() {
-            assertThat(Currency.values()).hasSize(12);
+            assertThat(Currency.values()).hasSize(23);
         }
 
         @Test
@@ -126,6 +126,71 @@ class CurrencyTest {
         @DisplayName("KRW小数位是0")
         void testKrwScale() {
             assertThat(Currency.KRW.getScale()).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("V1.0.3新增货币精度")
+        void testNewCurrencyScales() {
+            assertThat(Currency.INR.getScale()).isEqualTo(2);
+            assertThat(Currency.THB.getScale()).isEqualTo(2);
+            assertThat(Currency.NZD.getScale()).isEqualTo(2);
+            assertThat(Currency.BRL.getScale()).isEqualTo(2);
+            assertThat(Currency.MXN.getScale()).isEqualTo(2);
+            assertThat(Currency.SEK.getScale()).isEqualTo(2);
+            assertThat(Currency.NOK.getScale()).isEqualTo(2);
+            assertThat(Currency.DKK.getScale()).isEqualTo(2);
+            assertThat(Currency.RUB.getScale()).isEqualTo(2);
+            assertThat(Currency.AED.getScale()).isEqualTo(2);
+            assertThat(Currency.ZAR.getScale()).isEqualTo(2);
+        }
+    }
+
+    @Nested
+    @DisplayName("V1.0.3新增货币符号测试")
+    class NewCurrencySymbolTests {
+
+        @Test
+        @DisplayName("INR符号是₹")
+        void testInrSymbol() {
+            assertThat(Currency.INR.getSymbol()).isEqualTo("₹");
+        }
+
+        @Test
+        @DisplayName("THB符号是฿")
+        void testThbSymbol() {
+            assertThat(Currency.THB.getSymbol()).isEqualTo("฿");
+        }
+
+        @Test
+        @DisplayName("RUB符号是₽")
+        void testRubSymbol() {
+            assertThat(Currency.RUB.getSymbol()).isEqualTo("₽");
+        }
+
+        @Test
+        @DisplayName("BRL符号是R$")
+        void testBrlSymbol() {
+            assertThat(Currency.BRL.getSymbol()).isEqualTo("R$");
+        }
+
+        @Test
+        @DisplayName("AED符号")
+        void testAedSymbol() {
+            assertThat(Currency.AED.getSymbol()).isEqualTo("د.إ");
+        }
+
+        @Test
+        @DisplayName("ZAR符号是R")
+        void testZarSymbol() {
+            assertThat(Currency.ZAR.getSymbol()).isEqualTo("R");
+        }
+
+        @Test
+        @DisplayName("SEK/NOK/DKK共享kr符号")
+        void testScandinavianSymbols() {
+            assertThat(Currency.SEK.getSymbol()).isEqualTo("kr");
+            assertThat(Currency.NOK.getSymbol()).isEqualTo("kr");
+            assertThat(Currency.DKK.getSymbol()).isEqualTo("kr");
         }
     }
 

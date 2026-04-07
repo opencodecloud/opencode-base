@@ -43,6 +43,7 @@ public final class CoordinateUtil {
     private static final double PI = Math.PI;
     private static final double A = 6378245.0;  // Semi-major axis
     private static final double EE = 0.00669342162296594323;  // Eccentricity squared
+    private static final double BD09_FACTOR = PI * 3000.0 / 180.0;  // Pre-computed BD09 constant
 
     private CoordinateUtil() {
     }
@@ -115,8 +116,8 @@ public final class CoordinateUtil {
         double x = gcj02.longitude();
         double y = gcj02.latitude();
 
-        double z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * PI * 3000.0 / 180.0);
-        double theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * PI * 3000.0 / 180.0);
+        double z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * BD09_FACTOR);
+        double theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * BD09_FACTOR);
 
         return Coordinate.bd09(
             z * Math.cos(theta) + 0.0065,
@@ -135,8 +136,8 @@ public final class CoordinateUtil {
         double x = bd09.longitude() - 0.0065;
         double y = bd09.latitude() - 0.006;
 
-        double z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * PI * 3000.0 / 180.0);
-        double theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * PI * 3000.0 / 180.0);
+        double z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * BD09_FACTOR);
+        double theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * BD09_FACTOR);
 
         return Coordinate.gcj02(z * Math.cos(theta), z * Math.sin(theta));
     }

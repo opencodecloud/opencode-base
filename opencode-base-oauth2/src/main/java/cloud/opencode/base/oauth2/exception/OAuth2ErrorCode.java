@@ -253,7 +253,57 @@ public enum OAuth2ErrorCode {
      * Token endpoint is required
      * Token 端点是必需的
      */
-    MISSING_TOKEN_ENDPOINT(7085, "Token endpoint is required");
+    MISSING_TOKEN_ENDPOINT(7085, "Token endpoint is required"),
+
+    // ==================== 发现错误 (7091-7100) ====================
+
+    /**
+     * OIDC discovery failed
+     * OIDC 发现失败
+     */
+    DISCOVERY_FAILED(7091, "OIDC discovery failed"),
+
+    /**
+     * OIDC discovery returned invalid response
+     * OIDC 发现返回无效响应
+     */
+    DISCOVERY_INVALID_RESPONSE(7092, "Invalid OIDC discovery response"),
+
+    // ==================== Introspection错误 (7096-7097) ====================
+
+    /**
+     * Token introspection failed
+     * Token 内省失败
+     */
+    INTROSPECTION_FAILED(7096, "Token introspection failed"),
+
+    /**
+     * Token introspection not supported
+     * Token 内省不支持
+     */
+    INTROSPECTION_NOT_SUPPORTED(7097, "Token introspection not supported"),
+
+    // ==================== PAR错误 (7101-7102) ====================
+
+    /**
+     * Pushed authorization request failed
+     * 推送授权请求失败
+     */
+    PAR_FAILED(7101, "Pushed authorization request failed"),
+
+    /**
+     * Pushed authorization requests not supported
+     * 推送授权请求不支持
+     */
+    PAR_NOT_SUPPORTED(7102, "Pushed authorization requests not supported"),
+
+    // ==================== Security错误 (7106) ====================
+
+    /**
+     * Authorization server issuer mismatch
+     * 授权服务器颁发者不匹配
+     */
+    ISSUER_MISMATCH(7106, "Authorization server issuer mismatch");
 
     private final int code;
     private final String message;

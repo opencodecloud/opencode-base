@@ -1,5 +1,6 @@
 package cloud.opencode.base.geo.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.geo.Coordinate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,8 +28,9 @@ class InvalidCoordinateExceptionTest {
         void testMessageOnlyConstructor() {
             InvalidCoordinateException ex = new InvalidCoordinateException("Invalid coordinate");
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid coordinate");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid coordinate");
+            assertThat(ex.getMessage()).contains("Invalid coordinate");
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
         }
 
         @Test
@@ -37,9 +39,10 @@ class InvalidCoordinateExceptionTest {
             Coordinate coord = Coordinate.wgs84(200, 100);
             InvalidCoordinateException ex = new InvalidCoordinateException("Invalid coordinate", coord);
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid coordinate");
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid coordinate");
+            assertThat(ex.getMessage()).contains("Invalid coordinate");
             assertThat(ex.getCoordinate()).isEqualTo(coord);
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
         }
 
         @Test
@@ -48,7 +51,7 @@ class InvalidCoordinateExceptionTest {
             InvalidCoordinateException ex = new InvalidCoordinateException(200.0, 100.0);
 
             assertThat(ex.getMessage()).contains("200.0").contains("100.0");
-            assertThat(ex.getErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
+            assertThat(ex.getGeoErrorCode()).isEqualTo(GeoErrorCode.INVALID_COORDINATE);
         }
     }
 
@@ -62,6 +65,14 @@ class InvalidCoordinateExceptionTest {
             InvalidCoordinateException ex = new InvalidCoordinateException("test");
 
             assertThat(ex).isInstanceOf(GeoException.class);
+        }
+
+        @Test
+        @DisplayName("是OpenException子类")
+        void testIsOpenException() {
+            InvalidCoordinateException ex = new InvalidCoordinateException("test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
         }
 
         @Test

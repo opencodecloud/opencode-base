@@ -186,15 +186,19 @@ public final class WordUtil {
             return false;
         }
 
+        // charAt() loop avoids the char[] allocation of toCharArray().
+        // charAt() 循环避免 toCharArray() 的数组分配。
         boolean hasLower = false;
         boolean hasUpper = false;
 
-        for (char c : str.toCharArray()) {
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
             if (Character.isLowerCase(c)) hasLower = true;
-            if (Character.isUpperCase(c)) hasUpper = true;
+            else if (Character.isUpperCase(c)) hasUpper = true;
+            if (hasLower && hasUpper) return true; // early exit
         }
 
-        return hasLower && hasUpper;
+        return false;
     }
 
     /**

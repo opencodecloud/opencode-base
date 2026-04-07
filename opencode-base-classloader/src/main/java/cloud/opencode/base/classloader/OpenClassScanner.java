@@ -1,10 +1,15 @@
 package cloud.opencode.base.classloader;
 
+import cloud.opencode.base.classloader.index.ClassIndex;
+import cloud.opencode.base.classloader.index.ClassIndexReader;
+import cloud.opencode.base.classloader.index.IndexAwareScanner;
 import cloud.opencode.base.classloader.scanner.*;
 
 import java.lang.annotation.Annotation;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * OpenClassScanner - Class Scanning Facade
@@ -158,5 +163,34 @@ public final class OpenClassScanner {
      */
     public static PackageScanner packageScanner(String basePackage) {
         return PackageScanner.of(basePackage);
+    }
+
+    // ==================== Index-Aware Scanning | 索引感知扫描 ====================
+
+    /**
+     * Scan class names using build-time index (falls back to runtime scanning)
+     * 使用构建时索引扫描类名（降级为运行时扫描）
+     *
+     * <p>If a valid {@code META-INF/opencode/class-index.json} exists on the classpath,
+     * returns class names from the index without filesystem I/O.
+     * Otherwise falls back to runtime classpath scanning.</p>
+     * <p>如果 classpath 上存在有效的 {@code META-INF/opencode/class-index.json}，
+     * 则直接从索引返回类名，无需文件系统 I/O。否则降级为运行时扫描。</p>
+     *
+     * @param basePackage base package to scan | 要扫描的基础包
+     * @return set of fully-qualified class names | 全限定类名集合
+     */
+    public static Set<String> scanClassNames(String basePackage) {
+        Objects.requireNonNull(basePackage, "Base package must not be null");
+
+        // Try index first
+        Optional<ClassIndex> index = ClassIndexReader.load();
+        if (index.isPresent() && ClassIndexReader.isValid(index.get())) {
+            return IndexAwareScanner.scan(index.get(), basePackage);
+        }
+
+        // Fallback to runtime scanning
+        return ClassScanner.of(basePackage).classNameStream()
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

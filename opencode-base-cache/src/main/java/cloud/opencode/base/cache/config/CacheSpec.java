@@ -366,7 +366,14 @@ public final class CacheSpec {
                         }
                         builder.refreshAfterWrite(d);
                     }
-                    case "evictionPolicy" -> builder.evictionPolicy((EvictionPolicy) parseEvictionPolicy(value));
+                    case "evictionPolicy" -> {
+                        // Extract maximumSize if present so W-TinyLFU can size its sketch
+                        long maxSize = options.containsKey("maximumSize")
+                                ? parseLong("maximumSize", options.get("maximumSize"))
+                                : 10_000;
+                        builder.evictionPolicy((EvictionPolicy) parseEvictionPolicy(value,
+                                (int) Math.min(maxSize, Integer.MAX_VALUE)));
+                    }
                     case "recordStats" -> builder.recordStats();
                     case "useVirtualThreads" -> builder.useVirtualThreads();
                     default -> throw new OpenCacheException("Unknown option: " + key);
@@ -401,7 +408,7 @@ public final class CacheSpec {
                         Duration d = parseDuration(key, value);
                         if (d.isNegative()) errors.add(key + " cannot be negative: " + value);
                     }
-                    case "evictionPolicy" -> parseEvictionPolicy(value);
+                    case "evictionPolicy" -> parseEvictionPolicy(value, 10_000);
                     case "recordStats", "useVirtualThreads" -> {
                         // Flags, no value validation needed
                     }
@@ -467,14 +474,14 @@ public final class CacheSpec {
     /**
      * Parse eviction policy name
      */
-    private static <K, V> EvictionPolicy<K, V> parseEvictionPolicy(String value) {
+    private static <K, V> EvictionPolicy<K, V> parseEvictionPolicy(String value, int expectedSize) {
         String trimmed = value.trim().toLowerCase();
 
         return switch (trimmed) {
             case "lru" -> EvictionPolicy.lru();
             case "lfu" -> EvictionPolicy.lfu();
             case "fifo" -> EvictionPolicy.fifo();
-            case "wtinylfu", "w-tinylfu", "tinylfu" -> EvictionPolicy.wTinyLfu();
+            case "wtinylfu", "w-tinylfu", "tinylfu" -> EvictionPolicy.wTinyLfu(expectedSize);
             default -> throw new OpenCacheException(
                     "Unknown eviction policy: " + value +
                             ". Supported: lru, lfu, fifo, wtinylfu");

@@ -473,6 +473,131 @@ class ClassMetadataTest {
     }
 
     @Nested
+    @DisplayName("Generic Signature Tests")
+    class GenericSignatureTests {
+
+        @Test
+        @DisplayName("Should store generic signature")
+        void shouldStoreGenericSignature() {
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .genericSignature("<T extends Comparable<T>>")
+                    .build();
+
+            assertThat(metadata.getGenericSignature()).isEqualTo("<T extends Comparable<T>>");
+        }
+
+        @Test
+        @DisplayName("Should return null for non-generic class")
+        void shouldReturnNullForNonGenericClass() {
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .build();
+
+            assertThat(metadata.getGenericSignature()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should store type parameters")
+        void shouldStoreTypeParameters() {
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .typeParameters(List.of("T", "K extends Comparable<K>"))
+                    .build();
+
+            assertThat(metadata.getTypeParameters()).containsExactly("T", "K extends Comparable<K>");
+        }
+
+        @Test
+        @DisplayName("Should return empty list for no type parameters")
+        void shouldReturnEmptyListForNoTypeParameters() {
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .build();
+
+            assertThat(metadata.getTypeParameters()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should check has type parameters")
+        void shouldCheckHasTypeParameters() {
+            ClassMetadata withParams = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .typeParameters(List.of("T"))
+                    .build();
+
+            ClassMetadata withoutParams = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .build();
+
+            assertThat(withParams.hasTypeParameters()).isTrue();
+            assertThat(withoutParams.hasTypeParameters()).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should return immutable type parameters list")
+        void shouldReturnImmutableTypeParametersList() {
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .typeParameters(List.of("T"))
+                    .build();
+
+            assertThatThrownBy(() -> metadata.getTypeParameters().add("K"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Record Component Tests")
+    class RecordComponentTests {
+
+        @Test
+        @DisplayName("Should store record components")
+        void shouldStoreRecordComponents() {
+            List<RecordComponentMetadata> components = List.of(
+                    new RecordComponentMetadata("name", "java.lang.String", null, List.of()),
+                    new RecordComponentMetadata("age", "int", null, List.of())
+            );
+
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.Person")
+                    .isRecord(true)
+                    .recordComponents(components)
+                    .build();
+
+            assertThat(metadata.getRecordComponents()).hasSize(2);
+            assertThat(metadata.getRecordComponents().get(0).name()).isEqualTo("name");
+            assertThat(metadata.getRecordComponents().get(1).name()).isEqualTo("age");
+        }
+
+        @Test
+        @DisplayName("Should return empty list for non-record class")
+        void shouldReturnEmptyListForNonRecordClass() {
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.MyClass")
+                    .build();
+
+            assertThat(metadata.getRecordComponents()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should return immutable record components list")
+        void shouldReturnImmutableRecordComponentsList() {
+            ClassMetadata metadata = ClassMetadata.builder()
+                    .className("com.example.Person")
+                    .isRecord(true)
+                    .recordComponents(List.of(
+                            new RecordComponentMetadata("name", "java.lang.String", null, List.of())
+                    ))
+                    .build();
+
+            assertThatThrownBy(() -> metadata.getRecordComponents().add(
+                    new RecordComponentMetadata("extra", "int", null, List.of())))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("Equals and HashCode Tests")
     class EqualsHashCodeTests {
 

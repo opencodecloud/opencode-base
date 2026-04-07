@@ -164,11 +164,11 @@ class OpenDiffTest {
     class ApplyPatchTests {
 
         @Test
-        @DisplayName("Should apply patch to original")
-        void shouldApplyPatchToOriginal() {
-            String result = OpenDiff.applyPatch("original", "+ added line");
-            assertThat(result).contains("original");
-            assertThat(result).contains("added line");
+        @DisplayName("Should throw UnsupportedOperationException")
+        void shouldThrowUnsupportedOperationException() {
+            assertThatThrownBy(() -> OpenDiff.applyPatch("original", "+ added line"))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("not yet fully implemented");
         }
     }
 

@@ -1,5 +1,6 @@
 package cloud.opencode.base.web.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import cloud.opencode.base.web.CommonResultCode;
 import org.junit.jupiter.api.*;
 
@@ -160,6 +161,14 @@ class OpenBizExceptionTest {
 
             assertThat(exception).isInstanceOf(OpenWebException.class);
             assertThat(exception).isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            OpenBizException exception = new OpenBizException("Test");
+
+            assertThat(exception).isInstanceOf(OpenException.class);
         }
     }
 }

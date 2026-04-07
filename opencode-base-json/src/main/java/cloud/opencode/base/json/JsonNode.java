@@ -411,6 +411,7 @@ public sealed interface JsonNode permits JsonNode.ObjectNode, JsonNode.ArrayNode
      */
     final class ObjectNode implements JsonNode {
         private final Map<String, JsonNode> properties = new LinkedHashMap<>();
+        private Set<String> keysView;
 
         @Override public boolean isObject() { return true; }
 
@@ -426,7 +427,10 @@ public sealed interface JsonNode permits JsonNode.ObjectNode, JsonNode.ArrayNode
 
         @Override
         public Set<String> keys() {
-            return Collections.unmodifiableSet(properties.keySet());
+            if (keysView == null) {
+                keysView = Collections.unmodifiableSet(properties.keySet());
+            }
+            return keysView;
         }
 
         @Override
@@ -565,7 +569,7 @@ public sealed interface JsonNode permits JsonNode.ObjectNode, JsonNode.ArrayNode
 
         @Override
         public Iterator<JsonNode> iterator() {
-            return Collections.unmodifiableList(elements).iterator();
+            return elements.iterator();
         }
 
         @Override
@@ -620,6 +624,8 @@ public sealed interface JsonNode permits JsonNode.ObjectNode, JsonNode.ArrayNode
         @Override public BigDecimal asBigDecimal() {
             if (value instanceof BigDecimal bd) return bd;
             if (value instanceof BigInteger bi) return new BigDecimal(bi);
+            if (value instanceof Long l) return BigDecimal.valueOf(l);
+            if (value instanceof Integer i) return BigDecimal.valueOf(i);
             return new BigDecimal(value.toString());
         }
         @Override public BigInteger asBigInteger() {

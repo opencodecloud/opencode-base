@@ -51,13 +51,24 @@ import java.util.*;
 final class JsonSerializer {
 
     private static final int MAX_DEPTH = 512;
+    private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
+
+    private static final String[] INDENT_CACHE;
+    static {
+        INDENT_CACHE = new String[33];
+        StringBuilder indent = new StringBuilder();
+        for (int i = 0; i < INDENT_CACHE.length; i++) {
+            INDENT_CACHE[i] = indent.toString();
+            indent.append("  ");
+        }
+    }
 
     private final StringBuilder sb;
     private final boolean prettyPrint;
     private int depth;
 
     JsonSerializer(boolean prettyPrint) {
-        this.sb = new StringBuilder(256);
+        this.sb = new StringBuilder(1024);
         this.prettyPrint = prettyPrint;
         this.depth = 0;
     }
@@ -86,7 +97,7 @@ final class JsonSerializer {
             case String s -> writeString(s);
             case Boolean b -> sb.append(b);
             case Number n -> writeNumber(n);
-            case Map<?, ?> map -> writeMap((Map<String, Object>) map);
+            case Map<?, ?> map -> writeMap(map);
             case Collection<?> coll -> writeCollection(coll);
             case Object[] arr -> writeArray(arr);
             case int[] arr -> writePrimitiveArray(arr);
@@ -144,14 +155,14 @@ final class JsonSerializer {
         }
     }
 
-    private void writeMap(Map<String, Object> map) {
+    private void writeMap(Map<?, ?> map) {
         sb.append('{');
         pushDepth();
         boolean first = true;
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
             if (!first) sb.append(',');
             newline();
-            writeString(entry.getKey());
+            writeString(String.valueOf(entry.getKey()));
             sb.append(':');
             if (prettyPrint) sb.append(' ');
             writeValue(entry.getValue());
@@ -240,7 +251,9 @@ final class JsonSerializer {
                 case '\t' -> sb.append("\\t");
                 default -> {
                     if (c < 0x20) {
-                        sb.append("\\u").append(String.format("%04x", (int) c));
+                        sb.append("\\u").append(HEX_DIGITS[(c >> 12) & 0xF]).append(HEX_DIGITS[(c >> 8) & 0xF]).append(HEX_DIGITS[(c >> 4) & 0xF]).append(HEX_DIGITS[c & 0xF]);
+                    } else if (c == '<' || c == '>' || c == '&') {
+                        sb.append("\\u").append(HEX_DIGITS[(c >> 12) & 0xF]).append(HEX_DIGITS[(c >> 8) & 0xF]).append(HEX_DIGITS[(c >> 4) & 0xF]).append(HEX_DIGITS[c & 0xF]);
                     } else {
                         sb.append(c);
                     }
@@ -285,7 +298,11 @@ final class JsonSerializer {
     private void newline() {
         if (prettyPrint) {
             sb.append('\n');
-            sb.append("  ".repeat(depth));
+            if (depth < INDENT_CACHE.length) {
+                sb.append(INDENT_CACHE[depth]);
+            } else {
+                sb.append("  ".repeat(depth));
+            }
         }
     }
 }

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.Serial;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -258,6 +260,244 @@ class EventSerializerTest {
 
         public AnotherTestEvent(String source) {
             super(source);
+        }
+    }
+
+    /**
+     * Non-serializable event (does NOT implement Serializable)
+     */
+    private static class NonSerializableEvent extends Event {
+        private final String data;
+
+        public NonSerializableEvent(String source, String data) {
+            super(source);
+            this.data = data;
+        }
+
+        public String getData() {
+            return data;
+        }
+    }
+
+    /**
+     * Event with complex payload fields for exercising filter paths
+     */
+    private static class ComplexEvent extends Event implements java.io.Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final List<String> tags;
+        private final Map<String, Integer> metadata;
+        private final String description;
+
+        public ComplexEvent(String source, List<String> tags, Map<String, Integer> metadata, String description) {
+            super(source);
+            this.tags = tags;
+            this.metadata = metadata;
+            this.description = description;
+        }
+
+        public List<String> getTags() {
+            return tags;
+        }
+
+        public Map<String, Integer> getMetadata() {
+            return metadata;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+    }
+
+    @Nested
+    @DisplayName("Non-serializable event tests | 不可序列化事件测试")
+    class NonSerializableEventTests {
+
+        @Test
+        @DisplayName("serialize non-serializable event should throw EventSerializationException")
+        void shouldThrowForNonSerializableEvent() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            NonSerializableEvent event = new NonSerializableEvent("src", "payload");
+
+            assertThatThrownBy(() -> EventSerializer.serialize(event))
+                    .isInstanceOf(EventSerializer.EventSerializationException.class)
+                    .hasMessageContaining("Failed to serialize event");
+        }
+    }
+
+    @Nested
+    @DisplayName("Corrupt data tests | 损坏数据测试")
+    class CorruptDataTests {
+
+        @Test
+        @DisplayName("deserialize corrupt bytes should throw EventSerializationException")
+        void shouldThrowForCorruptBytes() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            byte[] garbage = {0x00, 0x01, 0x02, 0x03, 0x7F, (byte) 0xFF, (byte) 0xAB};
+
+            assertThatThrownBy(() -> EventSerializer.deserialize(garbage, TestEvent.class))
+                    .isInstanceOf(EventSerializer.EventSerializationException.class)
+                    .hasMessageContaining("Failed to deserialize event");
+        }
+
+        @Test
+        @DisplayName("deserialize empty byte array should throw EventSerializationException")
+        void shouldThrowForEmptyBytes() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            byte[] empty = new byte[0];
+
+            assertThatThrownBy(() -> EventSerializer.deserialize(empty, TestEvent.class))
+                    .isInstanceOf(EventSerializer.EventSerializationException.class)
+                    .hasMessageContaining("Failed to deserialize event");
+        }
+    }
+
+    @Nested
+    @DisplayName("Type mismatch detail tests | 类型不匹配详情测试")
+    class TypeMismatchDetailTests {
+
+        @Test
+        @DisplayName("deserialized object type mismatch should contain 'not of expected type' message")
+        void shouldContainExpectedTypeMessage() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            TestEvent original = new TestEvent("mismatch-src", "mismatch data");
+            byte[] data = EventSerializer.serialize(original);
+
+            assertThatThrownBy(() -> EventSerializer.deserialize(data, AnotherTestEvent.class))
+                    .isInstanceOf(EventSerializer.EventSerializationException.class)
+                    .hasMessageContaining("not of expected type");
+        }
+    }
+
+    @Nested
+    @DisplayName("String serialization edge cases | 字符串序列化边界测试")
+    class StringSerializationEdgeCaseTests {
+
+        @Test
+        @DisplayName("serializeToString and deserializeFromString roundtrip with null source")
+        void shouldRoundTripWithNullSource() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            TestEvent event = new TestEvent(null, "null-source-message");
+
+            String base64 = EventSerializer.serializeToString(event);
+            TestEvent restored = EventSerializer.deserializeFromString(base64, TestEvent.class);
+
+            assertThat(restored).isNotNull();
+            assertThat(restored.getSource()).isNull();
+            assertThat(restored.getMessage()).isEqualTo("null-source-message");
+        }
+
+        @Test
+        @DisplayName("invalid Base64 input should throw exception")
+        void shouldThrowForInvalidBase64() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            String invalidBase64 = "!!!not-valid-base64!!!";
+
+            assertThatThrownBy(() -> EventSerializer.deserializeFromString(invalidBase64, TestEvent.class))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Complex payload tests | 复杂负载测试")
+    class ComplexPayloadTests {
+
+        @Test
+        @DisplayName("serialize and deserialize event with List and Map fields")
+        void shouldRoundTripComplexEvent() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            List<String> tags = List.of("alpha", "beta", "gamma");
+            Map<String, Integer> metadata = Map.of("count", 42, "version", 3);
+            ComplexEvent original = new ComplexEvent("complex-src", tags, metadata, "complex description");
+
+            byte[] data = EventSerializer.serialize(original);
+            ComplexEvent restored = EventSerializer.deserialize(data, ComplexEvent.class);
+
+            assertThat(restored).isNotNull();
+            assertThat(restored.getTags()).containsExactlyInAnyOrderElementsOf(tags);
+            assertThat(restored.getMetadata()).containsAllEntriesOf(metadata);
+            assertThat(restored.getDescription()).isEqualTo("complex description");
+        }
+
+        @Test
+        @DisplayName("serialize and deserialize event with empty collections")
+        void shouldRoundTripWithEmptyCollections() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            ComplexEvent original = new ComplexEvent("empty-src", List.of(), Map.of(), "");
+
+            byte[] data = EventSerializer.serialize(original);
+            ComplexEvent restored = EventSerializer.deserialize(data, ComplexEvent.class);
+
+            assertThat(restored).isNotNull();
+            assertThat(restored.getTags()).isEmpty();
+            assertThat(restored.getMetadata()).isEmpty();
+            assertThat(restored.getDescription()).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("Large event tests | 大事件测试")
+    class LargeEventTests {
+
+        @Test
+        @DisplayName("serialize and deserialize event with large string payload")
+        void shouldRoundTripLargeEvent() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            String largePayload = "X".repeat(100_000);
+            TestEvent original = new TestEvent("large-src", largePayload);
+
+            byte[] data = EventSerializer.serialize(original);
+            assertThat(data).isNotNull().isNotEmpty();
+
+            TestEvent restored = EventSerializer.deserialize(data, TestEvent.class);
+
+            assertThat(restored).isNotNull();
+            assertThat(restored.getMessage()).isEqualTo(largePayload);
+            assertThat(restored.getMessage()).hasSize(100_000);
+        }
+
+        @Test
+        @DisplayName("string roundtrip with large payload")
+        void shouldStringRoundTripLargeEvent() {
+            if (EventSerializer.isSerializationModuleAvailable()) {
+                return;
+            }
+
+            String largePayload = "Y".repeat(50_000);
+            TestEvent original = new TestEvent("large-b64-src", largePayload);
+
+            String base64 = EventSerializer.serializeToString(original);
+            TestEvent restored = EventSerializer.deserializeFromString(base64, TestEvent.class);
+
+            assertThat(restored.getMessage()).isEqualTo(largePayload);
         }
     }
 }

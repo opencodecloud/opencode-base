@@ -68,6 +68,22 @@ public final class OpenTelemetryTracer implements Tracer {
     private final ConcurrentHashMap<String, Method> methodCache = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
+    /**
+     * Strips CR/LF characters to prevent log injection.
+     * 去除 CR/LF 字符以防止日志注入。
+     */
+    private static String sanitizeForLog(String value) {
+        if (value == null) {
+            return "";
+        }
+        // Fast path: no CR/LF → return original string (zero allocation).
+        // 快速路径：无 CR/LF 时返回原字符串（零分配）。
+        if (value.indexOf('\r') < 0 && value.indexOf('\n') < 0) {
+            return value;
+        }
+        return value.replace('\r', '_').replace('\n', '_');
+    }
+
     private OpenTelemetryTracer(String serviceName, Object otelTracer, boolean otelAvailable) {
         this.serviceName = serviceName;
         this.otelTracer = otelTracer;
@@ -96,15 +112,15 @@ public final class OpenTelemetryTracer implements Tracer {
             Method getTracerMethod = globalOTel.getClass().getMethod("getTracer", String.class);
             Object tracer = getTracerMethod.invoke(globalOTel, serviceName);
             LOGGER.log(System.Logger.Level.INFO,
-                    "OpenTelemetry API detected. Tracing enabled for service: {0}", serviceName);
+                    "OpenTelemetry API detected. Tracing enabled for service: {0}", sanitizeForLog(serviceName));
             return new OpenTelemetryTracer(serviceName, tracer, true);
         } catch (ClassNotFoundException e) {
             LOGGER.log(System.Logger.Level.DEBUG,
-                    "OpenTelemetry API not on classpath. Using noop tracer for: {0}", serviceName);
+                    "OpenTelemetry API not on classpath. Using noop tracer for: {0}", sanitizeForLog(serviceName));
             return new OpenTelemetryTracer(serviceName, null, false);
         } catch (Exception e) {
             LOGGER.log(System.Logger.Level.WARNING,
-                    "Failed to init OpenTelemetry tracer for {0}: {1}", serviceName, e.getMessage());
+                    "Failed to init OpenTelemetry tracer for {0}: {1}", sanitizeForLog(serviceName), e.getMessage());
             return new OpenTelemetryTracer(serviceName, null, false);
         }
     }
@@ -133,7 +149,7 @@ public final class OpenTelemetryTracer implements Tracer {
         if (closed.compareAndSet(false, true)) {
             methodCache.clear();
             LOGGER.log(System.Logger.Level.DEBUG,
-                    "OpenTelemetryTracer closed for service: {0}", serviceName);
+                    "OpenTelemetryTracer closed for service: {0}", sanitizeForLog(serviceName));
         }
     }
 
@@ -162,14 +178,19 @@ public final class OpenTelemetryTracer implements Tracer {
     // ==================== Internal | 内部实现 ====================
 
     private Span createOtelSpan(String operationName, String key) throws Exception {
+        // Sanitize values before passing to OTel to prevent CRLF injection in tracing backends.
+        // OTel 属性值过滤 CRLF，防止追踪后端注入。
+        String safeOperation = sanitizeForLog(operationName);
+        String safeKey = sanitizeForLog(key);
+
         Method spanBuilderMethod = cachedMethod(otelTracer.getClass(), "spanBuilder", String.class);
-        Object spanBuilder = spanBuilderMethod.invoke(otelTracer, operationName);
+        Object spanBuilder = spanBuilderMethod.invoke(otelTracer, safeOperation);
 
         Class<?> builderClass = Class.forName(OTEL_SPAN_BUILDER_CLASS);
         Method setAttribute = cachedMethod(builderClass, "setAttribute", String.class, String.class);
-        setAttribute.invoke(spanBuilder, "operation", operationName);
-        setAttribute.invoke(spanBuilder, "key", key);
-        setAttribute.invoke(spanBuilder, "service.name", serviceName);
+        setAttribute.invoke(spanBuilder, "operation", safeOperation);
+        setAttribute.invoke(spanBuilder, "key", safeKey);
+        setAttribute.invoke(spanBuilder, "service.name", sanitizeForLog(serviceName));
 
         Method startSpan = cachedMethod(builderClass, "startSpan");
         Object otelSpan = startSpan.invoke(spanBuilder);
@@ -178,7 +199,8 @@ public final class OpenTelemetryTracer implements Tracer {
     }
 
     private Method cachedMethod(Class<?> clazz, String name, Class<?>... params) throws NoSuchMethodException {
-        String cacheKey = clazz.getName() + "#" + name + "#" + params.length;
+        String cacheKey = clazz.getName() + "#" + name + "#" + java.util.Arrays.toString(
+                java.util.Arrays.stream(params).map(Class::getName).toArray(String[]::new));
         return methodCache.computeIfAbsent(cacheKey, _ -> {
             try {
                 return clazz.getMethod(name, params);
@@ -215,7 +237,11 @@ public final class OpenTelemetryTracer implements Tracer {
                 Class<?> statusCodeClass = Class.forName(OTEL_STATUS_CODE_CLASS);
                 Object errorStatus = statusCodeClass.getField("ERROR").get(null);
                 Method setStatus = cachedMethod(Class.forName(OTEL_SPAN_CLASS), "setStatus", statusCodeClass, String.class);
-                setStatus.invoke(otelSpan, errorStatus, error.getMessage());
+                // Use only the exception class name as the status description to avoid leaking
+                // sensitive data (connection strings, passwords) that may appear in exception messages.
+                // The full exception detail is already captured by recordException() above.
+                // 仅用异常类名作为状态描述，避免泄露异常消息中的敏感数据（连接串、密码等）。
+                setStatus.invoke(otelSpan, errorStatus, error.getClass().getName());
             } catch (Exception e) {
                 LOGGER.log(System.Logger.Level.DEBUG, "setError failed: {0}", e.getMessage());
             }

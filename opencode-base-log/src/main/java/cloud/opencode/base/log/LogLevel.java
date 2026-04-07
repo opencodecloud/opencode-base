@@ -98,6 +98,20 @@ public enum LogLevel {
      */
     OFF(6, "OFF");
 
+    /**
+     * Pre-computed map for O(1) name-to-level lookup (uppercase keys).
+     * 预计算的名称到级别映射，用于 O(1) 查找（大写键）。
+     */
+    private static final java.util.Map<String, LogLevel> NAME_MAP;
+
+    static {
+        java.util.Map<String, LogLevel> m = new java.util.HashMap<>();
+        for (LogLevel l : values()) {
+            m.put(l.name, l);
+        }
+        NAME_MAP = java.util.Collections.unmodifiableMap(m);
+    }
+
     private final int level;
     private final String name;
 
@@ -158,13 +172,11 @@ public enum LogLevel {
      */
     public static LogLevel fromName(String name) {
         Objects.requireNonNull(name, "Level name must not be null");
-        String upperName = name.toUpperCase();
-        for (LogLevel level : values()) {
-            if (level.name.equals(upperName)) {
-                return level;
-            }
+        LogLevel level = NAME_MAP.get(name.toUpperCase());
+        if (level == null) {
+            throw new IllegalArgumentException("Unknown log level: " + name);
         }
-        throw new IllegalArgumentException("Unknown log level: " + name);
+        return level;
     }
 
     /**

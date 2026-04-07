@@ -61,7 +61,7 @@ import java.util.function.Function;
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
  * @since JDK 25, opencode-base-cache V2.0.0
  */
-public final class RefreshAheadCache<K, V> implements Cache<K, V> {
+public final class RefreshAheadCache<K, V> implements Cache<K, V>, AutoCloseable {
 
     private final Cache<K, V> delegate;
     private final RefreshAheadPolicy<K, V> policy;
@@ -511,6 +511,17 @@ public final class RefreshAheadCache<K, V> implements Cache<K, V> {
         if (ownsExecutor && executor instanceof ExecutorService es) {
             es.shutdown();
         }
+    }
+
+    /**
+     * Close this cache, releasing all resources by delegating to {@link #shutdown()}.
+     * 关闭此缓存，通过委托给 {@link #shutdown()} 释放所有资源。
+     *
+     * @since V1.0.3
+     */
+    @Override
+    public void close() {
+        shutdown();
     }
 
     /**

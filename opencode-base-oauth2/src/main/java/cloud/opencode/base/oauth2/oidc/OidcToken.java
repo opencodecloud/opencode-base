@@ -337,8 +337,7 @@ public final class OidcToken {
     @Override
     public String toString() {
         return "OidcToken{" +
-                "subject='" + subject() + '\'' +
-                ", email='" + email() + '\'' +
+                "hasIdToken=" + hasIdToken() +
                 ", hasRefreshToken=" + hasRefreshToken() +
                 ", isExpired=" + isExpired() +
                 '}';

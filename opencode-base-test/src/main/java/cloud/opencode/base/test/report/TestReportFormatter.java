@@ -141,7 +141,7 @@ public final class TestReportFormatter {
     public static String toMarkdown(TestReport report) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("# Test Report: ").append(report.getName()).append("\n\n");
+        sb.append("# Test Report: ").append(escapeMd(report.getName())).append("\n\n");
         sb.append("## Summary\n\n");
         sb.append("| Metric | Value |\n");
         sb.append("|--------|-------|\n");
@@ -164,7 +164,7 @@ public final class TestReportFormatter {
                 case SKIPPED -> "⏭️";
             };
             sb.append(String.format("| %s | %s | %dms |\n",
-                emoji, result.testName(), result.duration().toMillis()));
+                emoji, escapeMd(result.testName()), result.duration().toMillis()));
         }
 
         // Add failures section if any
@@ -175,10 +175,10 @@ public final class TestReportFormatter {
         if (!failures.isEmpty()) {
             sb.append("\n## Failures\n\n");
             for (TestResult result : failures) {
-                sb.append("### ").append(result.testName()).append("\n\n");
+                sb.append("### ").append(escapeMd(result.testName())).append("\n\n");
                 if (result.error() != null) {
                     sb.append("```\n");
-                    sb.append(result.error().getMessage()).append("\n");
+                    sb.append(escapeMd(result.error().getMessage())).append("\n");
                     sb.append("```\n\n");
                 }
             }
@@ -194,6 +194,15 @@ public final class TestReportFormatter {
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
             .replace("'", "&apos;");
+    }
+
+    private static String escapeMd(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("|", "\\|")
+            .replace("`", "\\`");
     }
 
     private static String getStackTrace(Throwable t) {

@@ -146,7 +146,7 @@ class SafeImageServiceTest {
         @DisplayName("处理图片操作")
         void testProcessOperation() {
             BufferedImage bufferedImage = new BufferedImage(100, 100, BufferedImage.TYPE_INT_RGB);
-            Image image = new Image(bufferedImage, null);
+            Image image = new Image(bufferedImage);
 
             Image result = service.process(image, img -> img);
 
@@ -157,7 +157,7 @@ class SafeImageServiceTest {
         @DisplayName("处理调整大小操作")
         void testProcessResize() {
             BufferedImage bufferedImage = new BufferedImage(100, 100, BufferedImage.TYPE_INT_RGB);
-            Image image = new Image(bufferedImage, null);
+            Image image = new Image(bufferedImage);
 
             Image result = service.process(image, img -> {
                 return new BufferedImage(50, 50, BufferedImage.TYPE_INT_RGB);

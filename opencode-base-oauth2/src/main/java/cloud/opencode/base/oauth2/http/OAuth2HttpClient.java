@@ -3,6 +3,7 @@ package cloud.opencode.base.oauth2.http;
 import cloud.opencode.base.oauth2.OAuth2Config;
 import cloud.opencode.base.oauth2.exception.OAuth2ErrorCode;
 import cloud.opencode.base.oauth2.exception.OAuth2Exception;
+import cloud.opencode.base.oauth2.internal.JsonParser;
 
 import java.io.IOException;
 import java.net.URI;
@@ -40,7 +41,7 @@ import java.util.stream.Collectors;
  *
  * <p><strong>Security | 安全性:</strong></p>
  * <ul>
- *   <li>Thread-safe: No - 线程安全: 否</li>
+ *   <li>Thread-safe: Yes (stateless after construction) - 线程安全: 是（构造后无状态）</li>
  *   <li>Null-safe: Yes (validates inputs) - 空值安全: 是（验证输入）</li>
  * </ul>
  *
@@ -79,7 +80,7 @@ public class OAuth2HttpClient implements AutoCloseable {
         this.readTimeout = readTimeout;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(connectTimeout)
-                .followRedirects(HttpClient.Redirect.NORMAL)
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
     }
 
@@ -194,14 +195,13 @@ public class OAuth2HttpClient implements AutoCloseable {
      * @return the exception | 异常
      */
     private OAuth2Exception createErrorException(int status, String body) {
-        // Try to parse OAuth2 error response
-        String error = extractJsonField(body, "error");
-        String description = extractJsonField(body, "error_description");
+        // Try to parse OAuth2 error response (RFC 6749 Section 5.2)
+        String error = JsonParser.getString(body, "error");
+        String description = JsonParser.getString(body, "error_description");
+        String errorUri = JsonParser.getString(body, "error_uri");
 
         if (error != null) {
-            OAuth2ErrorCode errorCode = mapOAuth2Error(error);
-            String message = description != null ? description : error;
-            return new OAuth2Exception(errorCode, message);
+            return OAuth2Exception.fromServerError(error, description, errorUri);
         }
 
         // Generic HTTP error
@@ -209,55 +209,9 @@ public class OAuth2HttpClient implements AutoCloseable {
                 status == 401 ? OAuth2ErrorCode.AUTHORIZATION_FAILED :
                         OAuth2ErrorCode.INVALID_RESPONSE;
 
-        return new OAuth2Exception(code, "HTTP " + status + ": " + body);
-    }
-
-    /**
-     * Map OAuth2 error string to error code
-     * 将 OAuth2 错误字符串映射到错误码
-     *
-     * @param error the error string | 错误字符串
-     * @return the error code | 错误码
-     */
-    private OAuth2ErrorCode mapOAuth2Error(String error) {
-        return switch (error) {
-            case "invalid_grant" -> OAuth2ErrorCode.INVALID_GRANT;
-            case "invalid_scope" -> OAuth2ErrorCode.INVALID_SCOPE;
-            case "access_denied" -> OAuth2ErrorCode.ACCESS_DENIED;
-            case "authorization_pending" -> OAuth2ErrorCode.AUTHORIZATION_PENDING;
-            case "slow_down" -> OAuth2ErrorCode.SLOW_DOWN;
-            case "expired_token" -> OAuth2ErrorCode.CODE_EXPIRED;
-            case "invalid_client" -> OAuth2ErrorCode.AUTHORIZATION_FAILED;
-            case "invalid_request" -> OAuth2ErrorCode.INVALID_CONFIG;
-            default -> OAuth2ErrorCode.PROVIDER_ERROR;
-        };
-    }
-
-    /**
-     * Extract a field from JSON (simple implementation)
-     * 从 JSON 中提取字段（简单实现）
-     *
-     * @param json  the JSON string | JSON 字符串
-     * @param field the field name | 字段名
-     * @return the field value or null | 字段值或 null
-     */
-    private String extractJsonField(String json, String field) {
-        if (json == null) return null;
-
-        String pattern = "\"" + field + "\"";
-        int idx = json.indexOf(pattern);
-        if (idx < 0) return null;
-
-        int colonIdx = json.indexOf(':', idx + pattern.length());
-        if (colonIdx < 0) return null;
-
-        int start = json.indexOf('"', colonIdx);
-        if (start < 0) return null;
-
-        int end = json.indexOf('"', start + 1);
-        if (end < 0) return null;
-
-        return json.substring(start + 1, end);
+        String safeBody = body != null && body.length() > 256
+                ? body.substring(0, 256) + "..." : body;
+        return new OAuth2Exception(code, "HTTP " + status + ": " + safeBody);
     }
 
     /**
@@ -269,6 +223,7 @@ public class OAuth2HttpClient implements AutoCloseable {
      */
     private String encodeFormParams(Map<String, String> params) {
         return params.entrySet().stream()
+                .filter(e -> e.getValue() != null)
                 .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8) + "=" +
                         URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
                 .collect(Collectors.joining("&"));
@@ -292,16 +247,23 @@ public class OAuth2HttpClient implements AutoCloseable {
         if (url.toLowerCase().startsWith("http://")) {
             URI uri = URI.create(url);
             String host = uri.getHost();
-            if ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)) {
+            if ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)
+                    || "::1".equals(host)) {
                 return;
             }
         }
+        // Redact query parameters that may contain credentials
+        String safeUrl = url;
+        int queryIdx = url.indexOf('?');
+        if (queryIdx >= 0) {
+            safeUrl = url.substring(0, queryIdx) + "?[redacted]";
+        }
         throw new OAuth2Exception(OAuth2ErrorCode.INVALID_CONFIG,
-                "OAuth2 endpoints must use HTTPS for security (HTTP allowed only for localhost/127.0.0.1). URL: " + url);
+                "OAuth2 endpoints must use HTTPS for security (HTTP allowed only for localhost/127.0.0.1). URL: " + safeUrl);
     }
 
     @Override
     public void close() {
-        // HttpClient doesn't need explicit closing in most cases
+        httpClient.close();
     }
 }

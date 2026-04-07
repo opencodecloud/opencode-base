@@ -2,6 +2,8 @@ package cloud.opencode.base.money.exception;
 
 import cloud.opencode.base.money.Currency;
 
+import java.io.Serial;
+
 /**
  * Exchange Rate Exception
  * 汇率异常
@@ -33,6 +35,9 @@ import cloud.opencode.base.money.Currency;
  * @since JDK 25, opencode-base-money V1.0.0
  */
 public class ExchangeRateException extends MoneyException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final Currency source;
     private final Currency target;

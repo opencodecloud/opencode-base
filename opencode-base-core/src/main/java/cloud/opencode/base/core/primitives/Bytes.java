@@ -96,6 +96,10 @@ public final class Bytes {
      * 在指定范围内查找元素索引
      */
     public static int indexOf(byte[] array, byte target, int start, int end) {
+        if (start < 0 || end > array.length || start > end) {
+            throw new IndexOutOfBoundsException(
+                    "start=" + start + ", end=" + end + ", length=" + array.length);
+        }
         for (int i = start; i < end; i++) {
             if (array[i] == target) {
                 return i;

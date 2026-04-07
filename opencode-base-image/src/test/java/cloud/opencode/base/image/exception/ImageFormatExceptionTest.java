@@ -1,5 +1,6 @@
 package cloud.opencode.base.image.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-image V1.0.0
+ * @since JDK 25, opencode-base-image V1.0.3
  */
 @DisplayName("ImageFormatException 异常测试")
 class ImageFormatExceptionTest {
@@ -26,8 +27,8 @@ class ImageFormatExceptionTest {
         void testConstructorWithMessage() {
             ImageFormatException ex = new ImageFormatException("Invalid format");
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid format");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.UNSUPPORTED_FORMAT);
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid format");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.UNSUPPORTED_FORMAT);
             assertThat(ex.getFormat()).isNull();
         }
 
@@ -36,7 +37,7 @@ class ImageFormatExceptionTest {
         void testConstructorWithMessageAndFormat() {
             ImageFormatException ex = new ImageFormatException("Unsupported", "tiff");
 
-            assertThat(ex.getMessage()).isEqualTo("Unsupported");
+            assertThat(ex.getRawMessage()).isEqualTo("Unsupported");
             assertThat(ex.getFormat()).isEqualTo("tiff");
         }
 
@@ -45,8 +46,8 @@ class ImageFormatExceptionTest {
         void testConstructorWithMessageAndErrorCode() {
             ImageFormatException ex = new ImageFormatException("Invalid", ImageErrorCode.INVALID_IMAGE);
 
-            assertThat(ex.getMessage()).isEqualTo("Invalid");
-            assertThat(ex.getErrorCode()).isEqualTo(ImageErrorCode.INVALID_IMAGE);
+            assertThat(ex.getRawMessage()).isEqualTo("Invalid");
+            assertThat(ex.getImageErrorCode()).isEqualTo(ImageErrorCode.INVALID_IMAGE);
         }
 
         @Test
@@ -55,7 +56,7 @@ class ImageFormatExceptionTest {
             Throwable cause = new RuntimeException("Parse error");
             ImageFormatException ex = new ImageFormatException("Format error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Format error");
+            assertThat(ex.getRawMessage()).isEqualTo("Format error");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
     }
@@ -69,8 +70,8 @@ class ImageFormatExceptionTest {
         void testUnsupportedFactory() {
             ImageFormatException ex = ImageFormatException.unsupported("tiff");
 
-            assertThat(ex.getMessage()).contains("tiff");
-            assertThat(ex.getMessage()).contains("Unsupported");
+            assertThat(ex.getRawMessage()).contains("tiff");
+            assertThat(ex.getRawMessage()).contains("Unsupported");
             assertThat(ex.getFormat()).isEqualTo("tiff");
         }
     }
@@ -106,6 +107,22 @@ class ImageFormatExceptionTest {
             ImageFormatException ex = new ImageFormatException("Test");
 
             assertThat(ex).isInstanceOf(ImageException.class);
+        }
+
+        @Test
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
+            ImageFormatException ex = new ImageFormatException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent返回Image")
+        void testGetComponentReturnsImage() {
+            ImageFormatException ex = new ImageFormatException("Test");
+
+            assertThat(ex.getComponent()).isEqualTo("Image");
         }
     }
 }

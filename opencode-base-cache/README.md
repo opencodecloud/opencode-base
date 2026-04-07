@@ -11,7 +11,7 @@
 - **Flexible Expiration**: TTL, TTI, and custom expiry policies
 - **Async API**: Full async support with CompletableFuture
 - **Statistics**: Comprehensive cache statistics and metrics
-- **Virtual Threads**: Native JDK 21+ virtual thread support
+- **Virtual Threads**: Native JDK 25 virtual thread support
 
 ### Advanced Features
 - **Cache Protection**: BloomFilter and SingleFlight integration (ProtectedCache)
@@ -21,6 +21,10 @@
 - **Reactive API**: JDK Flow API and Project Reactor support (ReactiveCache)
 - **Resilient Loading**: Retry, circuit breaker, bulkhead, and timeout (ResilientCacheLoader)
 - **Sampling Statistics**: High-throughput probabilistic statistics (SamplingStatsCounter)
+- **Tag-based Batch Invalidation**: Invalidate groups of entries by tag (TaggedCache)
+- **CAS Conditional Operations**: Atomic replaceIf / computeIfMatch on Cache interface
+- **Cache Snapshot Persistence**: Save and restore cache contents to disk (CacheSnapshot)
+- **Lock-free Read Path**: tryLock degradation ensures high-concurrency reads are never blocked by eviction tracking
 
 ## Quick Start
 
@@ -29,7 +33,7 @@
 <dependency>
     <groupId>cloud.opencode.base</groupId>
     <artifactId>opencode-base-cache</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -151,6 +155,59 @@ StatsCounter highThroughput = StatsCounter.samplingHighThroughput();  // 1%
 StatsCounter balanced = StatsCounter.samplingBalanced();              // 10%
 ```
 
+### Tag-based Batch Invalidation
+
+```java
+import cloud.opencode.base.cache.TaggedCache;
+import cloud.opencode.base.cache.OpenCache;
+import cloud.opencode.base.cache.Cache;
+
+Cache<String, String> base = OpenCache.lruCache(1000);
+TaggedCache<String, String> cache = TaggedCache.wrap(base);
+
+cache.put("user:1", "Alice", "tenant:acme", "role:admin");
+cache.put("user:2", "Bob", "tenant:acme", "role:user");
+cache.put("user:3", "Charlie", "tenant:beta", "role:admin");
+
+// Invalidate all entries for tenant:acme
+cache.invalidateByTag("tenant:acme"); // removes user:1 and user:2
+
+// Invalidate all admin entries
+cache.invalidateByTag("role:admin"); // removes user:3 (user:1 already gone)
+```
+
+### CAS Conditional Operations
+
+```java
+import cloud.opencode.base.cache.Cache;
+import cloud.opencode.base.cache.OpenCache;
+
+Cache<String, Integer> counter = OpenCache.lruCache(100);
+counter.put("hits", 10);
+counter.replaceIf("hits", v -> v < 100, 20); // replaces: 10 < 100
+counter.computeIfMatch("hits", v -> v == 20, v -> v + 1); // Optional.of(21)
+```
+
+### Cache Snapshot Persistence
+
+```java
+import cloud.opencode.base.cache.util.CacheSnapshot;
+import cloud.opencode.base.cache.Cache;
+import cloud.opencode.base.cache.OpenCache;
+import java.nio.file.Path;
+
+Cache<String, String> cache = OpenCache.lruCache(1000);
+cache.put("key1", "value1");
+cache.put("key2", "value2");
+
+// Save cache to disk
+CacheSnapshot.saveStringCache(cache, Path.of("/tmp/cache-snapshot.dat"));
+
+// Restore on restart
+Cache<String, String> newCache = OpenCache.lruCache(1000);
+CacheSnapshot.restoreStringCache(Path.of("/tmp/cache-snapshot.dat"), newCache);
+```
+
 ## Package Structure
 
 ```
@@ -161,6 +218,7 @@ cloud.opencode.base.cache
 ├── CopyOnReadCache.java         # Deep copy decorator
 ├── ProtectedCache.java          # BloomFilter + SingleFlight
 ├── RefreshAheadCache.java       # Proactive refresh
+├── TaggedCache.java             # Tag-based batch invalidation decorator
 ├── TimeoutCache.java            # Operation timeout wrapper
 ├── config/
 │   └── CacheConfig.java         # Configuration builder
@@ -170,6 +228,8 @@ cloud.opencode.base.cache
 │   └── stats/
 │       ├── LongAdderStatsCounter.java
 │       └── SamplingStatsCounter.java
+├── util/
+│   └── CacheSnapshot.java      # Cache snapshot persistence
 ├── protection/
 │   ├── BloomFilter.java
 │   └── SingleFlight.java
@@ -204,8 +264,24 @@ cloud.opencode.base.cache
 | Copy-on-Read | Yes | No | No | Yes |
 | Reactive API | Yes | No | No | No |
 | Sampling Stats | Yes | No | No | Yes |
+| Tag-based Invalidation | Yes | No | No | Yes |
+| CAS Operations | Yes | No | No | No |
+| Snapshot Persistence | Yes | No | No | Yes |
 | Spring Boot Integration | Yes | Yes | Yes | Yes |
 | Zero Dependencies | Yes | Yes | Yes | No |
+
+## Security Fixes (Developer Notes)
+
+- `DefaultCache.get(K, loader)` is now atomic (uses `store.compute`), preventing cache stampede
+- `evictionLock` changed to `ReentrantLock` + `tryLock`, read path no longer blocks
+- `CopyOnReadCache` default copier now applies `ObjectInputFilter`
+- `WriteBehindCache` shutdown flushes all pending writes in a loop (previously could lose data)
+- `TenantCache` tenantId has length (256) and count (10000) limits
+
+## Performance Improvements (Developer Notes)
+
+- `get()` path: tryLock degradation ensures high-concurrency reads are never blocked by eviction tracking
+- `CacheSnapshot.save`: streaming traversal eliminates O(n) memory peak
 
 ## Requirements
 
@@ -228,3 +304,5 @@ Apache License 2.0
 ## Author
 
 Leon Soo - [OpenCode.cloud](https://opencode.cloud)
+
+@author Leon Soo, @since JDK 25

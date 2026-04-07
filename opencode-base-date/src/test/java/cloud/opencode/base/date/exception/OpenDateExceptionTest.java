@@ -1,5 +1,6 @@
 package cloud.opencode.base.date.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,9 @@ class OpenDateExceptionTest {
         void testConstructorWithMessage() {
             OpenDateException exception = new OpenDateException("Test message");
 
-            assertThat(exception.getMessage()).isEqualTo("Test message");
+            assertThat(exception.getMessage()).isEqualTo("[date] Test message");
+            assertThat(exception.getRawMessage()).isEqualTo("Test message");
+            assertThat(exception.getComponent()).isEqualTo("date");
             assertThat(exception.getCause()).isNull();
             assertThat(exception.getInputValue()).isNull();
             assertThat(exception.getExpectedFormat()).isNull();
@@ -38,7 +41,8 @@ class OpenDateExceptionTest {
             Throwable cause = new RuntimeException("cause");
             OpenDateException exception = new OpenDateException("Test message", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Test message");
+            assertThat(exception.getMessage()).isEqualTo("[date] Test message");
+            assertThat(exception.getRawMessage()).isEqualTo("Test message");
             assertThat(exception.getCause()).isSameAs(cause);
             assertThat(exception.getInputValue()).isNull();
             assertThat(exception.getExpectedFormat()).isNull();
@@ -53,7 +57,8 @@ class OpenDateExceptionTest {
                     "yyyy-MM-dd"
             );
 
-            assertThat(exception.getMessage()).isEqualTo("Test message");
+            assertThat(exception.getMessage()).isEqualTo("[date] Test message");
+            assertThat(exception.getRawMessage()).isEqualTo("Test message");
             assertThat(exception.getInputValue()).isEqualTo("2024-13-45");
             assertThat(exception.getExpectedFormat()).isEqualTo("yyyy-MM-dd");
             assertThat(exception.getCause()).isNull();
@@ -70,7 +75,8 @@ class OpenDateExceptionTest {
                     cause
             );
 
-            assertThat(exception.getMessage()).isEqualTo("Test message");
+            assertThat(exception.getMessage()).isEqualTo("[date] Test message");
+            assertThat(exception.getRawMessage()).isEqualTo("Test message");
             assertThat(exception.getInputValue()).isEqualTo("2024-13-45");
             assertThat(exception.getExpectedFormat()).isEqualTo("yyyy-MM-dd");
             assertThat(exception.getCause()).isSameAs(cause);
@@ -219,10 +225,11 @@ class OpenDateExceptionTest {
     class InheritanceTests {
 
         @Test
-        @DisplayName("继承自RuntimeException")
-        void testExtendsRuntimeException() {
+        @DisplayName("继承自OpenException")
+        void testExtendsOpenException() {
             OpenDateException exception = new OpenDateException("test");
 
+            assertThat(exception).isInstanceOf(OpenException.class);
             assertThat(exception).isInstanceOf(RuntimeException.class);
             assertThat(exception).isInstanceOf(Exception.class);
             assertThat(exception).isInstanceOf(Throwable.class);
@@ -249,7 +256,7 @@ class OpenDateExceptionTest {
                 }
             })
                     .isSameAs(original)
-                    .hasMessage("original");
+                    .hasMessage("[date] original");
         }
     }
 }

@@ -277,7 +277,15 @@ public final class ConditionalLog {
         }
 
         private boolean shouldLog() {
-            StackTraceElement caller = Thread.currentThread().getStackTrace()[3];
+            // Evict batch instead of clearing all to preserve dedup state
+            if (LOGGED_ONCE.size() > 10_000) {
+                evictOldest(LOGGED_ONCE, 1_000);
+            }
+            StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+            if (stack.length <= 3) {
+                return true; // Cannot determine call site, allow logging
+            }
+            StackTraceElement caller = stack[3];
             String callSite = caller.getClassName() + ":" + caller.getMethodName() + ":" + caller.getLineNumber();
             return LOGGED_ONCE.add(callSite);
         }
@@ -345,7 +353,15 @@ public final class ConditionalLog {
         }
 
         private boolean shouldLog() {
-            StackTraceElement caller = Thread.currentThread().getStackTrace()[3];
+            // Evict batch instead of clearing all to preserve rate-limit state
+            if (LAST_LOG_TIMES.size() > 10_000) {
+                evictOldestTimes(LAST_LOG_TIMES, 1_000);
+            }
+            StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+            if (stack.length <= 3) {
+                return true; // Cannot determine call site, allow logging
+            }
+            StackTraceElement caller = stack[3];
             String callSite = caller.getClassName() + ":" + caller.getMethodName() + ":" + caller.getLineNumber();
 
             long now = System.currentTimeMillis();
@@ -405,6 +421,26 @@ public final class ConditionalLog {
         public void error(String message, Throwable t) {
             if (shouldLog()) LOGGER.error(message, t);
         }
+    }
+
+    // ==================== Eviction Helpers | 淘汰帮助方法 ====================
+
+    private static void evictOldest(Set<String> set, int count) {
+        var iterator = set.iterator();
+        for (int i = 0; i < count && iterator.hasNext(); i++) {
+            iterator.next();
+            iterator.remove();
+        }
+    }
+
+    private static void evictOldestTimes(ConcurrentHashMap<String, AtomicLong> map, int count) {
+        map.entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByValue(
+                        java.util.Comparator.comparingLong(AtomicLong::get)))
+                .limit(count)
+                .map(java.util.Map.Entry::getKey)
+                .toList()
+                .forEach(map::remove);
     }
 
     // ==================== Utility Methods | 工具方法 ====================

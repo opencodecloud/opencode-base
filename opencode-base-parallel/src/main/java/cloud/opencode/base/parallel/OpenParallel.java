@@ -5,15 +5,18 @@ import cloud.opencode.base.parallel.exception.OpenParallelException;
 import cloud.opencode.base.parallel.executor.RateLimitedExecutor;
 import cloud.opencode.base.parallel.pipeline.AsyncPipeline;
 import cloud.opencode.base.parallel.pipeline.TriFunction;
-import cloud.opencode.base.parallel.structured.ScheduledScope;
-
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -217,15 +220,117 @@ public final class OpenParallel {
                 .map(s -> CompletableFuture.supplyAsync(s, VIRTUAL_EXECUTOR))
                 .toList();
 
-        return (T) CompletableFuture.anyOf(futures.toArray(new CompletableFuture[0]))
+        T result = (T) CompletableFuture.anyOf(futures.toArray(new CompletableFuture[0]))
                 .join();
+
+        // Cancel remaining futures
+        futures.forEach(f -> f.cancel(true));
+        return result;
+    }
+
+    // ==================== Parallel ForEach ====================
+
+    /**
+     * Applies an action to each item in parallel with bounded concurrency.
+     * 使用有界并发对每个元素并行应用操作。
+     *
+     * <p>Uses a {@link Semaphore} to limit concurrency, ensuring at most
+     * {@code parallelism} tasks run simultaneously.</p>
+     * <p>使用 {@link Semaphore} 限制并发，确保同时最多运行 {@code parallelism} 个任务。</p>
+     *
+     * @param items       the items to process - 要处理的元素
+     * @param parallelism the maximum concurrency level - 最大并发级别
+     * @param action      the action to apply to each item - 应用于每个元素的操作
+     * @param <T>         the item type - 元素类型
+     * @throws OpenParallelException if any task fails or is interrupted - 如果任何任务失败或被中断
+     */
+    public static <T> void parallelForEach(Collection<T> items, int parallelism,
+                                            Consumer<T> action) {
+        Objects.requireNonNull(items, "items must not be null");
+        Objects.requireNonNull(action, "action must not be null");
+        if (parallelism <= 0) {
+            throw new IllegalArgumentException("Parallelism must be positive: " + parallelism);
+        }
+        Semaphore semaphore = new Semaphore(parallelism);
+
+        List<CompletableFuture<Void>> futures = items.stream()
+                .map(item -> CompletableFuture.runAsync(() -> {
+                    boolean acquired = false;
+                    try {
+                        semaphore.acquire();
+                        acquired = true;
+                        action.accept(item);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw OpenParallelException.interrupted(e);
+                    } finally {
+                        if (acquired) semaphore.release();
+                    }
+                }, VIRTUAL_EXECUTOR))
+                .toList();
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+    }
+
+    /**
+     * Applies an action to each item in parallel with bounded concurrency and timeout.
+     * 使用有界并发和超时对每个元素并行应用操作。
+     *
+     * <p>Uses a {@link Semaphore} to limit concurrency. If the timeout expires
+     * before all tasks complete, remaining futures are cancelled.</p>
+     * <p>使用 {@link Semaphore} 限制并发。如果在所有任务完成之前超时到期，
+     * 则取消剩余的 Future。</p>
+     *
+     * @param items       the items to process - 要处理的元素
+     * @param parallelism the maximum concurrency level - 最大并发级别
+     * @param action      the action to apply to each item - 应用于每个元素的操作
+     * @param timeout     the maximum time to wait - 最大等待时间
+     * @param <T>         the item type - 元素类型
+     * @throws OpenParallelException if tasks time out, fail, or are interrupted -
+     *                                如果任务超时、失败或被中断
+     */
+    public static <T> void parallelForEach(Collection<T> items, int parallelism,
+                                            Consumer<T> action, Duration timeout) {
+        Objects.requireNonNull(items, "items must not be null");
+        Objects.requireNonNull(action, "action must not be null");
+        Objects.requireNonNull(timeout, "timeout must not be null");
+        if (parallelism <= 0) {
+            throw new IllegalArgumentException("Parallelism must be positive: " + parallelism);
+        }
+        Semaphore semaphore = new Semaphore(parallelism);
+
+        List<CompletableFuture<Void>> futures = items.stream()
+                .map(item -> CompletableFuture.runAsync(() -> {
+                    boolean acquired = false;
+                    try {
+                        semaphore.acquire();
+                        acquired = true;
+                        action.accept(item);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw OpenParallelException.interrupted(e);
+                    } finally {
+                        if (acquired) semaphore.release();
+                    }
+                }, VIRTUAL_EXECUTOR))
+                .toList();
+
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            futures.forEach(f -> f.cancel(true));
+            throw OpenParallelException.timeout(timeout);
+        } catch (Exception e) {
+            throw new OpenParallelException("Parallel forEach failed", e);
+        }
     }
 
     // ==================== Parallel Map ====================
 
     /**
-     * Maps items in parallel using stream.
-     * 使用流并行映射项目。
+     * Maps items in parallel using virtual threads.
+     * 使用虚拟线程并行映射项目。
      *
      * @param items  the items - 项目
      * @param mapper the mapper function - 映射函数
@@ -234,8 +339,13 @@ public final class OpenParallel {
      * @return the results - 结果
      */
     public static <T, R> List<R> parallelMap(List<T> items, Function<T, R> mapper) {
-        return items.parallelStream()
-                .map(mapper)
+        List<CompletableFuture<R>> futures = items.stream()
+                .map(item -> CompletableFuture.supplyAsync(
+                        () -> mapper.apply(item), VIRTUAL_EXECUTOR))
+                .toList();
+
+        return futures.stream()
+                .map(CompletableFuture::join)
                 .toList();
     }
 
@@ -256,14 +366,16 @@ public final class OpenParallel {
 
         List<CompletableFuture<R>> futures = items.stream()
                 .map(item -> CompletableFuture.supplyAsync(() -> {
+                    boolean acquired = false;
                     try {
                         semaphore.acquire();
+                        acquired = true;
                         return mapper.apply(item);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         throw new OpenParallelException("Interrupted", e);
                     } finally {
-                        semaphore.release();
+                        if (acquired) semaphore.release();
                     }
                 }, VIRTUAL_EXECUTOR))
                 .toList();
@@ -291,14 +403,16 @@ public final class OpenParallel {
 
         List<CompletableFuture<R>> futures = items.stream()
                 .map(item -> CompletableFuture.supplyAsync(() -> {
+                    boolean acquired = false;
                     try {
                         semaphore.acquire();
+                        acquired = true;
                         return mapper.apply(item);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         throw new OpenParallelException("Interrupted", e);
                     } finally {
-                        semaphore.release();
+                        if (acquired) semaphore.release();
                     }
                 }, VIRTUAL_EXECUTOR))
                 .toList();
@@ -317,6 +431,192 @@ public final class OpenParallel {
                 .filter(f -> !f.isCancelled())
                 .map(CompletableFuture::join)
                 .toList();
+    }
+
+    // ==================== Parallel Map Settled ====================
+
+    /**
+     * Maps items in parallel, collecting both successes and failures instead of throwing.
+     * 并行映射元素，收集成功和失败结果而非抛出异常。
+     *
+     * <p>Unlike {@link #parallelMap(List, Function, int)}, this method never throws on
+     * individual task failure. Instead, all outcomes are collected into a
+     * {@link ParallelResult} containing both successful results and failure exceptions.</p>
+     * <p>与 {@link #parallelMap(List, Function, int)} 不同，此方法不会因单个任务失败而抛出异常。
+     * 所有结果被收集到 {@link ParallelResult} 中，包含成功结果和失败异常。</p>
+     *
+     * <p>The order of results in the returned list may differ from the input order.</p>
+     * <p>返回列表中结果的顺序可能与输入顺序不同。</p>
+     *
+     * @param items       the items to map - 要映射的元素
+     * @param mapper      the mapper function - 映射函数
+     * @param parallelism the maximum concurrency level - 最大并发级别
+     * @param <T>         the input type - 输入类型
+     * @param <R>         the result type - 结果类型
+     * @return a {@link ParallelResult} containing successes and failures -
+     *         包含成功和失败的 {@link ParallelResult}
+     */
+    public static <T, R> ParallelResult<R> parallelMapSettled(List<T> items,
+                                                               Function<T, R> mapper,
+                                                               int parallelism) {
+        Objects.requireNonNull(items, "items must not be null");
+        Objects.requireNonNull(mapper, "mapper must not be null");
+        if (parallelism <= 0) {
+            throw new IllegalArgumentException("Parallelism must be positive: " + parallelism);
+        }
+        Semaphore semaphore = new Semaphore(parallelism);
+        ConcurrentLinkedQueue<R> successes = new ConcurrentLinkedQueue<>();
+        ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
+
+        List<CompletableFuture<Void>> futures = items.stream()
+                .map(item -> CompletableFuture.runAsync(() -> {
+                    boolean acquired = false;
+                    try {
+                        semaphore.acquire();
+                        acquired = true;
+                        R result = mapper.apply(item);
+                        successes.add(result);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        failures.add(e);
+                    } catch (Exception e) {
+                        failures.add(e);
+                    } finally {
+                        if (acquired) semaphore.release();
+                    }
+                }, VIRTUAL_EXECUTOR))
+                .toList();
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        return ParallelResult.of(new ArrayList<>(successes), new ArrayList<>(failures));
+    }
+
+    // ==================== ForEach As Completed ====================
+
+    /**
+     * Executes suppliers in parallel and processes results in completion order.
+     * 并行执行 Supplier，按完成顺序处理结果。
+     *
+     * <p>Unlike {@link #invokeAll(Collection)} which returns results in submission order,
+     * this method invokes the action as each task completes, allowing earlier processing
+     * of faster tasks.</p>
+     * <p>与 {@link #invokeAll(Collection)} 按提交顺序返回结果不同，
+     * 此方法在每个任务完成时调用操作，允许更快地处理先完成的任务。</p>
+     *
+     * @param suppliers the suppliers to execute - 要执行的 Supplier
+     * @param action    the action to apply to each result - 应用于每个结果的操作
+     * @param <T>       the result type - 结果类型
+     */
+    public static <T> void forEachAsCompleted(List<Supplier<T>> suppliers,
+                                               Consumer<T> action) {
+        Objects.requireNonNull(suppliers, "suppliers must not be null");
+        Objects.requireNonNull(action, "action must not be null");
+
+        record Outcome<V>(V value, Throwable error) {
+            boolean isSuccess() { return error == null; }
+        }
+
+        LinkedBlockingQueue<Outcome<T>> queue = new LinkedBlockingQueue<>();
+
+        List<CompletableFuture<Void>> futures = suppliers.stream()
+                .map(s -> CompletableFuture.runAsync(() -> {
+                    try {
+                        T result = s.get();
+                        queue.add(new Outcome<>(result, null));
+                    } catch (Exception e) {
+                        queue.add(new Outcome<>(null, e));
+                    }
+                }, VIRTUAL_EXECUTOR))
+                .toList();
+
+        List<Throwable> errors = new ArrayList<>();
+        for (int i = 0; i < suppliers.size(); i++) {
+            try {
+                Outcome<T> outcome = queue.take();
+                if (outcome.isSuccess()) {
+                    action.accept(outcome.value());
+                } else {
+                    errors.add(outcome.error());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                futures.forEach(f -> f.cancel(true));
+                throw OpenParallelException.interrupted(e);
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw OpenParallelException.partialFailure(errors, suppliers.size());
+        }
+    }
+
+    /**
+     * Executes suppliers in parallel with bounded concurrency and processes results
+     * in completion order.
+     * 使用有界并发并行执行 Supplier，按完成顺序处理结果。
+     *
+     * <p>Combines concurrency control via {@link Semaphore} with completion-order
+     * processing via a blocking queue.</p>
+     * <p>通过 {@link Semaphore} 实现并发控制，通过阻塞队列实现按完成顺序处理。</p>
+     *
+     * @param suppliers   the suppliers to execute - 要执行的 Supplier
+     * @param parallelism the maximum concurrency level - 最大并发级别
+     * @param action      the action to apply to each result - 应用于每个结果的操作
+     * @param <T>         the result type - 结果类型
+     */
+    public static <T> void forEachAsCompleted(List<Supplier<T>> suppliers,
+                                               int parallelism,
+                                               Consumer<T> action) {
+        Objects.requireNonNull(suppliers, "suppliers must not be null");
+        Objects.requireNonNull(action, "action must not be null");
+        if (parallelism <= 0) {
+            throw new IllegalArgumentException("Parallelism must be positive: " + parallelism);
+        }
+
+        record Outcome<V>(V value, Throwable error) {
+            boolean isSuccess() { return error == null; }
+        }
+
+        Semaphore semaphore = new Semaphore(parallelism);
+        LinkedBlockingQueue<Outcome<T>> queue = new LinkedBlockingQueue<>();
+
+        List<CompletableFuture<Void>> futures = suppliers.stream()
+                .map(s -> CompletableFuture.runAsync(() -> {
+                    boolean acquired = false;
+                    try {
+                        semaphore.acquire();
+                        acquired = true;
+                        T result = s.get();
+                        queue.add(new Outcome<>(result, null));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        queue.add(new Outcome<>(null, e));
+                    } catch (Exception e) {
+                        queue.add(new Outcome<>(null, e));
+                    } finally {
+                        if (acquired) semaphore.release();
+                    }
+                }, VIRTUAL_EXECUTOR))
+                .toList();
+
+        List<Throwable> errors = new ArrayList<>();
+        for (int i = 0; i < suppliers.size(); i++) {
+            try {
+                Outcome<T> outcome = queue.take();
+                if (outcome.isSuccess()) {
+                    action.accept(outcome.value());
+                } else {
+                    errors.add(outcome.error());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                futures.forEach(f -> f.cancel(true));
+                throw OpenParallelException.interrupted(e);
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw OpenParallelException.partialFailure(errors, suppliers.size());
+        }
     }
 
     // ==================== Batch Processing ====================
@@ -552,83 +852,4 @@ public final class OpenParallel {
         }
     }
 
-    // ==================== Scheduled Structured Concurrency ====================
-
-    /**
-     * Creates a new scheduled scope for structured concurrency with scheduling.
-     * 创建新的定时作用域用于带调度的结构化并发。
-     *
-     * <p><strong>Example | 示例:</strong></p>
-     * <pre>{@code
-     * try (var scope = OpenParallel.<String>scheduledScope()) {
-     *     scope.fork(() -> fetchA());
-     *     scope.forkDelayed(Duration.ofSeconds(1), () -> fetchB());
-     *     List<String> results = scope.joinAll();
-     * }
-     * }</pre>
-     *
-     * @param <T> the result type - 结果类型
-     * @return the scheduled scope - 定时作用域
-     */
-    public static <T> ScheduledScope<T> scheduledScope() {
-        return ScheduledScope.create();
-    }
-
-    /**
-     * Creates a scheduled scope with timeout.
-     * 创建带超时的定时作用域。
-     *
-     * @param timeout the timeout - 超时
-     * @param <T>     the result type - 结果类型
-     * @return the scheduled scope - 定时作用域
-     */
-    public static <T> ScheduledScope<T> scheduledScope(Duration timeout) {
-        return ScheduledScope.withTimeout(timeout);
-    }
-
-    /**
-     * Creates a scheduled scope with deadline.
-     * 创建带截止时间的定时作用域。
-     *
-     * @param deadline the deadline - 截止时间
-     * @param <T>      the result type - 结果类型
-     * @return the scheduled scope - 定时作用域
-     */
-    public static <T> ScheduledScope<T> scheduledScope(java.time.Instant deadline) {
-        return ScheduledScope.withDeadline(deadline);
-    }
-
-    /**
-     * Executes a delayed task.
-     * 执行延迟任务。
-     *
-     * @param delay    the delay before execution - 执行前的延迟
-     * @param task     the task - 任务
-     * @param <T>      the result type - 结果类型
-     * @return the result - 结果
-     */
-    public static <T> T invokeDelayed(Duration delay, Supplier<T> task) {
-        try (ScheduledScope<T> scope = ScheduledScope.create()) {
-            scope.forkDelayed(delay, task::get);
-            List<T> results = scope.joinAll();
-            return results.isEmpty() ? null : results.getFirst();
-        }
-    }
-
-    /**
-     * Executes tasks at scheduled times and collects results.
-     * 在预定时间执行任务并收集结果。
-     *
-     * @param interval the interval between tasks - 任务间隔
-     * @param count    the number of executions - 执行次数
-     * @param task     the task - 任务
-     * @param <T>      the result type - 结果类型
-     * @return the results - 结果
-     */
-    public static <T> List<T> invokePeriodic(Duration interval, int count, Supplier<T> task) {
-        try (ScheduledScope<T> scope = ScheduledScope.create()) {
-            scope.forkPeriodic(interval, count, task::get);
-            return scope.joinAll();
-        }
-    }
 }

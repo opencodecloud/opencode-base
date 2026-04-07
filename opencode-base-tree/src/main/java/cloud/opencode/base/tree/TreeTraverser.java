@@ -1,5 +1,7 @@
 package cloud.opencode.base.tree;
 
+import cloud.opencode.base.tree.exception.TreeException;
+
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.Stream;
@@ -57,6 +59,8 @@ import java.util.stream.StreamSupport;
  */
 public final class TreeTraverser {
 
+    private static final int MAX_DEPTH = 1000;
+
     private TreeTraverser() {}
 
     // ==================== Traversal Control | 遍历控制 ====================
@@ -95,22 +99,21 @@ public final class TreeTraverser {
      * @return true if completed without stop | 如果完成且未停止则为true
      */
     public static <T> boolean traverse(TreeNode<T> root, ControlledVisitor<T> visitor) {
-        return traverseInternal(root, visitor);
-    }
-
-    private static <T> boolean traverseInternal(TreeNode<T> node, ControlledVisitor<T> visitor) {
-        TraversalControl control = visitor.visit(node);
-
-        switch (control) {
-            case STOP -> { return false; }
-            case SKIP_SUBTREE -> { return true; }
-            case CONTINUE -> {
-                for (TreeNode<T> child : node.getChildren()) {
-                    if (!traverseInternal(child, visitor)) {
-                        return false;
+        // Iterative DFS with traversal control
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        stack.push(root);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            TraversalControl control = visitor.visit(node);
+            switch (control) {
+                case STOP -> { return false; }
+                case SKIP_SUBTREE -> { /* skip children */ }
+                case CONTINUE -> {
+                    List<TreeNode<T>> children = node.getChildren();
+                    for (int i = children.size() - 1; i >= 0; i--) {
+                        stack.push(children.get(i));
                     }
                 }
-                return true;
             }
         }
         return true;
@@ -128,30 +131,25 @@ public final class TreeTraverser {
      */
     public static <T extends Treeable<T, ID>, ID> boolean traverse(
             List<T> roots, Function<T, TraversalControl> visitor) {
-        for (T root : roots) {
-            if (!traverseTreeable(root, visitor)) {
-                return false;
-            }
+        // Iterative DFS with traversal control
+        Deque<T> stack = new ArrayDeque<>();
+        for (int i = roots.size() - 1; i >= 0; i--) {
+            stack.push(roots.get(i));
         }
-        return true;
-    }
-
-    private static <T extends Treeable<T, ID>, ID> boolean traverseTreeable(
-            T node, Function<T, TraversalControl> visitor) {
-        TraversalControl control = visitor.apply(node);
-
-        switch (control) {
-            case STOP -> { return false; }
-            case SKIP_SUBTREE -> { return true; }
-            case CONTINUE -> {
-                if (node.getChildren() != null) {
-                    for (T child : node.getChildren()) {
-                        if (!traverseTreeable(child, visitor)) {
-                            return false;
+        while (!stack.isEmpty()) {
+            T node = stack.pop();
+            TraversalControl control = visitor.apply(node);
+            switch (control) {
+                case STOP -> { return false; }
+                case SKIP_SUBTREE -> { /* skip children */ }
+                case CONTINUE -> {
+                    List<T> children = node.getChildren();
+                    if (children != null) {
+                        for (int i = children.size() - 1; i >= 0; i--) {
+                            stack.push(children.get(i));
                         }
                     }
                 }
-                return true;
             }
         }
         return true;
@@ -294,11 +292,22 @@ public final class TreeTraverser {
      * @return mapped tree | 映射后的树
      */
     public static <T, R> TreeNode<R> map(TreeNode<T> root, Function<T, R> mapper) {
-        TreeNode<R> newNode = new TreeNode<>(mapper.apply(root.getData()));
-        for (TreeNode<T> child : root.getChildren()) {
-            newNode.addChild(map(child, mapper));
+        // Iterative BFS mapping
+        TreeNode<R> mappedRoot = new TreeNode<>(mapper.apply(root.getData()));
+        Deque<TreeNode<T>> sourceQueue = new ArrayDeque<>();
+        Deque<TreeNode<R>> targetQueue = new ArrayDeque<>();
+        sourceQueue.offer(root);
+        targetQueue.offer(mappedRoot);
+        while (!sourceQueue.isEmpty()) {
+            TreeNode<T> src = sourceQueue.poll();
+            TreeNode<R> tgt = targetQueue.poll();
+            for (TreeNode<T> child : src.getChildren()) {
+                TreeNode<R> mc = tgt.addChild(mapper.apply(child.getData()));
+                sourceQueue.offer(child);
+                targetQueue.offer(mc);
+            }
         }
-        return newNode;
+        return mappedRoot;
     }
 
     /**
@@ -312,11 +321,21 @@ public final class TreeTraverser {
      * @return mapped tree | 映射后的树
      */
     public static <T, R> TreeNode<R> mapNode(TreeNode<T> root, Function<TreeNode<T>, R> mapper) {
-        TreeNode<R> newNode = new TreeNode<>(mapper.apply(root));
-        for (TreeNode<T> child : root.getChildren()) {
-            newNode.addChild(mapNode(child, mapper));
+        TreeNode<R> mappedRoot = new TreeNode<>(mapper.apply(root));
+        Deque<TreeNode<T>> sourceQueue = new ArrayDeque<>();
+        Deque<TreeNode<R>> targetQueue = new ArrayDeque<>();
+        sourceQueue.offer(root);
+        targetQueue.offer(mappedRoot);
+        while (!sourceQueue.isEmpty()) {
+            TreeNode<T> src = sourceQueue.poll();
+            TreeNode<R> tgt = targetQueue.poll();
+            for (TreeNode<T> child : src.getChildren()) {
+                TreeNode<R> mc = tgt.addChild(mapper.apply(child));
+                sourceQueue.offer(child);
+                targetQueue.offer(mc);
+            }
         }
-        return newNode;
+        return mappedRoot;
     }
 
     /**
@@ -347,9 +366,17 @@ public final class TreeTraverser {
      * @return reduced value | 归约值
      */
     public static <T, R> R reduce(TreeNode<T> root, R identity, BiFunction<R, T, R> accumulator) {
-        R result = accumulator.apply(identity, root.getData());
-        for (TreeNode<T> child : root.getChildren()) {
-            result = reduce(child, result, accumulator);
+        // Iterative pre-order reduction
+        R result = identity;
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        stack.push(root);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            result = accumulator.apply(result, node.getData());
+            List<TreeNode<T>> children = node.getChildren();
+            for (int i = children.size() - 1; i >= 0; i--) {
+                stack.push(children.get(i));
+            }
         }
         return result;
     }
@@ -369,10 +396,18 @@ public final class TreeTraverser {
     public static <T, R> R reduce(TreeNode<T> root, R identity,
                                    BiFunction<R, T, R> accumulator,
                                    BinaryOperator<R> combiner) {
-        R result = accumulator.apply(identity, root.getData());
-        for (TreeNode<T> child : root.getChildren()) {
-            R childResult = reduce(child, identity, accumulator, combiner);
-            result = combiner.apply(result, childResult);
+        // For combiner-based reduce, use iterative pre-order (same semantics for commutative combiners)
+        R result = identity;
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        stack.push(root);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            R nodeResult = accumulator.apply(identity, node.getData());
+            result = combiner.apply(result, nodeResult);
+            List<TreeNode<T>> children = node.getChildren();
+            for (int i = children.size() - 1; i >= 0; i--) {
+                stack.push(children.get(i));
+            }
         }
         return result;
     }
@@ -391,15 +426,36 @@ public final class TreeTraverser {
     public static <T, R> R foldBottomUp(TreeNode<T> root,
                                          Function<T, R> leafMapper,
                                          BiFunction<T, List<R>, R> branchFolder) {
-        if (root.getChildren().isEmpty()) {
-            return leafMapper.apply(root.getData());
+        // Iterative post-order fold using two passes
+        // 1. Collect post-order
+        List<TreeNode<T>> postOrder = new ArrayList<>();
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
+        Deque<TreeNode<T>> output = new ArrayDeque<>();
+        stack.push(root);
+        while (!stack.isEmpty()) {
+            TreeNode<T> node = stack.pop();
+            output.push(node);
+            for (TreeNode<T> child : node.getChildren()) {
+                stack.push(child);
+            }
         }
-
-        List<R> childResults = new ArrayList<>();
-        for (TreeNode<T> child : root.getChildren()) {
-            childResults.add(foldBottomUp(child, leafMapper, branchFolder));
+        while (!output.isEmpty()) {
+            postOrder.add(output.pop());
         }
-        return branchFolder.apply(root.getData(), childResults);
+        // 2. Compute results bottom-up
+        IdentityHashMap<TreeNode<T>, R> results = new IdentityHashMap<>();
+        for (TreeNode<T> node : postOrder) {
+            if (node.getChildren().isEmpty()) {
+                results.put(node, leafMapper.apply(node.getData()));
+            } else {
+                List<R> childResults = new ArrayList<>();
+                for (TreeNode<T> child : node.getChildren()) {
+                    childResults.add(results.get(child));
+                }
+                results.put(node, branchFolder.apply(node.getData(), childResults));
+            }
+        }
+        return results.get(root);
     }
 
     // ==================== Ancestor/Descendant Queries | 祖先/后代查询 ====================
@@ -419,9 +475,17 @@ public final class TreeTraverser {
     }
 
     private static <T> void collectDescendants(TreeNode<T> node, List<TreeNode<T>> list) {
+        Deque<TreeNode<T>> stack = new ArrayDeque<>();
         for (TreeNode<T> child : node.getChildren()) {
-            list.add(child);
-            collectDescendants(child, list);
+            stack.push(child);
+        }
+        while (!stack.isEmpty()) {
+            TreeNode<T> current = stack.pop();
+            list.add(current);
+            List<TreeNode<T>> children = current.getChildren();
+            for (int i = children.size() - 1; i >= 0; i--) {
+                stack.push(children.get(i));
+            }
         }
     }
 
@@ -596,11 +660,21 @@ public final class TreeTraverser {
             }
         }
 
-        private void collectPostOrder(TreeNode<T> node) {
-            for (TreeNode<T> child : node.getChildren()) {
-                collectPostOrder(child);
+        private void collectPostOrder(TreeNode<T> root) {
+            // Iterative post-order using two stacks
+            Deque<TreeNode<T>> stack = new ArrayDeque<>();
+            Deque<TreeNode<T>> output = new ArrayDeque<>();
+            stack.push(root);
+            while (!stack.isEmpty()) {
+                TreeNode<T> node = stack.pop();
+                output.push(node);
+                for (TreeNode<T> child : node.getChildren()) {
+                    stack.push(child);
+                }
             }
-            nodes.add(node);
+            while (!output.isEmpty()) {
+                nodes.add(output.pop());
+            }
         }
 
         @Override

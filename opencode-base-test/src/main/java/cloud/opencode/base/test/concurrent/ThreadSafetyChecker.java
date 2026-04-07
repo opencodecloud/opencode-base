@@ -3,6 +3,7 @@ package cloud.opencode.base.test.concurrent;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -84,9 +85,17 @@ public final class ThreadSafetyChecker {
             }
         } finally {
             executor.shutdown();
+            try {
+                if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
 
-        int expected = threads * incrementsPerThread;
+        int expected = Math.multiplyExact(threads, incrementsPerThread);
         int actual = getCountTask.get();
 
         return new CheckResult(
@@ -142,6 +151,14 @@ public final class ThreadSafetyChecker {
             }
         } finally {
             executor.shutdown();
+            try {
+                if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
         return safe.get();
     }

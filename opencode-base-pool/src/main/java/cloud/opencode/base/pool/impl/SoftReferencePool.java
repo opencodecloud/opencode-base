@@ -195,17 +195,15 @@ public class SoftReferencePool<T> implements ObjectPool<T> {
     public void invalidateObject(T obj) {
         if (obj == null) return;
         PooledObject<T> pooledObject = allObjects.remove(new IdentityWrapper<>(obj));
-        try {
-            if (pooledObject != null) {
+        if (pooledObject != null) {
+            try {
                 factory.destroyObject(pooledObject);
-            } else {
-                factory.destroyObject(new DefaultPooledObject<>(obj));
+            } catch (Exception e) {
+                // Ignore destroy errors to ensure pool state is updated
             }
-        } catch (Exception e) {
-            // Ignore destroy errors to ensure pool state is updated
+            numActive.decrementAndGet();
+            metrics.recordDestroy();
         }
-        numActive.decrementAndGet();
-        metrics.recordDestroy();
     }
 
     @Override

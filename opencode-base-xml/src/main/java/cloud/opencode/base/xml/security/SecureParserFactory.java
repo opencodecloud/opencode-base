@@ -263,4 +263,21 @@ public final class SecureParserFactory {
     public static TransformerFactory getTransformerFactory() {
         return TRANSFORMER_FACTORY.get();
     }
+
+    /**
+     * Removes all ThreadLocal instances to prevent memory leaks.
+     * 移除所有 ThreadLocal 实例以防止内存泄漏。
+     *
+     * <p>Call this method when the thread is done using XML parsers,
+     * especially in thread pool or web container environments.</p>
+     * <p>当线程完成 XML 解析器使用后调用此方法，特别是在线程池或 Web 容器环境中。</p>
+     */
+    public static void cleanup() {
+        DOCUMENT_BUILDER_FACTORY.remove();
+        SAX_PARSER_FACTORY.remove();
+        XML_INPUT_FACTORY.remove();
+        TRANSFORMER_FACTORY.remove();
+        NS_DOCUMENT_BUILDER_FACTORY.remove();
+        NS_SAX_PARSER_FACTORY.remove();
+    }
 }

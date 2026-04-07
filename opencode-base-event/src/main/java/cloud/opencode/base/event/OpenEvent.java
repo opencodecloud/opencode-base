@@ -9,28 +9,43 @@ import cloud.opencode.base.event.dispatcher.SyncDispatcher;
 import cloud.opencode.base.event.exception.EventException;
 import cloud.opencode.base.event.handler.EventExceptionHandler;
 import cloud.opencode.base.event.handler.LoggingExceptionHandler;
+import cloud.opencode.base.event.interceptor.EventInterceptor;
+import cloud.opencode.base.event.monitor.EventBusMetrics;
 import cloud.opencode.base.event.store.EventStore;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
- * OpenEvent - Event Bus
- * 事件总线
+ * OpenEvent - Event Bus with dead event detection, interceptors, sticky events, and metrics
+ * 事件总线 - 支持死事件检测、拦截器、粘性事件和指标
  *
- * <p>The main entry point for event-driven architecture support.</p>
- * <p>事件驱动架构支持的主入口点。</p>
+ * <p>The main entry point for event-driven architecture support. Provides publish/subscribe
+ * pattern with virtual thread async processing, event filtering, interceptor chains,
+ * sticky events, subscription handles, dead event detection, and operational metrics.</p>
+ * <p>事件驱动架构支持的主入口点。提供基于虚拟线程异步处理的发布/订阅模式，
+ * 支持事件过滤、拦截器链、粘性事件、订阅句柄、死事件检测和运行指标。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>Publish/Subscribe pattern - 发布/订阅模式</li>
  *   <li>Sync/Async event processing - 同步/异步事件处理</li>
- *   <li>Event priority - 事件优先级</li>
- *   <li>Event cancellation - 事件取消</li>
- *   <li>Event sourcing support - 事件溯源支持</li>
+ *   <li>Event priority and cancellation - 事件优先级和取消</li>
+ *   <li>Dead event detection - 死事件检测</li>
+ *   <li>Subscription handles (AutoCloseable) - 订阅句柄（自动关闭）</li>
+ *   <li>Event filtering (Predicate) - 事件过滤（谓词）</li>
+ *   <li>Interceptor chain - 拦截器链</li>
+ *   <li>Sticky events - 粘性事件</li>
+ *   <li>Operational metrics - 运行指标</li>
  *   <li>Virtual thread async processing - 虚拟线程异步处理</li>
  * </ul>
  *
@@ -39,24 +54,24 @@ import java.util.function.Consumer;
  * // Get default instance
  * OpenEvent eventBus = OpenEvent.getDefault();
  *
- * // Register annotation-based listener
- * eventBus.register(new MyEventHandler());
+ * // Subscribe with Subscription handle
+ * Subscription sub = eventBus.subscribe(UserEvent.class, e -> handle(e));
+ * sub.unsubscribe(); // precise unsubscribe
  *
- * // Register lambda listener
- * eventBus.on(UserRegisteredEvent.class, event -> {
- *     System.out.println("User registered: " + event.getUserId());
- * });
+ * // Subscribe with filter
+ * eventBus.subscribe(OrderEvent.class, e -> handle(e), e -> e.getAmount() > 100);
  *
- * // Publish event
- * eventBus.publish(new UserRegisteredEvent(userId, email));
+ * // Dead event monitoring
+ * eventBus.subscribe(DeadEvent.class, dead ->
+ *     log.warn("Unhandled: {}", dead.getOriginalEvent()));
  *
- * // Publish async
- * eventBus.publishAsync(event).thenRun(() -> log.info("Done"));
+ * // Sticky events
+ * eventBus.publishSticky(new ConfigEvent(config));
+ * eventBus.subscribe(ConfigEvent.class, e -> applyConfig(e)); // receives immediately
  *
- * // Create custom instance
+ * // Interceptors
  * OpenEvent custom = OpenEvent.builder()
- *     .eventStore(new InMemoryEventStore(10000))
- *     .exceptionHandler(new LoggingExceptionHandler())
+ *     .interceptor(new LoggingInterceptor())
  *     .build();
  * }</pre>
  *
@@ -72,14 +87,32 @@ import java.util.function.Consumer;
  */
 public final class OpenEvent implements AutoCloseable {
 
+    private static final Logger LOGGER = System.getLogger(OpenEvent.class.getName());
+
     private static final OpenEvent INSTANCE = new OpenEvent();
 
     private final Map<Class<?>, List<ListenerInfo>> listeners;
     private final ExecutorService asyncExecutor;
+    private final boolean ownsExecutor;
     private final EventDispatcher syncDispatcher;
     private final EventDispatcher asyncDispatcher;
-    private EventStore eventStore;
-    private EventExceptionHandler exceptionHandler;
+    private final List<EventInterceptor> interceptors;
+    private final Map<Class<?>, Event> stickyEvents;
+    private volatile EventStore eventStore;
+    private volatile EventExceptionHandler exceptionHandler;
+
+    // Listener lookup cache: eventType -> sorted listener list (invalidated on registration changes)
+    // 监听器查找缓存：事件类型 -> 已排序监听器列表（注册变更时失效）
+    private final Map<Class<?>, List<ListenerInfo>> listenerCache = new ConcurrentHashMap<>();
+
+    // Metrics counters - LongAdder for high-throughput contention-free increment
+    private final LongAdder publishedCount = new LongAdder();
+    private final LongAdder deliveredCount = new LongAdder();
+    private final LongAdder errorCount = new LongAdder();
+    private final LongAdder deadEventCount = new LongAdder();
+
+    // Listener count tracker - avoids stream iteration in getMetrics()
+    private final AtomicInteger listenerCount = new AtomicInteger();
 
     /**
      * Private constructor for singleton
@@ -90,9 +123,12 @@ public final class OpenEvent implements AutoCloseable {
         this.asyncExecutor = Executors.newThreadPerTaskExecutor(
             Thread.ofVirtual().name("event-", 0).factory()
         );
+        this.ownsExecutor = true;
         this.syncDispatcher = new SyncDispatcher();
         this.asyncDispatcher = new AsyncDispatcher(asyncExecutor);
         this.exceptionHandler = new LoggingExceptionHandler();
+        this.interceptors = new CopyOnWriteArrayList<>();
+        this.stickyEvents = new ConcurrentHashMap<>();
     }
 
     /**
@@ -101,6 +137,7 @@ public final class OpenEvent implements AutoCloseable {
      */
     private OpenEvent(Builder builder) {
         this.listeners = new ConcurrentHashMap<>();
+        this.ownsExecutor = (builder.asyncExecutor == null);
         this.asyncExecutor = builder.asyncExecutor != null
             ? builder.asyncExecutor
             : Executors.newThreadPerTaskExecutor(
@@ -116,6 +153,8 @@ public final class OpenEvent implements AutoCloseable {
         this.exceptionHandler = builder.exceptionHandler != null
             ? builder.exceptionHandler
             : new LoggingExceptionHandler();
+        this.interceptors = new CopyOnWriteArrayList<>(builder.interceptors);
+        this.stickyEvents = new ConcurrentHashMap<>();
     }
 
     // ============ Factory Methods | 工厂方法 ============
@@ -184,14 +223,17 @@ public final class OpenEvent implements AutoCloseable {
             boolean async = method.isAnnotationPresent(Async.class);
             int priority = getPriority(method);
 
-            ListenerInfo info = new ListenerInfo(subscriber, method, null, eventType, async, priority);
+            // Set accessible once at registration, not on every invoke
+            method.setAccessible(true);
+
+            ListenerInfo info = new ListenerInfo(subscriber, method, null, eventType, async, priority, null);
             addListener(eventType, info);
         }
     }
 
     /**
-     * Register a lambda listener for an event type
-     * 为事件类型注册Lambda监听器
+     * Register a lambda listener for an event type (legacy void return)
+     * 为事件类型注册Lambda监听器（兼容旧接口，无返回值）
      *
      * @param eventType the event type class | 事件类型类
      * @param listener  the event listener | 事件监听器
@@ -202,8 +244,8 @@ public final class OpenEvent implements AutoCloseable {
     }
 
     /**
-     * Register a lambda listener with async option
-     * 使用异步选项注册Lambda监听器
+     * Register a lambda listener with async option (legacy void return)
+     * 使用异步选项注册Lambda监听器（兼容旧接口，无返回值）
      *
      * @param eventType the event type class | 事件类型类
      * @param listener  the event listener | 事件监听器
@@ -215,8 +257,8 @@ public final class OpenEvent implements AutoCloseable {
     }
 
     /**
-     * Register a lambda listener with async and priority options
-     * 使用异步和优先级选项注册Lambda监听器
+     * Register a lambda listener with async and priority options (legacy void return)
+     * 使用异步和优先级选项注册Lambda监听器（兼容旧接口，无返回值）
      *
      * @param eventType the event type class | 事件类型类
      * @param listener  the event listener | 事件监听器
@@ -230,8 +272,82 @@ public final class OpenEvent implements AutoCloseable {
             throw new IllegalArgumentException("EventType and listener cannot be null");
         }
 
-        ListenerInfo info = new ListenerInfo(listener, null, listener, eventType, async, priority);
+        ListenerInfo info = new ListenerInfo(listener, null, listener, eventType, async, priority, null);
         addListener(eventType, info);
+    }
+
+    /**
+     * Subscribe a listener and return a Subscription handle
+     * 订阅监听器并返回订阅句柄
+     *
+     * @param eventType the event type class | 事件类型类
+     * @param listener  the event listener | 事件监听器
+     * @param <E>       the event type parameter | 事件类型参数
+     * @return subscription handle for lifecycle management | 用于生命周期管理的订阅句柄
+     */
+    public <E extends Event> Subscription subscribe(Class<E> eventType, EventListener<E> listener) {
+        return subscribe(eventType, listener, null, false, 0);
+    }
+
+    /**
+     * Subscribe a listener with a filter predicate
+     * 使用过滤谓词订阅监听器
+     *
+     * @param eventType the event type class | 事件类型类
+     * @param listener  the event listener | 事件监听器
+     * @param filter    predicate to filter events, null means accept all | 过滤事件的谓词，null 表示接受全部
+     * @param <E>       the event type parameter | 事件类型参数
+     * @return subscription handle | 订阅句柄
+     */
+    public <E extends Event> Subscription subscribe(Class<E> eventType, EventListener<E> listener,
+                                                     Predicate<E> filter) {
+        return subscribe(eventType, listener, filter, false, 0);
+    }
+
+    /**
+     * Subscribe a listener with full configuration
+     * 使用完整配置订阅监听器
+     *
+     * @param eventType the event type class | 事件类型类
+     * @param listener  the event listener | 事件监听器
+     * @param filter    predicate to filter events, null means accept all | 过滤事件的谓词，null 表示接受全部
+     * @param async     true for async execution | 异步执行为true
+     * @param priority  listener priority (higher = earlier) | 监听器优先级（越高越早）
+     * @param <E>       the event type parameter | 事件类型参数
+     * @return subscription handle | 订阅句柄
+     */
+    @SuppressWarnings("unchecked")
+    public <E extends Event> Subscription subscribe(Class<E> eventType, EventListener<E> listener,
+                                                     Predicate<E> filter,
+                                                     boolean async, int priority) {
+        if (eventType == null || listener == null) {
+            throw new IllegalArgumentException("EventType and listener cannot be null");
+        }
+
+        Predicate<Event> rawFilter = filter != null ? e -> filter.test((E) e) : null;
+        ListenerInfo info = new ListenerInfo(listener, null, listener, eventType, async, priority, rawFilter);
+        addListener(eventType, info);
+
+        // Deliver sticky event if available (goes through interceptor chain)
+        Event sticky = stickyEvents.get(eventType);
+        if (sticky != null && !sticky.isCancelled()
+                && (rawFilter == null || rawFilter.test(sticky))) {
+            if (runBeforeInterceptors(sticky)) {
+                try {
+                    ((EventListener<Event>) listener).onEvent(sticky);
+                    deliveredCount.increment();
+                    runAfterInterceptors(sticky, true);
+                } catch (Exception e) {
+                    errorCount.increment();
+                    if (exceptionHandler != null) {
+                        exceptionHandler.handleException(sticky, e, "StickyDelivery");
+                    }
+                    runAfterInterceptors(sticky, false);
+                }
+            }
+        }
+
+        return new SubscriptionImpl(eventType, info);
     }
 
     /**
@@ -245,8 +361,21 @@ public final class OpenEvent implements AutoCloseable {
             return;
         }
 
-        listeners.values().forEach(list ->
-            list.removeIf(info -> info.subscriber() == subscriber));
+        listeners.values().forEach(list -> {
+            // Count actual removals explicitly to avoid TOCTOU on list.size()
+            int removed = 0;
+            var it = list.iterator();
+            while (it.hasNext()) {
+                if (it.next().subscriber() == subscriber) {
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                list.removeIf(info -> info.subscriber() == subscriber);
+                listenerCount.addAndGet(-removed);
+            }
+        });
+        invalidateListenerCache();
     }
 
     // ============ Publish Events | 发布事件 ============
@@ -262,12 +391,30 @@ public final class OpenEvent implements AutoCloseable {
             throw new IllegalArgumentException("Event cannot be null");
         }
 
-        // Store event if store is configured
-        if (eventStore != null) {
-            eventStore.save(event);
+        publishedCount.increment();
+
+        // Run interceptors beforePublish
+        if (!runBeforeInterceptors(event)) {
+            completeWaitableEvent(event);
+            return;
         }
 
-        dispatch(event, false);
+        // Store event if store is configured (best-effort, does not block dispatch)
+        if (eventStore != null) {
+            try {
+                eventStore.save(event);
+            } catch (Exception e) {
+                errorCount.increment();
+                if (exceptionHandler != null) {
+                    exceptionHandler.handleException(event, e, "EventStore");
+                }
+            }
+        }
+
+        boolean dispatched = dispatch(event, false);
+
+        // Run interceptors afterPublish
+        runAfterInterceptors(event, dispatched);
     }
 
     /**
@@ -282,14 +429,32 @@ public final class OpenEvent implements AutoCloseable {
             throw new IllegalArgumentException("Event cannot be null");
         }
 
-        // Store event if store is configured
+        publishedCount.increment();
+
+        // Run interceptors beforePublish
+        if (!runBeforeInterceptors(event)) {
+            completeWaitableEvent(event);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        // Store event if store is configured (best-effort, does not block dispatch)
         if (eventStore != null) {
-            eventStore.save(event);
+            try {
+                eventStore.save(event);
+            } catch (Exception e) {
+                errorCount.increment();
+                if (exceptionHandler != null) {
+                    exceptionHandler.handleException(event, e, "EventStore");
+                }
+            }
         }
 
         // Get listeners and convert to consumers
         List<Consumer<Event>> listenerConsumers = getMatchedListenerConsumers(event);
         if (listenerConsumers.isEmpty()) {
+            handleDeadEvent(event);
+            completeWaitableEvent(event);
+            runAfterInterceptors(event, false);
             return CompletableFuture.completedFuture(null);
         }
 
@@ -297,9 +462,13 @@ public final class OpenEvent implements AutoCloseable {
         if (asyncDispatcher instanceof AsyncDispatcher ad) {
             try {
                 return ad.dispatchAsync(event, listenerConsumers)
-                        .whenComplete((_, _) -> completeWaitableEvent(event));
+                        .whenComplete((_, _) -> {
+                            completeWaitableEvent(event);
+                            runAfterInterceptors(event, true);
+                        });
             } catch (Exception e) {
                 completeWaitableEvent(event);
+                runAfterInterceptors(event, false);
                 return CompletableFuture.failedFuture(e);
             }
         }
@@ -308,6 +477,7 @@ public final class OpenEvent implements AutoCloseable {
         return CompletableFuture.runAsync(() -> {
             asyncDispatcher.dispatch(event, listenerConsumers);
             completeWaitableEvent(event);
+            runAfterInterceptors(event, true);
         }, asyncExecutor);
     }
 
@@ -350,7 +520,69 @@ public final class OpenEvent implements AutoCloseable {
         CountDownLatch latch = new CountDownLatch(1);
         WaitableEvent waitableEvent = new WaitableEvent(event, latch);
 
-        publish(waitableEvent);
+        // Dispatch using the wrapped event's type so that listeners for the original event type match.
+        // Use getMatchedListeners on the original event, but track completion via the WaitableEvent.
+        publishedCount.increment();
+
+        if (!runBeforeInterceptors(event)) {
+            waitableEvent.complete();
+            return true;
+        }
+
+        if (eventStore != null) {
+            try {
+                eventStore.save(event);
+            } catch (Exception e) {
+                errorCount.increment();
+                if (exceptionHandler != null) {
+                    exceptionHandler.handleException(event, e, "EventStore");
+                }
+            }
+        }
+
+        List<ListenerInfo> matchedListeners = getMatchedListeners(event);
+        if (matchedListeners.isEmpty()) {
+            handleDeadEvent(event);
+            waitableEvent.complete();
+            return true;
+        }
+
+        // Separate sync and async listeners
+        List<Consumer<Event>> syncConsumers = new ArrayList<>();
+        List<Consumer<Event>> asyncConsumers = new ArrayList<>();
+        for (ListenerInfo info : matchedListeners) {
+            Consumer<Event> consumer = toConsumer(info);
+            if (info.async()) {
+                asyncConsumers.add(consumer);
+            } else {
+                syncConsumers.add(consumer);
+            }
+        }
+
+        // Dispatch sync listeners
+        if (!syncConsumers.isEmpty()) {
+            syncDispatcher.dispatch(event, syncConsumers);
+        }
+
+        // Dispatch async listeners and wait for completion
+        if (!asyncConsumers.isEmpty() && asyncDispatcher instanceof AsyncDispatcher ad) {
+            try {
+                ad.dispatchAsync(event, asyncConsumers)
+                    .whenComplete((_, _) -> {
+                        runAfterInterceptors(event, true);
+                        waitableEvent.complete();
+                    });
+            } catch (Exception e) {
+                waitableEvent.complete();
+                throw e;
+            }
+        } else {
+            if (!asyncConsumers.isEmpty()) {
+                asyncDispatcher.dispatch(event, asyncConsumers);
+            }
+            runAfterInterceptors(event, true);
+            waitableEvent.complete();
+        }
 
         try {
             return latch.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -358,6 +590,123 @@ public final class OpenEvent implements AutoCloseable {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    // ============ Sticky Events | 粘性事件 ============
+
+    /**
+     * Publish a sticky event (stored and replayed to future subscribers)
+     * 发布粘性事件（存储并重放给未来的订阅者）
+     *
+     * <p>The event is stored per-type (last one wins) and also published to current listeners.
+     * Future subscribers for this event type will immediately receive the stored sticky event.</p>
+     * <p>事件按类型存储（最后一个生效），并同时发布给当前监听器。
+     * 该事件类型的未来订阅者将立即收到存储的粘性事件。</p>
+     *
+     * @param event the event to publish as sticky | 要作为粘性事件发布的事件
+     */
+    public void publishSticky(Event event) {
+        if (event == null) {
+            throw new IllegalArgumentException("Event cannot be null");
+        }
+        stickyEvents.put(event.getClass(), event);
+        publish(event);
+    }
+
+    /**
+     * Get the last sticky event of the given type
+     * 获取指定类型的最后一个粘性事件
+     *
+     * @param eventType the event type class | 事件类型类
+     * @param <E>       the event type | 事件类型
+     * @return the sticky event or null if none | 粘性事件，如果没有则为 null
+     */
+    @SuppressWarnings("unchecked")
+    public <E extends Event> E getStickyEvent(Class<E> eventType) {
+        return (E) stickyEvents.get(eventType);
+    }
+
+    /**
+     * Remove and return the sticky event of the given type
+     * 移除并返回指定类型的粘性事件
+     *
+     * @param eventType the event type class | 事件类型类
+     * @param <E>       the event type | 事件类型
+     * @return the removed sticky event or null | 移除的粘性事件，如果没有则为 null
+     */
+    @SuppressWarnings("unchecked")
+    public <E extends Event> E removeStickyEvent(Class<E> eventType) {
+        return (E) stickyEvents.remove(eventType);
+    }
+
+    /**
+     * Remove all sticky events, releasing references for GC.
+     * 移除所有粘性事件，释放引用以便 GC。
+     *
+     * <p>Sticky events are retained indefinitely until explicitly removed.
+     * Call this method periodically or on shutdown to prevent memory leaks
+     * in long-running applications.</p>
+     * <p>粘性事件会一直保留直到被显式移除。
+     * 在长时间运行的应用中定期调用或在关闭时调用此方法以防止内存泄漏。</p>
+     *
+     * @since JDK 25, opencode-base-event V1.0.3
+     */
+    public void clearAllStickyEvents() {
+        stickyEvents.clear();
+    }
+
+    // ============ Interceptors | 拦截器 ============
+
+    /**
+     * Add an event interceptor
+     * 添加事件拦截器
+     *
+     * @param interceptor the interceptor to add | 要添加的拦截器
+     */
+    public void addInterceptor(EventInterceptor interceptor) {
+        if (interceptor == null) {
+            throw new IllegalArgumentException("Interceptor cannot be null");
+        }
+        interceptors.add(interceptor);
+    }
+
+    /**
+     * Remove an event interceptor
+     * 移除事件拦截器
+     *
+     * @param interceptor the interceptor to remove | 要移除的拦截器
+     */
+    public void removeInterceptor(EventInterceptor interceptor) {
+        interceptors.remove(interceptor);
+    }
+
+    // ============ Metrics | 指标 ============
+
+    /**
+     * Get current event bus metrics snapshot
+     * 获取当前事件总线指标快照
+     *
+     * @return metrics snapshot | 指标快照
+     */
+    public EventBusMetrics getMetrics() {
+        return new EventBusMetrics(
+                publishedCount.sum(),
+                deliveredCount.sum(),
+                errorCount.sum(),
+                deadEventCount.sum(),
+                listenerCount.get()
+        );
+    }
+
+    /**
+     * Reset all metrics counters
+     * 重置所有指标计数器
+     */
+    public void resetMetrics() {
+        publishedCount.reset();
+        deliveredCount.reset();
+        errorCount.reset();
+        deadEventCount.reset();
     }
 
     // ============ Configuration | 配置 ============
@@ -400,33 +749,47 @@ public final class OpenEvent implements AutoCloseable {
      */
     @Override
     public void close() {
+        if (this == INSTANCE) {
+            LOGGER.log(Level.WARNING,
+                    "Cannot close the default singleton OpenEvent instance; ignoring close()");
+            return;
+        }
         syncDispatcher.shutdown();
         asyncDispatcher.shutdown();
-        asyncExecutor.shutdown();
-        try {
-            if (!asyncExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+        // Only shut down the executor if we own it (not user-provided via builder)
+        if (ownsExecutor) {
+            asyncExecutor.shutdown();
+            try {
+                if (!asyncExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    asyncExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 asyncExecutor.shutdownNow();
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            asyncExecutor.shutdownNow();
         }
+        // Release cached data to help GC
+        listenerCache.clear();
+        stickyEvents.clear();
     }
 
     // ============ Internal Methods | 内部方法 ============
 
     private void addListener(Class<?> eventType, ListenerInfo info) {
         listeners.computeIfAbsent(eventType, _ -> new CopyOnWriteArrayList<>()).add(info);
-        // Sort by priority (descending)
-        listeners.get(eventType).sort(Comparator.comparingInt(ListenerInfo::priority).reversed());
+        listenerCount.incrementAndGet();
+        // Priority sorting is handled by computeTypeMatchedListeners (on cache miss).
+        // Sorting here on CopyOnWriteArrayList is racy under concurrent registration.
+        invalidateListenerCache();
     }
 
-    private void dispatch(Event event, boolean forceAsync) {
+    private boolean dispatch(Event event, boolean forceAsync) {
         // Get all matching listeners and convert to consumers
         List<ListenerInfo> matchedListeners = getMatchedListeners(event);
         if (matchedListeners.isEmpty()) {
+            handleDeadEvent(event);
             completeWaitableEvent(event);
-            return;
+            return false;
         }
 
         if (forceAsync) {
@@ -457,12 +820,10 @@ public final class OpenEvent implements AutoCloseable {
             // Dispatch async listeners using asyncDispatcher
             if (!asyncConsumers.isEmpty()) {
                 if (event instanceof WaitableEvent && asyncDispatcher instanceof AsyncDispatcher ad) {
-                    // For waitable events, wait for async listeners to complete before
-                    // signaling the latch, otherwise publishAndWait() returns prematurely
                     try {
                         ad.dispatchAsync(event, asyncConsumers)
                             .whenComplete((_, _) -> completeWaitableEvent(event));
-                        return;
+                        return true;
                     } catch (Exception e) {
                         completeWaitableEvent(event);
                         throw e;
@@ -473,21 +834,75 @@ public final class OpenEvent implements AutoCloseable {
 
             completeWaitableEvent(event);
         }
+        return true;
+    }
+
+    private void handleDeadEvent(Event event) {
+        // Prevent recursive dead events: if this IS a DeadEvent, don't wrap again
+        if (event instanceof DeadEvent || event instanceof WaitableEvent) {
+            return;
+        }
+        deadEventCount.increment();
+        // Only create DeadEvent if someone is listening for it
+        List<ListenerInfo> deadListenerList = listeners.get(DeadEvent.class);
+        if (deadListenerList != null && !deadListenerList.isEmpty()) {
+            DeadEvent deadEvent = new DeadEvent(event);
+            List<ListenerInfo> deadListeners = getMatchedListeners(deadEvent);
+            for (ListenerInfo info : deadListeners) {
+                try {
+                    info.invoke(deadEvent);
+                    deliveredCount.increment();
+                } catch (Exception e) {
+                    errorCount.increment();
+                    if (exceptionHandler != null) {
+                        exceptionHandler.handleException(deadEvent, e, "DeadEventListener");
+                    }
+                }
+            }
+        }
     }
 
     private List<ListenerInfo> getMatchedListeners(Event event) {
         Class<?> eventType = event.getClass();
 
-        List<ListenerInfo> matchedListeners = new ArrayList<>();
-        for (Map.Entry<Class<?>, List<ListenerInfo>> entry : listeners.entrySet()) {
-            if (entry.getKey().isAssignableFrom(eventType)) {
-                matchedListeners.addAll(entry.getValue());
+        // Use cached type-matched listeners (sorted, invalidated on registration changes)
+        List<ListenerInfo> typeMatched = listenerCache.computeIfAbsent(eventType, this::computeTypeMatchedListeners);
+
+        // Fast path: if no listeners have filters, return cached list directly
+        boolean hasFilters = false;
+        for (ListenerInfo info : typeMatched) {
+            if (info.filter() != null) {
+                hasFilters = true;
+                break;
             }
         }
+        if (!hasFilters) {
+            return typeMatched;
+        }
 
-        // Sort by priority (descending)
-        matchedListeners.sort(Comparator.comparingInt(ListenerInfo::priority).reversed());
-        return matchedListeners;
+        // Slow path: apply event-specific filter predicates
+        List<ListenerInfo> filtered = new ArrayList<>(typeMatched.size());
+        for (ListenerInfo info : typeMatched) {
+            if (info.filter() == null || info.filter().test(event)) {
+                filtered.add(info);
+            }
+        }
+        return filtered;
+    }
+
+    private List<ListenerInfo> computeTypeMatchedListeners(Class<?> eventType) {
+        List<ListenerInfo> matched = new ArrayList<>();
+        for (Map.Entry<Class<?>, List<ListenerInfo>> entry : listeners.entrySet()) {
+            if (entry.getKey().isAssignableFrom(eventType)) {
+                matched.addAll(entry.getValue());
+            }
+        }
+        matched.sort(Comparator.comparingInt(ListenerInfo::priority).reversed());
+        return List.copyOf(matched);
+    }
+
+    private void invalidateListenerCache() {
+        listenerCache.clear();
     }
 
     private List<Consumer<Event>> getMatchedListenerConsumers(Event event) {
@@ -509,12 +924,48 @@ public final class OpenEvent implements AutoCloseable {
     private void invokeListener(ListenerInfo info, Event event) {
         try {
             info.invoke(event);
+            deliveredCount.increment();
         } catch (Exception e) {
+            errorCount.increment();
             if (exceptionHandler != null) {
                 String listenerName = info.subscriber() != null
                     ? info.subscriber().getClass().getSimpleName()
                     : "Lambda";
-                exceptionHandler.handleException(event, e, listenerName);
+                try {
+                    exceptionHandler.handleException(event, e, listenerName);
+                } catch (Exception handlerEx) {
+                    // Exception handler itself failed - log and swallow to protect the event bus
+                    // 异常处理器自身异常 - 记录并吞掉以保护事件总线
+                    LOGGER.log(Level.ERROR,
+                            "Exception handler failed for listener ''{0}'': {1}",
+                            listenerName, handlerEx.getMessage());
+                }
+            }
+        }
+    }
+
+    private boolean runBeforeInterceptors(Event event) {
+        for (EventInterceptor interceptor : interceptors) {
+            try {
+                if (!interceptor.beforePublish(event)) {
+                    return false;
+                }
+            } catch (Exception e) {
+                // Fail-closed: interceptor exception blocks publishing (safer default)
+                // 安全默认：拦截器异常阻止发布
+                LOGGER.log(Level.WARNING, "Interceptor beforePublish failed, blocking event", e);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void runAfterInterceptors(Event event, boolean dispatched) {
+        for (EventInterceptor interceptor : interceptors) {
+            try {
+                interceptor.afterPublish(event, dispatched);
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Interceptor afterPublish failed", e);
             }
         }
     }
@@ -536,6 +987,7 @@ public final class OpenEvent implements AutoCloseable {
         private EventDispatcher asyncDispatcher;
         private EventStore eventStore;
         private EventExceptionHandler exceptionHandler;
+        private final List<EventInterceptor> interceptors = new ArrayList<>();
 
         /**
          * Set the async executor
@@ -598,6 +1050,20 @@ public final class OpenEvent implements AutoCloseable {
         }
 
         /**
+         * Add an event interceptor
+         * 添加事件拦截器
+         *
+         * @param interceptor the interceptor to add | 要添加的拦截器
+         * @return this builder | 此构建器
+         */
+        public Builder interceptor(EventInterceptor interceptor) {
+            if (interceptor != null) {
+                this.interceptors.add(interceptor);
+            }
+            return this;
+        }
+
+        /**
          * Build the OpenEvent instance
          * 构建OpenEvent实例
          *
@@ -620,16 +1086,55 @@ public final class OpenEvent implements AutoCloseable {
         EventListener<?> lambdaListener,
         Class<?> eventType,
         boolean async,
-        int priority
+        int priority,
+        Predicate<Event> filter
     ) {
         @SuppressWarnings("unchecked")
         void invoke(Event event) throws Exception {
             if (lambdaListener != null) {
                 ((EventListener<Event>) lambdaListener).onEvent(event);
             } else if (method != null) {
-                method.setAccessible(true);
                 method.invoke(subscriber, event);
             }
+        }
+    }
+
+    // ============ Subscription Implementation | 订阅实现 ============
+
+    /**
+     * Internal subscription implementation
+     * 内部订阅实现
+     */
+    private final class SubscriptionImpl implements Subscription {
+        private final Class<? extends Event> eventType;
+        private final ListenerInfo listenerInfo;
+        private final AtomicBoolean active = new AtomicBoolean(true);
+
+        @SuppressWarnings("unchecked")
+        SubscriptionImpl(Class<?> eventType, ListenerInfo listenerInfo) {
+            this.eventType = (Class<? extends Event>) eventType;
+            this.listenerInfo = listenerInfo;
+        }
+
+        @Override
+        public void unsubscribe() {
+            if (active.compareAndSet(true, false)) {
+                List<ListenerInfo> list = listeners.get(eventType);
+                if (list != null && list.remove(listenerInfo)) {
+                    listenerCount.decrementAndGet();
+                    invalidateListenerCache();
+                }
+            }
+        }
+
+        @Override
+        public boolean isActive() {
+            return active.get();
+        }
+
+        @Override
+        public Class<? extends Event> getEventType() {
+            return eventType;
         }
     }
 }

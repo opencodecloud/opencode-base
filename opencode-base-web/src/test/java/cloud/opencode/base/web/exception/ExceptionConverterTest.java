@@ -99,14 +99,15 @@ class ExceptionConverterTest {
         }
 
         @Test
-        @DisplayName("toResult with generic exception should use internal error code")
+        @DisplayName("toResult with generic exception should use internal error code and generic message")
         void toResultWithGenericExceptionShouldUseInternalErrorCode() {
             Exception exception = new Exception("Something went wrong");
 
             Result<Object> result = ExceptionConverter.toResult(exception);
 
             assertThat(result.code()).isEqualTo(CommonResultCode.INTERNAL_ERROR.getCode());
-            assertThat(result.message()).isEqualTo("Something went wrong");
+            // Generic message to prevent internal info leakage
+            assertThat(result.message()).isEqualTo("Internal server error");
         }
 
         @Test

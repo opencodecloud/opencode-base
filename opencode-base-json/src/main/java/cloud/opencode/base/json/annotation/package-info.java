@@ -13,6 +13,9 @@
  *   <li>{@link cloud.opencode.base.json.annotation.JsonFormat} - Formatting - 格式化</li>
  *   <li>{@link cloud.opencode.base.json.annotation.JsonNaming} - Naming strategy - 命名策略</li>
  *   <li>{@link cloud.opencode.base.json.annotation.JsonMask} - Data masking - 数据脱敏</li>
+ *   <li>{@link cloud.opencode.base.json.annotation.JsonTypeInfo} - Polymorphic type handling - 多态类型处理</li>
+ *   <li>{@link cloud.opencode.base.json.annotation.JsonSubTypes} - Known subtypes declaration - 已知子类型声明</li>
+ *   <li>{@link cloud.opencode.base.json.annotation.JsonTypeName} - Logical type name - 逻辑类型名</li>
  * </ul>
  *
  * @author Leon Soo

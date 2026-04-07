@@ -67,8 +67,13 @@ public final class BuiltinJsonWriter implements JsonWriter {
     private boolean htmlSafe;
     private boolean closed;
 
+    private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
+
     /** True when the next value needs a property name first. */
     private boolean expectName;
+
+    /** Deferred property name, used to support serializeNulls=false in object scope. */
+    private String deferredName;
 
     /**
      * Creates a new writer that writes to the given output.
@@ -140,17 +145,29 @@ public final class BuiltinJsonWriter implements JsonWriter {
         if (!isObjectScope(scope)) {
             throw new IllegalStateException("not in an object");
         }
-        if (scope == Scope.NONEMPTY_OBJECT) {
-            write(',');
-        }
-        stack.pop();
-        stack.push(Scope.NONEMPTY_OBJECT);
-        newline();
-        writeString(name);
-        write(':');
-        if (!indent.isEmpty()) write(' ');
+        deferredName = name;
         expectName = false;
         return this;
+    }
+
+    /**
+     * Writes the deferred property name if one is pending.
+     * 如果有待写入的属性名则写入。
+     */
+    private void writeDeferredName() {
+        if (deferredName != null) {
+            Scope scope = stack.peek();
+            if (scope == Scope.NONEMPTY_OBJECT) {
+                write(',');
+            }
+            stack.pop();
+            stack.push(Scope.NONEMPTY_OBJECT);
+            newline();
+            writeString(deferredName);
+            write(':');
+            if (!indent.isEmpty()) write(' ');
+            deferredName = null;
+        }
     }
 
     // ==================== Value Writing ====================
@@ -218,10 +235,11 @@ public final class BuiltinJsonWriter implements JsonWriter {
 
     @Override
     public JsonWriter nullValue() {
-        if (!serializeNulls && isObjectScope(stack.peek())) {
-            // skip null in object when serializeNulls is false;
-            // the name was already written, so we need to handle this.
-            // For simplicity, always write null if name was written.
+        if (!serializeNulls && deferredName != null) {
+            // Skip the null value and discard the deferred property name
+            deferredName = null;
+            expectName = true;
+            return this;
         }
         beforeValue();
         write("null");
@@ -242,8 +260,14 @@ public final class BuiltinJsonWriter implements JsonWriter {
 
     // ==================== Configuration ====================
 
+    private static final int MAX_INDENT_LENGTH = 16;
+
     @Override
     public JsonWriter setIndent(String indent) {
+        if (indent != null && indent.length() > MAX_INDENT_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Indent string length exceeds maximum of " + MAX_INDENT_LENGTH);
+        }
         this.indent = indent != null ? indent : "";
         return this;
     }
@@ -306,6 +330,7 @@ public final class BuiltinJsonWriter implements JsonWriter {
      * 在数组上下文中写入值之前调用以处理逗号。
      */
     private void beforeValue() {
+        writeDeferredName();
         Scope scope = stack.peek();
         if (scope == Scope.NONEMPTY_ARRAY) {
             write(',');
@@ -315,7 +340,7 @@ public final class BuiltinJsonWriter implements JsonWriter {
             stack.push(Scope.NONEMPTY_ARRAY);
             newline();
         }
-        // For object scopes, comma is handled in name()
+        // For object scopes, comma is handled in writeDeferredName()
     }
 
     /**
@@ -361,10 +386,16 @@ public final class BuiltinJsonWriter implements JsonWriter {
                 default -> {
                     if (c < 0x20) {
                         write("\\u");
-                        write(String.format("%04x", (int) c));
+                        write(HEX_DIGITS[(c >> 12) & 0xF]);
+                        write(HEX_DIGITS[(c >> 8) & 0xF]);
+                        write(HEX_DIGITS[(c >> 4) & 0xF]);
+                        write(HEX_DIGITS[c & 0xF]);
                     } else if (htmlSafe && (c == '<' || c == '>' || c == '&' || c == '=' || c == '\'')) {
                         write("\\u");
-                        write(String.format("%04x", (int) c));
+                        write(HEX_DIGITS[(c >> 12) & 0xF]);
+                        write(HEX_DIGITS[(c >> 8) & 0xF]);
+                        write(HEX_DIGITS[(c >> 4) & 0xF]);
+                        write(HEX_DIGITS[c & 0xF]);
                     } else {
                         write(c);
                     }

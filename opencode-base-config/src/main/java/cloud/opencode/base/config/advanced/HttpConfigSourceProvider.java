@@ -62,6 +62,7 @@ public class HttpConfigSourceProvider implements ConfigSourceProvider {
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
     private static final HttpClient SHARED_CLIENT = HttpClient.newBuilder()
             .connectTimeout(DEFAULT_TIMEOUT)
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     /**
@@ -74,7 +75,11 @@ public class HttpConfigSourceProvider implements ConfigSourceProvider {
 
     @Override
     public ConfigSource create(String uri, Map<String, Object> options) {
-        validateNotInternalUrl(uri);
+        // Validate AND pin the resolved IP to prevent DNS rebinding SSRF.
+        // The returned URI has the hostname replaced with the validated IP,
+        // so the HTTP client connects to the exact same address we checked.
+        String pinnedUri = validateAndPinIp(uri);
+        URI originalUri = URI.create(uri);
 
         Duration timeout = options != null && options.containsKey("timeout")
                 ? Duration.ofMillis(((Number) options.get("timeout")).longValue())
@@ -82,9 +87,10 @@ public class HttpConfigSourceProvider implements ConfigSourceProvider {
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(uri))
+                    .uri(URI.create(pinnedUri))
                     .timeout(timeout)
                     .header("Accept", "application/json, text/plain, */*")
+                    .header("Host", originalUri.getHost()) // preserve original Host for virtual hosting
                     .GET()
                     .build();
 
@@ -185,20 +191,27 @@ public class HttpConfigSourceProvider implements ConfigSourceProvider {
     }
 
     /**
-     * Validates that the URL does not point to an internal/private network address.
-     * 验证URL不指向内部/私有网络地址。
+     * Validates that the URL does not point to an internal/private network address,
+     * and returns a new URI with the hostname replaced by the resolved IP address
+     * to prevent DNS rebinding attacks.
+     * 验证URL不指向内部/私有网络地址，并返回将主机名替换为已解析IP地址的新URI，
+     * 以防止DNS重绑定攻击。
      *
      * <p>Rejects URLs targeting localhost, link-local (169.254.x.x), and RFC 1918
      * private ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x), as well as IPv6
-     * loopback (::1) to prevent SSRF attacks.</p>
+     * loopback (::1) to prevent SSRF attacks. The returned URI pins the resolved
+     * IP so the HTTP client connects to the exact address that was validated.</p>
      * <p>拒绝指向 localhost、链路本地 (169.254.x.x) 和 RFC 1918
      * 私有范围 (10.x.x.x, 172.16-31.x.x, 192.168.x.x) 的URL，
-     * 以及 IPv6 回环 (::1)，以防止 SSRF 攻击。</p>
+     * 以及 IPv6 回环 (::1)。返回的 URI 固定已解析的 IP，
+     * 确保 HTTP 客户端连接到经过验证的确切地址。</p>
      *
      * @param uri the URI to validate | 要验证的URI
-     * @throws IllegalArgumentException if the URL points to an internal network | 如果URL指向内部网络
+     * @return URI with hostname replaced by validated IP address | 主机名替换为已验证IP地址的URI
+     * @throws IllegalArgumentException if the URL points to an internal network or cannot be resolved |
+     *                                  如果URL指向内部网络或无法解析
      */
-    private static void validateNotInternalUrl(String uri) {
+    private static String validateAndPinIp(String uri) {
         URI parsed = URI.create(uri);
         String host = parsed.getHost();
         if (host == null || host.isEmpty()) {
@@ -213,20 +226,30 @@ public class HttpConfigSourceProvider implements ConfigSourceProvider {
                 "URL points to internal/private network (blocked hostname): " + uri);
         }
 
-        // Resolve the host to IP address and check
+        // Resolve the host to IP address, validate all addresses, then pin the first safe one
+        InetAddress[] addresses;
         try {
-            InetAddress[] addresses = InetAddress.getAllByName(host);
-            for (InetAddress addr : addresses) {
-                if (addr.isLoopbackAddress() || addr.isLinkLocalAddress()
-                        || addr.isSiteLocalAddress() || addr.isAnyLocalAddress()) {
-                    throw new IllegalArgumentException(
-                        "URL points to internal/private network (" + addr.getHostAddress() + "): " + uri);
-                }
-            }
+            addresses = InetAddress.getAllByName(host);
         } catch (UnknownHostException e) {
-            // Allow unresolvable hosts - they will fail at connection time
-            LOGGER.log(System.Logger.Level.DEBUG,
-                "Could not resolve host for SSRF check: {0}", host);
+            throw new IllegalArgumentException(
+                "Cannot resolve host for SSRF validation: " + host, e);
         }
+
+        for (InetAddress addr : addresses) {
+            if (addr.isLoopbackAddress() || addr.isLinkLocalAddress()
+                    || addr.isSiteLocalAddress() || addr.isAnyLocalAddress()
+                    || addr.isMulticastAddress()) {
+                throw new IllegalArgumentException(
+                    "URL points to internal/private network (" + addr.getHostAddress() + "): " + uri);
+            }
+        }
+
+        // Pin to the first resolved IP to prevent DNS rebinding between validation and connection
+        String pinnedIp = addresses[0].getHostAddress();
+        // For IPv6, wrap in brackets for URI syntax
+        if (pinnedIp.contains(":")) {
+            pinnedIp = "[" + pinnedIp + "]";
+        }
+        return uri.replace(host, pinnedIp);
     }
 }

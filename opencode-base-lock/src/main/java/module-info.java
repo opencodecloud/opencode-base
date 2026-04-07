@@ -31,6 +31,7 @@ module cloud.opencode.base.lock {
     // Export public API packages
     exports cloud.opencode.base.lock;
     exports cloud.opencode.base.lock.distributed;
+    exports cloud.opencode.base.lock.event;
     exports cloud.opencode.base.lock.exception;
     exports cloud.opencode.base.lock.local;
     exports cloud.opencode.base.lock.manager;

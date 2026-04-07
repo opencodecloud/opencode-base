@@ -1,7 +1,10 @@
 package cloud.opencode.base.expression.function;
 
+import cloud.opencode.base.expression.OpenExpressionException;
+
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.Date;
@@ -207,11 +210,11 @@ public final class DateFunctions {
         functions.put("formatdate", args -> {
             if (args.length < 1 || args[0] == null) return "";
             String pattern = args.length >= 2 ? args[1].toString() : "yyyy-MM-dd";
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+            DateTimeFormatter formatter = safePattern(pattern);
             Object date = args[0];
             if (date instanceof LocalDate ld) return ld.format(formatter);
             if (date instanceof LocalDateTime ldt) return ldt.format(formatter);
-            if (date instanceof LocalTime lt) return lt.format(DateTimeFormatter.ofPattern(pattern));
+            if (date instanceof LocalTime lt) return lt.format(formatter);
             return date.toString();
         });
 
@@ -219,21 +222,29 @@ public final class DateFunctions {
         functions.put("parsedate", args -> {
             if (args.length < 1 || args[0] == null) return null;
             String s = args[0].toString();
-            if (args.length >= 2) {
-                String pattern = args[1].toString();
-                return LocalDate.parse(s, DateTimeFormatter.ofPattern(pattern));
+            try {
+                if (args.length >= 2) {
+                    return LocalDate.parse(s, safePattern(args[1].toString()));
+                }
+                return LocalDate.parse(s);
+            } catch (DateTimeParseException e) {
+                throw OpenExpressionException.evaluationError(
+                        "Failed to parse date '" + s + "': " + e.getMessage(), e);
             }
-            return LocalDate.parse(s);
         });
 
         functions.put("parsedatetime", args -> {
             if (args.length < 1 || args[0] == null) return null;
             String s = args[0].toString();
-            if (args.length >= 2) {
-                String pattern = args[1].toString();
-                return LocalDateTime.parse(s, DateTimeFormatter.ofPattern(pattern));
+            try {
+                if (args.length >= 2) {
+                    return LocalDateTime.parse(s, safePattern(args[1].toString()));
+                }
+                return LocalDateTime.parse(s);
+            } catch (DateTimeParseException e) {
+                throw OpenExpressionException.evaluationError(
+                        "Failed to parse datetime '" + s + "': " + e.getMessage(), e);
             }
-            return LocalDateTime.parse(s);
         });
 
         // Special dates
@@ -344,6 +355,27 @@ public final class DateFunctions {
             return Long.parseLong(value.toString());
         } catch (NumberFormatException e) {
             return 0L;
+        }
+    }
+
+    /** Maximum allowed date format pattern length. */
+    private static final int MAX_PATTERN_LENGTH = 100;
+
+    /**
+     * Validate and compile a DateTimeFormatter pattern safely.
+     * Prevents DoS via overly complex or malformed patterns.
+     */
+    private static DateTimeFormatter safePattern(String pattern) {
+        if (pattern.length() > MAX_PATTERN_LENGTH) {
+            throw OpenExpressionException.evaluationError(
+                    "Date format pattern length " + pattern.length()
+                            + " exceeds maximum " + MAX_PATTERN_LENGTH);
+        }
+        try {
+            return DateTimeFormatter.ofPattern(pattern);
+        } catch (IllegalArgumentException e) {
+            throw OpenExpressionException.evaluationError(
+                    "Invalid date format pattern: " + e.getMessage(), e);
         }
     }
 }

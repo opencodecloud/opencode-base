@@ -38,34 +38,47 @@ public enum CaptchaStrength {
      * Easy - Minimal noise, clear text
      * 简单 - 最少噪点，清晰文本
      */
-    EASY(3, 3, 20),
+    EASY(3, 3, 20, false, false, false, false, 0.0f),
 
     /**
      * Medium - Moderate noise and distortion
      * 中等 - 适中噪点和干扰
      */
-    MEDIUM(5, 50, 32),
+    MEDIUM(5, 50, 32, false, false, false, false, 0.0f),
 
     /**
      * Hard - Heavy noise and distortion
      * 困难 - 大量噪点和干扰
      */
-    HARD(8, 100, 28),
+    HARD(8, 100, 28, true, true, false, true, 0.1f),
 
     /**
      * Extreme - Maximum noise and distortion
      * 极难 - 最大噪点和干扰
      */
-    EXTREME(12, 200, 26);
+    EXTREME(12, 200, 26, true, true, true, true, 0.2f);
 
     private final int noiseLines;
     private final int noiseDots;
     private final float fontSize;
+    private final boolean randomFontPerChar;
+    private final boolean bezierNoiseEnabled;
+    private final boolean sineWarpEnabled;
+    private final boolean outlineShadowEnabled;
+    private final float charOverlapRatio;
 
-    CaptchaStrength(int noiseLines, int noiseDots, float fontSize) {
+    CaptchaStrength(int noiseLines, int noiseDots, float fontSize,
+                    boolean randomFontPerChar, boolean bezierNoiseEnabled,
+                    boolean sineWarpEnabled, boolean outlineShadowEnabled,
+                    float charOverlapRatio) {
         this.noiseLines = noiseLines;
         this.noiseDots = noiseDots;
         this.fontSize = fontSize;
+        this.randomFontPerChar = randomFontPerChar;
+        this.bezierNoiseEnabled = bezierNoiseEnabled;
+        this.sineWarpEnabled = sineWarpEnabled;
+        this.outlineShadowEnabled = outlineShadowEnabled;
+        this.charOverlapRatio = charOverlapRatio;
     }
 
     /**
@@ -99,6 +112,56 @@ public enum CaptchaStrength {
     }
 
     /**
+     * Returns whether each character uses a random different font.
+     * 返回每个字符是否使用随机不同字体。
+     *
+     * @return {@code true} if random font per character is enabled | 是否启用每字符随机字体
+     */
+    public boolean isRandomFontPerChar() {
+        return randomFontPerChar;
+    }
+
+    /**
+     * Returns whether Bezier curve noise is enabled.
+     * 返回是否启用贝塞尔穿字噪声。
+     *
+     * @return {@code true} if Bezier noise is enabled | 是否启用贝塞尔噪声
+     */
+    public boolean isBezierNoiseEnabled() {
+        return bezierNoiseEnabled;
+    }
+
+    /**
+     * Returns whether sine wave warp is enabled.
+     * 返回是否启用正弦波变形。
+     *
+     * @return {@code true} if sine warp is enabled | 是否启用正弦波变形
+     */
+    public boolean isSineWarpEnabled() {
+        return sineWarpEnabled;
+    }
+
+    /**
+     * Returns whether character outline shadow is enabled.
+     * 返回是否启用字符轮廓阴影。
+     *
+     * @return {@code true} if outline shadow is enabled | 是否启用轮廓阴影
+     */
+    public boolean isOutlineShadowEnabled() {
+        return outlineShadowEnabled;
+    }
+
+    /**
+     * Gets the character overlap ratio.
+     * 获取字符重叠比例。
+     *
+     * @return the overlap ratio (0.0-0.5) | 重叠比例（0.0-0.5）
+     */
+    public float getCharOverlapRatio() {
+        return charOverlapRatio;
+    }
+
+    /**
      * Applies this strength to a configuration builder.
      * 将此强度应用到配置构建器。
      *
@@ -109,7 +172,12 @@ public enum CaptchaStrength {
         return builder
             .noiseLines(noiseLines)
             .noiseDots(noiseDots)
-            .fontSize(fontSize);
+            .fontSize(fontSize)
+            .randomFontPerChar(randomFontPerChar)
+            .bezierNoiseEnabled(bezierNoiseEnabled)
+            .sineWarpEnabled(sineWarpEnabled)
+            .outlineShadowEnabled(outlineShadowEnabled)
+            .charOverlapRatio(charOverlapRatio);
     }
 
     /**

@@ -75,6 +75,15 @@ public final class JsonPath {
     private static final Pattern SIMPLE_FILTER = Pattern.compile("@\\.(\\w+)\\s*(==|!=|<|>|<=|>=)\\s*(.+)");
     private static final Pattern EXISTS_FILTER = Pattern.compile("@\\.(\\w+)");
 
+    private static final int CACHE_SIZE = 256;
+    private static final Map<String, JsonPath> COMPILE_CACHE = Collections.synchronizedMap(
+            new LinkedHashMap<>(CACHE_SIZE, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, JsonPath> eldest) {
+                    return size() > CACHE_SIZE;
+                }
+            });
+
     /**
      * Original path expression
      * 原始路径表达式
@@ -102,14 +111,18 @@ public final class JsonPath {
      */
     public static JsonPath compile(String expression) {
         Objects.requireNonNull(expression, "Expression must not be null");
-
+        JsonPath cached = COMPILE_CACHE.get(expression);
+        if (cached != null) {
+            return cached;
+        }
         if (!expression.startsWith("$")) {
             throw OpenJsonProcessingException.pathError(
                     "JSONPath expression must start with '$': " + expression);
         }
-
         List<PathSegment> segments = parse(expression.substring(1));
-        return new JsonPath(expression, segments);
+        JsonPath path = new JsonPath(expression, segments);
+        COMPILE_CACHE.put(expression, path);
+        return path;
     }
 
     /**
@@ -201,21 +214,29 @@ public final class JsonPath {
     private static List<PathSegment> parse(String path) {
         List<PathSegment> segments = new ArrayList<>();
         int pos = 0;
+        int len = path.length();
 
-        while (pos < path.length()) {
+        Matcher dotMatcher = DOT_NOTATION.matcher(path);
+        Matcher bracketMatcher = BRACKET_NOTATION.matcher(path);
+        Matcher wildcardMatcher = WILDCARD_ARRAY.matcher(path);
+        Matcher filterMatcher = FILTER_EXPR.matcher(path);
+        Matcher sliceMatcher = ARRAY_SLICE.matcher(path);
+        Matcher indexMatcher = ARRAY_INDEX.matcher(path);
+
+        while (pos < len) {
             // Recursive descent
             if (path.startsWith("..", pos)) {
                 pos += 2;
                 String property = parseProperty(path, pos);
                 if (property != null) {
                     segments.add(new RecursiveDescentSegment(property));
-                    pos += property.length() + (path.charAt(pos) == '.' ? 1 : 0);
+                    pos += property.length() + (pos < len && path.charAt(pos) == '.' ? 1 : 0);
                 }
                 continue;
             }
 
             // Dot notation
-            Matcher dotMatcher = DOT_NOTATION.matcher(path.substring(pos));
+            dotMatcher.region(pos, len);
             if (dotMatcher.lookingAt()) {
                 String property = dotMatcher.group(1);
                 if ("*".equals(property)) {
@@ -223,38 +244,38 @@ public final class JsonPath {
                 } else {
                     segments.add(new PropertySegment(property));
                 }
-                pos += dotMatcher.end();
+                pos = dotMatcher.end();
                 continue;
             }
 
             // Bracket notation for property
-            Matcher bracketMatcher = BRACKET_NOTATION.matcher(path.substring(pos));
+            bracketMatcher.region(pos, len);
             if (bracketMatcher.lookingAt()) {
                 String property = bracketMatcher.group(1) != null ?
                         bracketMatcher.group(1) : bracketMatcher.group(2);
                 segments.add(new PropertySegment(property));
-                pos += bracketMatcher.end();
+                pos = bracketMatcher.end();
                 continue;
             }
 
             // Array wildcard
-            Matcher wildcardMatcher = WILDCARD_ARRAY.matcher(path.substring(pos));
+            wildcardMatcher.region(pos, len);
             if (wildcardMatcher.lookingAt()) {
                 segments.add(new ArrayWildcardSegment());
-                pos += wildcardMatcher.end();
+                pos = wildcardMatcher.end();
                 continue;
             }
 
             // Filter expression
-            Matcher filterMatcher = FILTER_EXPR.matcher(path.substring(pos));
+            filterMatcher.region(pos, len);
             if (filterMatcher.lookingAt()) {
-                segments.add(new FilterSegment(filterMatcher.group(1)));
-                pos += filterMatcher.end();
+                segments.add(new FilterSegment(filterMatcher.group(1).trim()));
+                pos = filterMatcher.end();
                 continue;
             }
 
             // Array slice
-            Matcher sliceMatcher = ARRAY_SLICE.matcher(path.substring(pos));
+            sliceMatcher.region(pos, len);
             if (sliceMatcher.lookingAt()) {
                 String startStr = sliceMatcher.group(1);
                 String endStr = sliceMatcher.group(2);
@@ -263,16 +284,16 @@ public final class JsonPath {
                 Integer end = endStr.isEmpty() ? null : Integer.parseInt(endStr);
                 Integer step = stepStr == null ? null : Integer.parseInt(stepStr);
                 segments.add(new ArraySliceSegment(start, end, step));
-                pos += sliceMatcher.end();
+                pos = sliceMatcher.end();
                 continue;
             }
 
             // Array index
-            Matcher indexMatcher = ARRAY_INDEX.matcher(path.substring(pos));
+            indexMatcher.region(pos, len);
             if (indexMatcher.lookingAt()) {
                 int index = Integer.parseInt(indexMatcher.group(1));
                 segments.add(new ArrayIndexSegment(index));
-                pos += indexMatcher.end();
+                pos = indexMatcher.end();
                 continue;
             }
 
@@ -288,7 +309,8 @@ public final class JsonPath {
         if (pos >= path.length()) {
             return null;
         }
-        Matcher matcher = WORD_PATTERN.matcher(path.substring(pos));
+        Matcher matcher = WORD_PATTERN.matcher(path);
+        matcher.region(pos, path.length());
         if (matcher.lookingAt()) {
             return matcher.group();
         }
@@ -304,7 +326,7 @@ public final class JsonPath {
     private record PropertySegment(String property) implements PathSegment {
         @Override
         public List<JsonNode> evaluate(List<JsonNode> nodes) {
-            List<JsonNode> result = new ArrayList<>();
+            List<JsonNode> result = new ArrayList<>(nodes.size());
             for (JsonNode node : nodes) {
                 if (node.isObject()) {
                     JsonNode child = node.get(property);
@@ -320,7 +342,7 @@ public final class JsonPath {
     private record ArrayIndexSegment(int index) implements PathSegment {
         @Override
         public List<JsonNode> evaluate(List<JsonNode> nodes) {
-            List<JsonNode> result = new ArrayList<>();
+            List<JsonNode> result = new ArrayList<>(nodes.size());
             for (JsonNode node : nodes) {
                 if (node.isArray()) {
                     int actualIndex = index < 0 ? node.size() + index : index;
@@ -336,13 +358,17 @@ public final class JsonPath {
     private record ArraySliceSegment(Integer start, Integer end, Integer step) implements PathSegment {
         @Override
         public List<JsonNode> evaluate(List<JsonNode> nodes) {
-            List<JsonNode> result = new ArrayList<>();
+            List<JsonNode> result = new ArrayList<>(nodes.size());
             for (JsonNode node : nodes) {
                 if (node.isArray()) {
                     int size = node.size();
                     int s = start != null ? normalizeIndex(start, size) : 0;
                     int e = end != null ? normalizeIndex(end, size) : size;
                     int st = step != null ? step : 1;
+                    if (st == 0) {
+                        throw OpenJsonProcessingException.pathError(
+                                "Array slice step must not be zero");
+                    }
 
                     if (st > 0) {
                         for (int i = s; i < e && i < size; i += st) {
@@ -363,14 +389,18 @@ public final class JsonPath {
         }
 
         private int normalizeIndex(int idx, int size) {
-            return idx < 0 ? size + idx : idx;
+            if (idx < 0) {
+                int normalized = size + idx;
+                return normalized < 0 ? 0 : normalized;
+            }
+            return idx;
         }
     }
 
     private record WildcardSegment() implements PathSegment {
         @Override
         public List<JsonNode> evaluate(List<JsonNode> nodes) {
-            List<JsonNode> result = new ArrayList<>();
+            List<JsonNode> result = new ArrayList<>(nodes.size() * 4);
             for (JsonNode node : nodes) {
                 if (node.isObject()) {
                     for (String key : node.keys()) {
@@ -389,7 +419,7 @@ public final class JsonPath {
     private record ArrayWildcardSegment() implements PathSegment {
         @Override
         public List<JsonNode> evaluate(List<JsonNode> nodes) {
-            List<JsonNode> result = new ArrayList<>();
+            List<JsonNode> result = new ArrayList<>(nodes.size() * 4);
             for (JsonNode node : nodes) {
                 if (node.isArray()) {
                     for (int i = 0; i < node.size(); i++) {
@@ -436,15 +466,50 @@ public final class JsonPath {
         }
     }
 
-    private record FilterSegment(String expression) implements PathSegment {
+    private static final class FilterSegment implements PathSegment {
+        private final String expression;
+        // Pre-parsed filter fields (computed once at compile time)
+        private final String property;
+        private final String operator;
+        private final String compareValue;
+        private final boolean isExistsCheck;
+
+        FilterSegment(String expression) {
+            this.expression = expression;
+            Matcher matcher = SIMPLE_FILTER.matcher(expression);
+            if (matcher.matches()) {
+                this.property = matcher.group(1);
+                this.operator = matcher.group(2);
+                String raw = matcher.group(3).trim();
+                // Strip quotes
+                if ((raw.startsWith("'") && raw.endsWith("'"))
+                        || (raw.startsWith("\"") && raw.endsWith("\""))) {
+                    raw = raw.substring(1, raw.length() - 1);
+                }
+                this.compareValue = raw;
+                this.isExistsCheck = false;
+            } else {
+                Matcher existsMatcher = EXISTS_FILTER.matcher(expression);
+                if (existsMatcher.matches()) {
+                    this.property = existsMatcher.group(1);
+                    this.isExistsCheck = true;
+                } else {
+                    this.property = null;
+                    this.isExistsCheck = false;
+                }
+                this.operator = null;
+                this.compareValue = null;
+            }
+        }
+
         @Override
         public List<JsonNode> evaluate(List<JsonNode> nodes) {
-            List<JsonNode> result = new ArrayList<>();
+            List<JsonNode> result = new ArrayList<>(nodes.size());
             for (JsonNode node : nodes) {
                 if (node.isArray()) {
                     for (int i = 0; i < node.size(); i++) {
                         JsonNode element = node.get(i);
-                        if (matchesFilter(element, expression)) {
+                        if (matchesFilter(element)) {
                             result.add(element);
                         }
                     }
@@ -453,52 +518,28 @@ public final class JsonPath {
             return result;
         }
 
-        private boolean matchesFilter(JsonNode node, String expr) {
-            // Simple filter implementation for common patterns
-            // @.property operator value
-            Matcher matcher = SIMPLE_FILTER.matcher(expr.trim());
-
-            if (matcher.matches()) {
-                String property = matcher.group(1);
-                String operator = matcher.group(2);
-                String valueStr = matcher.group(3).trim();
-
-                JsonNode propValue = node.get(property);
-                if (propValue == null) {
-                    return false;
-                }
-
-                return compareValues(propValue, operator, valueStr);
+        private boolean matchesFilter(JsonNode node) {
+            if (property == null) return false;
+            if (isExistsCheck) {
+                return node.get(property) != null;
             }
-
-            // @.property (existence check)
-            matcher = EXISTS_FILTER.matcher(expr.trim());
-            if (matcher.matches()) {
-                return node.get(matcher.group(1)) != null;
-            }
-
-            return false;
+            JsonNode propValue = node.get(property);
+            if (propValue == null) return false;
+            return compareValues(propValue);
         }
 
-        private boolean compareValues(JsonNode node, String operator, String valueStr) {
-            // Remove quotes for string comparison
-            if (valueStr.startsWith("'") && valueStr.endsWith("'")) {
-                valueStr = valueStr.substring(1, valueStr.length() - 1);
-            } else if (valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
-                valueStr = valueStr.substring(1, valueStr.length() - 1);
-            }
-
+        private boolean compareValues(JsonNode node) {
             if (node.isNumber()) {
                 try {
                     double nodeValue = node.asDouble();
-                    double compareValue = Double.parseDouble(valueStr);
+                    double cmpValue = Double.parseDouble(compareValue);
                     return switch (operator) {
-                        case "==" -> nodeValue == compareValue;
-                        case "!=" -> nodeValue != compareValue;
-                        case "<" -> nodeValue < compareValue;
-                        case ">" -> nodeValue > compareValue;
-                        case "<=" -> nodeValue <= compareValue;
-                        case ">=" -> nodeValue >= compareValue;
+                        case "==" -> nodeValue == cmpValue;
+                        case "!=" -> nodeValue != cmpValue;
+                        case "<" -> nodeValue < cmpValue;
+                        case ">" -> nodeValue > cmpValue;
+                        case "<=" -> nodeValue <= cmpValue;
+                        case ">=" -> nodeValue >= cmpValue;
                         default -> false;
                     };
                 } catch (NumberFormatException e) {
@@ -507,20 +548,19 @@ public final class JsonPath {
             } else if (node.isString()) {
                 String nodeValue = node.asString();
                 return switch (operator) {
-                    case "==" -> nodeValue.equals(valueStr);
-                    case "!=" -> !nodeValue.equals(valueStr);
+                    case "==" -> nodeValue.equals(compareValue);
+                    case "!=" -> !nodeValue.equals(compareValue);
                     default -> false;
                 };
             } else if (node.isBoolean()) {
                 boolean nodeValue = node.asBoolean();
-                boolean compareValue = Boolean.parseBoolean(valueStr);
+                boolean boolValue = Boolean.parseBoolean(compareValue);
                 return switch (operator) {
-                    case "==" -> nodeValue == compareValue;
-                    case "!=" -> nodeValue != compareValue;
+                    case "==" -> nodeValue == boolValue;
+                    case "!=" -> nodeValue != boolValue;
                     default -> false;
                 };
             }
-
             return false;
         }
     }

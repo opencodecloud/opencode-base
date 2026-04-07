@@ -62,41 +62,45 @@ public record EmailFlags(
     public static final EmailFlags READ = new EmailFlags(true, false, false, false, false, false);
 
     /**
-     * Create flags from Jakarta Mail Flags
-     * 从Jakarta Mail Flags创建标记
+     * Create flags from IMAP flags string
+     * 从IMAP标记字符串创建标记
      *
-     * @param flags the Jakarta Mail flags | Jakarta Mail标记
+     * <p>Parses an IMAP FLAGS response string like "(\\Seen \\Flagged \\Answered)"</p>
+     * <p>解析IMAP FLAGS响应字符串，如 "(\\Seen \\Flagged \\Answered)"</p>
+     *
+     * @param imapFlags the IMAP flags string (e.g., "(\\Seen \\Flagged)") | IMAP标记字符串
      * @return the email flags | 邮件标记
      */
-    public static EmailFlags from(jakarta.mail.Flags flags) {
-        if (flags == null) {
+    public static EmailFlags fromImapFlags(String imapFlags) {
+        if (imapFlags == null || imapFlags.isBlank()) {
             return UNREAD;
         }
+        String upper = imapFlags.toUpperCase();
         return new EmailFlags(
-                flags.contains(jakarta.mail.Flags.Flag.SEEN),
-                flags.contains(jakarta.mail.Flags.Flag.ANSWERED),
-                flags.contains(jakarta.mail.Flags.Flag.FLAGGED),
-                flags.contains(jakarta.mail.Flags.Flag.DELETED),
-                flags.contains(jakarta.mail.Flags.Flag.DRAFT),
-                flags.contains(jakarta.mail.Flags.Flag.RECENT)
+                upper.contains("\\SEEN"),
+                upper.contains("\\ANSWERED"),
+                upper.contains("\\FLAGGED"),
+                upper.contains("\\DELETED"),
+                upper.contains("\\DRAFT"),
+                upper.contains("\\RECENT")
         );
     }
 
     /**
-     * Convert to Jakarta Mail Flags
-     * 转换为Jakarta Mail Flags
+     * Convert to IMAP flags string
+     * 转换为IMAP标记字符串
      *
-     * @return the Jakarta Mail flags | Jakarta Mail标记
+     * @return the IMAP flags string (e.g., "(\\Seen \\Flagged)") | IMAP标记字符串
      */
-    public jakarta.mail.Flags toMailFlags() {
-        jakarta.mail.Flags flags = new jakarta.mail.Flags();
-        if (seen) flags.add(jakarta.mail.Flags.Flag.SEEN);
-        if (answered) flags.add(jakarta.mail.Flags.Flag.ANSWERED);
-        if (flagged) flags.add(jakarta.mail.Flags.Flag.FLAGGED);
-        if (deleted) flags.add(jakarta.mail.Flags.Flag.DELETED);
-        if (draft) flags.add(jakarta.mail.Flags.Flag.DRAFT);
-        if (recent) flags.add(jakarta.mail.Flags.Flag.RECENT);
-        return flags;
+    public String toImapFlags() {
+        StringBuilder sb = new StringBuilder("(");
+        if (seen) sb.append("\\Seen ");
+        if (answered) sb.append("\\Answered ");
+        if (flagged) sb.append("\\Flagged ");
+        if (deleted) sb.append("\\Deleted ");
+        if (draft) sb.append("\\Draft ");
+        if (recent) sb.append("\\Recent ");
+        return sb.toString().trim() + ")";
     }
 
     /**

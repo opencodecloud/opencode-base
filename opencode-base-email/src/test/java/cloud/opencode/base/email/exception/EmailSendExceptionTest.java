@@ -27,8 +27,8 @@ class EmailSendExceptionTest {
         void testConstructorWithMessage() {
             EmailSendException exception = new EmailSendException("Send failed");
 
-            assertThat(exception.getMessage()).isEqualTo("Send failed");
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
+            assertThat(exception.getRawMessage()).isEqualTo("Send failed");
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.UNKNOWN);
             assertThat(exception.getCause()).isNull();
             assertThat(exception.getEmail()).isNull();
         }
@@ -39,7 +39,7 @@ class EmailSendExceptionTest {
             Throwable cause = new RuntimeException("Connection refused");
             EmailSendException exception = new EmailSendException("Send failed", cause);
 
-            assertThat(exception.getMessage()).isEqualTo("Send failed");
+            assertThat(exception.getRawMessage()).isEqualTo("Send failed");
             assertThat(exception.getCause()).isEqualTo(cause);
         }
 
@@ -56,10 +56,10 @@ class EmailSendExceptionTest {
                     EmailErrorCode.SEND_TIMEOUT
             );
 
-            assertThat(exception.getMessage()).isEqualTo("Send timeout");
+            assertThat(exception.getRawMessage()).isEqualTo("Send timeout");
             assertThat(exception.getCause()).isEqualTo(cause);
             assertThat(exception.getEmail()).isEqualTo(email);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.SEND_TIMEOUT);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.SEND_TIMEOUT);
         }
 
         @Test
@@ -73,9 +73,9 @@ class EmailSendExceptionTest {
                     EmailErrorCode.RECIPIENT_REJECTED
             );
 
-            assertThat(exception.getMessage()).isEqualTo("Recipient rejected");
+            assertThat(exception.getRawMessage()).isEqualTo("Recipient rejected");
             assertThat(exception.getEmail()).isEqualTo(email);
-            assertThat(exception.getErrorCode()).isEqualTo(EmailErrorCode.RECIPIENT_REJECTED);
+            assertThat(exception.getEmailErrorCode()).isEqualTo(EmailErrorCode.RECIPIENT_REJECTED);
             assertThat(exception.getCause()).isNull();
         }
     }

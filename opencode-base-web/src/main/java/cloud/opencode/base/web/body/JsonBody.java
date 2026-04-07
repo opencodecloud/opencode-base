@@ -102,36 +102,53 @@ public final class JsonBody implements RequestBody {
 
     public String getJson() { return json; }
 
+    private static final int MAX_DEPTH = 32;
+
     private static String mapToJson(Map<String, ?> map) {
+        return mapToJson(map, 0);
+    }
+
+    private static String mapToJson(Map<String, ?> map, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw new IllegalArgumentException("JSON nesting depth exceeds maximum: " + MAX_DEPTH);
+        }
         StringJoiner joiner = new StringJoiner(",", "{", "}");
         for (Map.Entry<String, ?> entry : map.entrySet()) {
             String key = escapeJson(entry.getKey());
-            String valueStr = valueToJson(entry.getValue());
+            String valueStr = valueToJson(entry.getValue(), depth);
             joiner.add("\"" + key + "\":" + valueStr);
         }
         return joiner.toString();
     }
 
     private static String valueToJson(Object value) {
+        return valueToJson(value, 0);
+    }
+
+    private static String valueToJson(Object value, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw new IllegalArgumentException("JSON nesting depth exceeds maximum: " + MAX_DEPTH);
+        }
         if (value == null) return "null";
         if (value instanceof String str) return "\"" + escapeJson(str) + "\"";
         if (value instanceof Number || value instanceof Boolean) return value.toString();
         if (value instanceof Map<?, ?> map) {
             @SuppressWarnings("unchecked")
             Map<String, ?> stringMap = (Map<String, ?>) map;
-            return mapToJson(stringMap);
+            return mapToJson(stringMap, depth + 1);
         }
         if (value instanceof Iterable<?> iterable) {
             StringJoiner joiner = new StringJoiner(",", "[", "]");
-            for (Object item : iterable) joiner.add(valueToJson(item));
+            for (Object item : iterable) joiner.add(valueToJson(item, depth + 1));
             return joiner.toString();
         }
         return "\"" + escapeJson(value.toString()) + "\"";
     }
 
     private static String escapeJson(String str) {
-        StringBuilder sb = new StringBuilder();
-        for (char c : str.toCharArray()) {
+        StringBuilder sb = new StringBuilder(str.length() + 16);
+        for (int i = 0, len = str.length(); i < len; i++) {
+            char c = str.charAt(i);
             switch (c) {
                 case '"' -> sb.append("\\\"");
                 case '\\' -> sb.append("\\\\");
@@ -140,7 +157,15 @@ public final class JsonBody implements RequestBody {
                 case '\n' -> sb.append("\\n");
                 case '\r' -> sb.append("\\r");
                 case '\t' -> sb.append("\\t");
-                default -> sb.append(c);
+                default -> {
+                    if (c < 0x20) {
+                        sb.append("\\u00");
+                        sb.append(Character.forDigit((c >> 4) & 0xF, 16));
+                        sb.append(Character.forDigit(c & 0xF, 16));
+                    } else {
+                        sb.append(c);
+                    }
+                }
             }
         }
         return sb.toString();

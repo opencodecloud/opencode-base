@@ -4,12 +4,12 @@ package cloud.opencode.base.timeseries.exception;
  * Time Series Error Code
  * 时序错误码
  *
- * <p>Error codes for time series operations (TS-1xxx ~ 4xxx).</p>
- * <p>时间序列操作的错误码（TS-1xxx ~ 4xxx）。</p>
+ * <p>Error codes for time series operations (TS-1xxx ~ 6xxx).</p>
+ * <p>时间序列操作的错误码（TS-1xxx ~ 6xxx）。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
- *   <li>Categorized error codes: data (1xxx), query (2xxx), computation (3xxx), capacity (4xxx) - 分类错误码</li>
+ *   <li>Categorized error codes: data (1xxx), query (2xxx), computation (3xxx), capacity (4xxx), alignment (5xxx), rate (6xxx) - 分类错误码</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -45,10 +45,20 @@ public enum TimeSeriesErrorCode {
     AGGREGATION_FAILED("TS-3001", "Aggregation failed"),
     WINDOW_SIZE_INVALID("TS-3002", "Invalid window size"),
     INSUFFICIENT_DATA("TS-3003", "Insufficient data"),
+    INVALID_INTERVAL("TS-3004", "Invalid interval"),
+    GAP_DETECTED("TS-3005", "Gap detected in time series"),
 
     // 4xxx - Capacity errors | 容量错误
     CAPACITY_EXCEEDED("TS-4001", "Capacity exceeded"),
-    MEMORY_LIMIT_EXCEEDED("TS-4002", "Memory limit exceeded");
+    MEMORY_LIMIT_EXCEEDED("TS-4002", "Memory limit exceeded"),
+
+    // 5xxx - Alignment/Interpolation errors | 对齐/插值错误
+    ALIGNMENT_FAILED("TS-5001", "Alignment failed"),
+    INTERPOLATION_FAILED("TS-5002", "Interpolation failed"),
+    INSUFFICIENT_POINTS("TS-5003", "Insufficient data points for interpolation"),
+
+    // 6xxx - Rate/Quality errors | 速率/质量错误
+    COUNTER_RESET("TS-6001", "Counter reset detected");
 
     private final String code;
     private final String message;

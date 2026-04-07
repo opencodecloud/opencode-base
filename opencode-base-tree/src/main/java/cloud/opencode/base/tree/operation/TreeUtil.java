@@ -4,8 +4,11 @@ import cloud.opencode.base.tree.Treeable;
 import cloud.opencode.base.tree.traversal.PreOrderTraversal;
 import cloud.opencode.base.tree.traversal.TreeVisitor;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -66,6 +69,7 @@ public final class TreeUtil {
      * @return the found node | 找到的节点
      */
     public static <T extends Treeable<T, ID>, ID> Optional<T> findById(List<T> roots, ID id) {
+        Objects.requireNonNull(id, "id must not be null");
         return find(roots, node -> id.equals(node.getId()));
     }
 
@@ -90,15 +94,18 @@ public final class TreeUtil {
     }
 
     private static <T extends Treeable<T, ID>, ID> Optional<T> findInNode(T node, Predicate<T> predicate) {
-        if (predicate.test(node)) {
-            return Optional.of(node);
-        }
-        List<T> children = node.getChildren();
-        if (children != null) {
-            for (T child : children) {
-                Optional<T> found = findInNode(child, predicate);
-                if (found.isPresent()) {
-                    return found;
+        // Iterative DFS to prevent StackOverflow on deep trees
+        Deque<T> stack = new ArrayDeque<>();
+        stack.push(node);
+        while (!stack.isEmpty()) {
+            T current = stack.pop();
+            if (predicate.test(current)) {
+                return Optional.of(current);
+            }
+            List<T> children = current.getChildren();
+            if (children != null) {
+                for (int i = children.size() - 1; i >= 0; i--) {
+                    stack.push(children.get(i));
                 }
             }
         }
@@ -184,7 +191,10 @@ public final class TreeUtil {
      * @return the leaf nodes | 叶子节点
      */
     public static <T extends Treeable<T, ID>, ID> List<T> getLeaves(List<T> roots) {
-        return findAll(roots, node -> node.getChildren() == null || node.getChildren().isEmpty());
+        return findAll(roots, node -> {
+            List<T> children = node.getChildren();
+            return children == null || children.isEmpty();
+        });
     }
 
     /**
@@ -199,5 +209,79 @@ public final class TreeUtil {
      */
     public static <T extends Treeable<T, ID>, ID> boolean contains(List<T> roots, ID id) {
         return findById(roots, id).isPresent();
+    }
+
+    /**
+     * Extract the subtree rooted at the node with the given ID
+     * 提取以给定ID节点为根的子树
+     *
+     * <p>Returns the node and its entire subtree. This does NOT clone — it returns
+     * the original node reference with its existing children.</p>
+     * <p>返回该节点及其完整子树。不进行克隆——返回原始节点引用及其现有子节点。</p>
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param id the target node ID | 目标节点ID
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the subtree rooted at the node, or empty if not found | 以该节点为根的子树，未找到返回空
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> Optional<T> extractSubtree(List<T> roots, ID id) {
+        return findById(roots, id);
+    }
+
+    /**
+     * Get sibling nodes of the node with the given ID
+     * 获取给定ID节点的兄弟节点
+     *
+     * <p>Returns other children of the same parent, excluding the target node itself.
+     * Returns empty list if the node is a root or not found.</p>
+     * <p>返回同一父节点的其他子节点，不包括目标节点本身。
+     * 如果节点是根节点或未找到则返回空列表。</p>
+     *
+     * @param roots the root nodes | 根节点列表
+     * @param id the target node ID | 目标节点ID
+     * @param <T> the node type | 节点类型
+     * @param <ID> the ID type | ID类型
+     * @return the sibling nodes | 兄弟节点列表
+     * @since V1.0.3
+     */
+    public static <T extends Treeable<T, ID>, ID> List<T> getSiblings(List<T> roots, ID id) {
+        // Find the parent of the target node
+        for (T root : roots) {
+            List<T> siblings = findSiblingsInNode(root, id);
+            if (siblings != null) {
+                return siblings;
+            }
+        }
+        return List.of();
+    }
+
+    private static <T extends Treeable<T, ID>, ID> List<T> findSiblingsInNode(T node, ID targetId) {
+        // Iterative BFS to prevent StackOverflow on deep trees
+        Deque<T> queue = new ArrayDeque<>();
+        queue.offer(node);
+        while (!queue.isEmpty()) {
+            T current = queue.poll();
+            List<T> children = current.getChildren();
+            if (children == null || children.isEmpty()) {
+                continue;
+            }
+            for (T child : children) {
+                if (targetId.equals(child.getId())) {
+                    // Found: return siblings (other children excluding this one)
+                    List<T> siblings = new ArrayList<>();
+                    for (T sibling : children) {
+                        if (!targetId.equals(sibling.getId())) {
+                            siblings.add(sibling);
+                        }
+                    }
+                    return siblings;
+                }
+            }
+            // Not found at this level, enqueue children for deeper search
+            queue.addAll(children);
+        }
+        return null;
     }
 }

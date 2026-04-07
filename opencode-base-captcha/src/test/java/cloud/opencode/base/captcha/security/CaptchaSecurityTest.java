@@ -190,6 +190,33 @@ class CaptchaSecurityTest {
             // Base64 uses A-Z, a-z, 0-9, +, /, =
             assertThat(hash).matches("[A-Za-z0-9+/=]+");
         }
+
+        @Test
+        @DisplayName("should preserve case when caseSensitive is true")
+        void shouldPreserveCaseWhenCaseSensitive() {
+            String hashUpper = CaptchaSecurity.hashAnswer("ANSWER", "salt", true);
+            String hashLower = CaptchaSecurity.hashAnswer("answer", "salt", true);
+
+            assertThat(hashUpper).isNotEqualTo(hashLower);
+        }
+
+        @Test
+        @DisplayName("should ignore case when caseSensitive is false")
+        void shouldIgnoreCaseWhenCaseSensitiveFalse() {
+            String hashUpper = CaptchaSecurity.hashAnswer("ANSWER", "salt", false);
+            String hashLower = CaptchaSecurity.hashAnswer("answer", "salt", false);
+
+            assertThat(hashUpper).isEqualTo(hashLower);
+        }
+
+        @Test
+        @DisplayName("caseSensitive false should match 2-arg overload")
+        void caseSensitiveFalseShouldMatch2ArgOverload() {
+            String hash2Arg = CaptchaSecurity.hashAnswer("Answer", "salt");
+            String hash3Arg = CaptchaSecurity.hashAnswer("Answer", "salt", false);
+
+            assertThat(hash2Arg).isEqualTo(hash3Arg);
+        }
     }
 
     @Nested
@@ -230,6 +257,27 @@ class CaptchaSecurityTest {
             String hash = CaptchaSecurity.hashAnswer("answer", "salt-A");
 
             assertThat(CaptchaSecurity.verifyHashedAnswer("answer", hash, "salt-B")).isFalse();
+        }
+
+        @Test
+        @DisplayName("should verify case-sensitive answer when caseSensitive is true")
+        void shouldVerifyCaseSensitiveAnswer() {
+            String salt = CaptchaSecurity.generateSalt();
+            String hash = CaptchaSecurity.hashAnswer("Answer", salt, true);
+
+            assertThat(CaptchaSecurity.verifyHashedAnswer("Answer", hash, salt, true)).isTrue();
+            assertThat(CaptchaSecurity.verifyHashedAnswer("answer", hash, salt, true)).isFalse();
+            assertThat(CaptchaSecurity.verifyHashedAnswer("ANSWER", hash, salt, true)).isFalse();
+        }
+
+        @Test
+        @DisplayName("should verify case-insensitive answer when caseSensitive is false")
+        void shouldVerifyCaseInsensitiveWithOverload() {
+            String salt = CaptchaSecurity.generateSalt();
+            String hash = CaptchaSecurity.hashAnswer("Answer", salt, false);
+
+            assertThat(CaptchaSecurity.verifyHashedAnswer("ANSWER", hash, salt, false)).isTrue();
+            assertThat(CaptchaSecurity.verifyHashedAnswer("answer", hash, salt, false)).isTrue();
         }
     }
 
@@ -284,6 +332,26 @@ class CaptchaSecurityTest {
         @DisplayName("should return false for strings differing at first char")
         void shouldReturnFalseForStringsDifferingAtFirstChar() {
             assertThat(CaptchaSecurity.constantTimeEquals("Abcd", "abcd")).isFalse();
+        }
+
+        @Test
+        @DisplayName("should correctly compare strings of different lengths")
+        void shouldCorrectlyCompareStringsOfDifferentLengths() {
+            assertThat(CaptchaSecurity.constantTimeEquals("abc", "abcd")).isFalse();
+            assertThat(CaptchaSecurity.constantTimeEquals("abcd", "abc")).isFalse();
+            assertThat(CaptchaSecurity.constantTimeEquals("a", "abcdef")).isFalse();
+            assertThat(CaptchaSecurity.constantTimeEquals("", "a")).isFalse();
+            assertThat(CaptchaSecurity.constantTimeEquals("a", "")).isFalse();
+        }
+
+        @Test
+        @DisplayName("should not leak length via early return - compares full content")
+        void shouldNotLeakLengthViaEarlyReturn() {
+            // Strings that share a prefix but differ in length should still return false
+            assertThat(CaptchaSecurity.constantTimeEquals("secret", "secret_extra")).isFalse();
+            assertThat(CaptchaSecurity.constantTimeEquals("secret_extra", "secret")).isFalse();
+            // Completely different strings of different lengths
+            assertThat(CaptchaSecurity.constantTimeEquals("x", "yyyyyy")).isFalse();
         }
     }
 

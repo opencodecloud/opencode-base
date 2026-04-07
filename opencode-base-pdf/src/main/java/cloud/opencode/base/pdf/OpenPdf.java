@@ -4,6 +4,8 @@ import cloud.opencode.base.pdf.document.DocumentBuilder;
 import cloud.opencode.base.pdf.document.Metadata;
 import cloud.opencode.base.pdf.document.PageSize;
 import cloud.opencode.base.pdf.exception.OpenPdfException;
+import cloud.opencode.base.pdf.internal.DefaultPdfDocument;
+import cloud.opencode.base.pdf.internal.parser.PdfParser;
 import cloud.opencode.base.pdf.operation.PdfExtractor;
 import cloud.opencode.base.pdf.operation.PdfMerger;
 import cloud.opencode.base.pdf.operation.PdfSplitter;
@@ -11,7 +13,9 @@ import cloud.opencode.base.pdf.signature.PdfSigner;
 import cloud.opencode.base.pdf.signature.SignatureInfo;
 import cloud.opencode.base.pdf.signature.SignatureValidator;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +73,7 @@ import java.util.Objects;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-pdf V1.0.0
+ * @since JDK 25, opencode-base-pdf V1.0.3
  */
 public final class OpenPdf {
 
@@ -113,8 +117,7 @@ public final class OpenPdf {
      */
     public static PdfDocument open(Path path) {
         Objects.requireNonNull(path, "path cannot be null");
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        return DefaultPdfDocument.open(path);
     }
 
     /**
@@ -127,8 +130,7 @@ public final class OpenPdf {
      */
     public static PdfDocument open(InputStream inputStream) {
         Objects.requireNonNull(inputStream, "inputStream cannot be null");
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        return DefaultPdfDocument.open(inputStream);
     }
 
     /**
@@ -141,8 +143,7 @@ public final class OpenPdf {
      */
     public static PdfDocument open(byte[] bytes) {
         Objects.requireNonNull(bytes, "bytes cannot be null");
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        return DefaultPdfDocument.open(bytes);
     }
 
     /**
@@ -370,7 +371,14 @@ public final class OpenPdf {
      */
     public static String extractText(Path source) {
         Objects.requireNonNull(source, "source cannot be null");
-        return PdfExtractor.of(source).extractText();
+        try (PdfDocument doc = open(source)) {
+            StringBuilder sb = new StringBuilder();
+            for (PdfPage page : doc.getPages()) {
+                if (!sb.isEmpty()) sb.append('\n');
+                sb.append(page.extractText());
+            }
+            return sb.toString();
+        }
     }
 
     /**
@@ -443,8 +451,9 @@ public final class OpenPdf {
      */
     public static boolean isEncrypted(Path source) {
         Objects.requireNonNull(source, "source cannot be null");
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        try (PdfDocument doc = open(source)) {
+            return doc.isEncrypted();
+        }
     }
 
     /**
@@ -472,7 +481,33 @@ public final class OpenPdf {
      */
     public static boolean isSigned(Path source) {
         Objects.requireNonNull(source, "source cannot be null");
-        // Implementation will be provided by internal classes
-        throw new UnsupportedOperationException("Not yet implemented");
+        try {
+            long fileSize = Files.size(source);
+            if (fileSize > 500L * 1024 * 1024) {
+                throw new OpenPdfException("File too large: " + fileSize + " bytes (max 500 MB)");
+            }
+            byte[] data = Files.readAllBytes(source);
+            PdfParser.ParsedPdf parsed = PdfParser.parse(data);
+            // Check page annotations for /Sig type fields
+            for (var pageDict : parsed.getPages()) {
+                var annotsObj = pageDict.get("Annots");
+                if (annotsObj == null) continue;
+                var resolved = parsed.resolve(annotsObj);
+                if (resolved instanceof cloud.opencode.base.pdf.internal.parser.PdfObject.PdfArray arr) {
+                    for (var element : arr.elements()) {
+                        var annotObj = parsed.resolve(element);
+                        if (annotObj instanceof cloud.opencode.base.pdf.internal.parser.PdfObject.PdfDictionary annotDict) {
+                            String ft = annotDict.getString("FT");
+                            if ("Sig".equals(ft)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        } catch (IOException e) {
+            throw OpenPdfException.readFailed(source.toString(), e);
+        }
     }
 }

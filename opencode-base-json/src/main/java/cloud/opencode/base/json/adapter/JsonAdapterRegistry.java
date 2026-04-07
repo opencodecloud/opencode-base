@@ -60,7 +60,7 @@ public final class JsonAdapterRegistry {
      * Adapter factory registry for dynamic adapter creation
      * 动态适配器创建的适配器工厂注册表
      */
-    private static final List<AdapterFactory> FACTORIES = new ArrayList<>();
+    private static final List<AdapterFactory> FACTORIES = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     static {
         // Register built-in adapters for common types
@@ -108,9 +108,7 @@ public final class JsonAdapterRegistry {
      */
     public static void registerFactory(AdapterFactory factory) {
         Objects.requireNonNull(factory, "Factory must not be null");
-        synchronized (FACTORIES) {
-            FACTORIES.add(factory);
-        }
+        FACTORIES.add(factory);
     }
 
     /**
@@ -141,14 +139,12 @@ public final class JsonAdapterRegistry {
         }
 
         // Try factories
-        synchronized (FACTORIES) {
-            for (AdapterFactory factory : FACTORIES) {
-                adapter = factory.create(type);
-                if (adapter != null) {
-                    // Cache the created adapter
-                    ADAPTERS.put(type, adapter);
-                    return adapter;
-                }
+        for (AdapterFactory factory : FACTORIES) {
+            adapter = factory.create(type);
+            if (adapter != null) {
+                // Cache the created adapter
+                ADAPTERS.put(type, adapter);
+                return adapter;
             }
         }
 
@@ -193,9 +189,7 @@ public final class JsonAdapterRegistry {
      */
     public static void clear() {
         ADAPTERS.clear();
-        synchronized (FACTORIES) {
-            FACTORIES.clear();
-        }
+        FACTORIES.clear();
         registerBuiltInAdapters();
     }
 

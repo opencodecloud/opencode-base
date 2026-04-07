@@ -73,6 +73,14 @@ import java.security.NoSuchAlgorithmException;
  */
 public class ConsistentPercentageStrategy implements EnableStrategy {
 
+    private static final ThreadLocal<MessageDigest> SHA256 = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            return null;
+        }
+    });
+
     private final int percentage;
     private final String salt;
 
@@ -126,8 +134,9 @@ public class ConsistentPercentageStrategy implements EnableStrategy {
      * @return hash value 0-99 | 哈希值 0-99
      */
     private int computeHash(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
+        MessageDigest md = SHA256.get();
+        if (md != null) {
+            md.reset();
             byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
             // Use first 4 bytes for integer, mask sign bit to avoid Math.abs(MIN_VALUE) bug
             int value = ((hash[0] & 0xFF) << 24) |
@@ -135,10 +144,9 @@ public class ConsistentPercentageStrategy implements EnableStrategy {
                         ((hash[2] & 0xFF) << 8) |
                         (hash[3] & 0xFF);
             return (int) (Integer.toUnsignedLong(value) % 100);
-        } catch (NoSuchAlgorithmException e) {
-            // Fallback to simple hashCode
-            return (int) (Integer.toUnsignedLong(input.hashCode()) % 100);
         }
+        // Fallback to simple hashCode
+        return (int) (Integer.toUnsignedLong(input.hashCode()) % 100);
     }
 
     /**

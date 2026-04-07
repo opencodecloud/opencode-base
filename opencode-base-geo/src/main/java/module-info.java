@@ -32,5 +32,7 @@ module cloud.opencode.base.geo {
     exports cloud.opencode.base.geo.region;
     exports cloud.opencode.base.geo.security;
     exports cloud.opencode.base.geo.transform;
+    exports cloud.opencode.base.geo.polyline;
     exports cloud.opencode.base.geo.validation;
+    exports cloud.opencode.base.geo.wkt;
 }

@@ -67,6 +67,7 @@ class PoolConfigTest {
         @DisplayName("maxIdle设置最大空闲数")
         void testMaxIdle() {
             PoolConfig config = PoolConfig.builder()
+                    .maxTotal(20)
                     .maxIdle(10)
                     .build();
 

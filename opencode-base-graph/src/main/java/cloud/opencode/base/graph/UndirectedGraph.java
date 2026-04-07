@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Undirected Graph
@@ -126,38 +125,21 @@ public class UndirectedGraph<V> implements Graph<V> {
     @Override
     public Set<Edge<V>> edges() {
         Set<Edge<V>> allEdges = new HashSet<>();
-        Set<VertexPair<V>> seen = new HashSet<>();
+        Set<V> visited = new HashSet<>();
 
-        for (Set<Edge<V>> edgeSet : adjacencyList.values()) {
-            for (Edge<V> edge : edgeSet) {
-                // Only add one direction to avoid duplicates
-                VertexPair<V> pair = new VertexPair<>(edge.from(), edge.to());
-                if (seen.add(pair)) {
+        for (Map.Entry<V, Set<Edge<V>>> entry : adjacencyList.entrySet()) {
+            V vertex = entry.getKey();
+            for (Edge<V> edge : entry.getValue()) {
+                // Only add edge (u,v) when processing u and v hasn't been visited yet,
+                // or it's a self-loop (from == to). This avoids the (v,u) duplicate.
+                if (!visited.contains(edge.to()) || edge.from().equals(edge.to())) {
                     allEdges.add(edge);
                 }
             }
+            visited.add(vertex);
         }
 
         return Collections.unmodifiableSet(allEdges);
-    }
-
-    /**
-     * Unordered vertex pair for deduplication.
-     * Treats (A,B) and (B,A) as equal.
-     */
-    private record VertexPair<V>(V a, V b) {
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof VertexPair<?> that)) return false;
-            return (Objects.equals(a, that.a) && Objects.equals(b, that.b))
-                || (Objects.equals(a, that.b) && Objects.equals(b, that.a));
-        }
-
-        @Override
-        public int hashCode() {
-            // Commutative hash: order-independent
-            return Objects.hashCode(a) + Objects.hashCode(b);
-        }
     }
 
     @Override
@@ -166,9 +148,11 @@ public class UndirectedGraph<V> implements Graph<V> {
         if (edges == null) {
             return Set.of();
         }
-        return edges.stream()
-            .map(Edge::to)
-            .collect(Collectors.toUnmodifiableSet());
+        Set<V> result = HashSet.newHashSet(edges.size());
+        for (Edge<V> edge : edges) {
+            result.add(edge.to());
+        }
+        return Collections.unmodifiableSet(result);
     }
 
     @Override

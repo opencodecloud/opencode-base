@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 
 /**
@@ -64,6 +65,7 @@ public class AsyncEmailReceiver implements AutoCloseable {
     private final ExecutorService executor;
     private final boolean ownsDelegate;
     private final boolean ownsExecutor;
+    private final ReentrantLock delegateLock = new ReentrantLock();
 
     /**
      * Create async receiver with delegate
@@ -119,8 +121,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<List<ReceivedEmail>> receiveUnreadAsync() {
         return CompletableFuture.supplyAsync(() -> {
-            ensureConnected();
-            return delegate.receiveUnread();
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                return delegate.receiveUnread();
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -133,8 +140,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<List<ReceivedEmail>> receiveAsync(EmailQuery query) {
         return CompletableFuture.supplyAsync(() -> {
-            ensureConnected();
-            return delegate.receive(query);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                return delegate.receive(query);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -165,8 +177,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<List<ReceivedEmail>> receiveAllAsync() {
         return CompletableFuture.supplyAsync(() -> {
-            ensureConnected();
-            return delegate.receiveAll();
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                return delegate.receiveAll();
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -179,8 +196,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<ReceivedEmail> receiveByIdAsync(String messageId) {
         return CompletableFuture.supplyAsync(() -> {
-            ensureConnected();
-            return delegate.receiveById(messageId);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                return delegate.receiveById(messageId);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -193,8 +215,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<Void> markAsReadAsync(String messageId) {
         return CompletableFuture.runAsync(() -> {
-            ensureConnected();
-            delegate.markAsRead(messageId);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                delegate.markAsRead(messageId);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -207,8 +234,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<Void> markAsUnreadAsync(String messageId) {
         return CompletableFuture.runAsync(() -> {
-            ensureConnected();
-            delegate.markAsUnread(messageId);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                delegate.markAsUnread(messageId);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -222,8 +254,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<Void> setFlaggedAsync(String messageId, boolean flagged) {
         return CompletableFuture.runAsync(() -> {
-            ensureConnected();
-            delegate.setFlagged(messageId, flagged);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                delegate.setFlagged(messageId, flagged);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -236,8 +273,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<Void> deleteAsync(String messageId) {
         return CompletableFuture.runAsync(() -> {
-            ensureConnected();
-            delegate.delete(messageId);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                delegate.delete(messageId);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -251,8 +293,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<Void> moveToFolderAsync(String messageId, String targetFolder) {
         return CompletableFuture.runAsync(() -> {
-            ensureConnected();
-            delegate.moveToFolder(messageId, targetFolder);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                delegate.moveToFolder(messageId, targetFolder);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -264,8 +311,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<List<String>> listFoldersAsync() {
         return CompletableFuture.supplyAsync(() -> {
-            ensureConnected();
-            return delegate.listFolders();
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                return delegate.listFolders();
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -278,8 +330,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<Integer> getMessageCountAsync(String folder) {
         return CompletableFuture.supplyAsync(() -> {
-            ensureConnected();
-            return delegate.getMessageCount(folder);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                return delegate.getMessageCount(folder);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -292,8 +349,13 @@ public class AsyncEmailReceiver implements AutoCloseable {
      */
     public CompletableFuture<Integer> getUnreadCountAsync(String folder) {
         return CompletableFuture.supplyAsync(() -> {
-            ensureConnected();
-            return delegate.getUnreadCount(folder);
+            delegateLock.lock();
+            try {
+                ensureConnected();
+                return delegate.getUnreadCount(folder);
+            } finally {
+                delegateLock.unlock();
+            }
         }, executor);
     }
 
@@ -314,7 +376,14 @@ public class AsyncEmailReceiver implements AutoCloseable {
      * @return future that completes when connected | 连接完成时的future
      */
     public CompletableFuture<Void> connectAsync() {
-        return CompletableFuture.runAsync(delegate::connect, executor);
+        return CompletableFuture.runAsync(() -> {
+            delegateLock.lock();
+            try {
+                delegate.connect();
+            } finally {
+                delegateLock.unlock();
+            }
+        }, executor);
     }
 
     /**

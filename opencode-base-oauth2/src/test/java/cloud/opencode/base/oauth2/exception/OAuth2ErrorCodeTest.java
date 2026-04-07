@@ -84,6 +84,40 @@ class OAuth2ErrorCodeTest {
             assertThat(OAuth2ErrorCode.MISSING_REDIRECT_URI.code()).isEqualTo(7084);
             assertThat(OAuth2ErrorCode.MISSING_TOKEN_ENDPOINT.code()).isEqualTo(7085);
         }
+
+        @Test
+        @DisplayName("发现错误码 (7091-7095)")
+        void testDiscoveryErrorCodes() {
+            assertThat(OAuth2ErrorCode.DISCOVERY_FAILED.code()).isEqualTo(7091);
+            assertThat(OAuth2ErrorCode.DISCOVERY_FAILED.message()).isEqualTo("OIDC discovery failed");
+            assertThat(OAuth2ErrorCode.DISCOVERY_INVALID_RESPONSE.code()).isEqualTo(7092);
+            assertThat(OAuth2ErrorCode.DISCOVERY_INVALID_RESPONSE.message()).isEqualTo("Invalid OIDC discovery response");
+        }
+
+        @Test
+        @DisplayName("内省错误码 (7096-7100)")
+        void testIntrospectionErrorCodes() {
+            assertThat(OAuth2ErrorCode.INTROSPECTION_FAILED.code()).isEqualTo(7096);
+            assertThat(OAuth2ErrorCode.INTROSPECTION_FAILED.message()).isEqualTo("Token introspection failed");
+            assertThat(OAuth2ErrorCode.INTROSPECTION_NOT_SUPPORTED.code()).isEqualTo(7097);
+            assertThat(OAuth2ErrorCode.INTROSPECTION_NOT_SUPPORTED.message()).isEqualTo("Token introspection not supported");
+        }
+
+        @Test
+        @DisplayName("PAR错误码 (7101-7105)")
+        void testParErrorCodes() {
+            assertThat(OAuth2ErrorCode.PAR_FAILED.code()).isEqualTo(7101);
+            assertThat(OAuth2ErrorCode.PAR_FAILED.message()).isEqualTo("Pushed authorization request failed");
+            assertThat(OAuth2ErrorCode.PAR_NOT_SUPPORTED.code()).isEqualTo(7102);
+            assertThat(OAuth2ErrorCode.PAR_NOT_SUPPORTED.message()).isEqualTo("Pushed authorization requests not supported");
+        }
+
+        @Test
+        @DisplayName("颁发者错误码 (7106-7110)")
+        void testIssuerErrorCodes() {
+            assertThat(OAuth2ErrorCode.ISSUER_MISMATCH.code()).isEqualTo(7106);
+            assertThat(OAuth2ErrorCode.ISSUER_MISMATCH.message()).isEqualTo("Authorization server issuer mismatch");
+        }
     }
 
     @Nested
@@ -129,6 +163,18 @@ class OAuth2ErrorCodeTest {
         void testValueOf() {
             OAuth2ErrorCode code = OAuth2ErrorCode.valueOf("TOKEN_EXPIRED");
             assertThat(code).isEqualTo(OAuth2ErrorCode.TOKEN_EXPIRED);
+        }
+
+        @Test
+        @DisplayName("valueOf新增枚举值")
+        void testValueOfNewCodes() {
+            assertThat(OAuth2ErrorCode.valueOf("DISCOVERY_FAILED")).isEqualTo(OAuth2ErrorCode.DISCOVERY_FAILED);
+            assertThat(OAuth2ErrorCode.valueOf("DISCOVERY_INVALID_RESPONSE")).isEqualTo(OAuth2ErrorCode.DISCOVERY_INVALID_RESPONSE);
+            assertThat(OAuth2ErrorCode.valueOf("INTROSPECTION_FAILED")).isEqualTo(OAuth2ErrorCode.INTROSPECTION_FAILED);
+            assertThat(OAuth2ErrorCode.valueOf("INTROSPECTION_NOT_SUPPORTED")).isEqualTo(OAuth2ErrorCode.INTROSPECTION_NOT_SUPPORTED);
+            assertThat(OAuth2ErrorCode.valueOf("PAR_FAILED")).isEqualTo(OAuth2ErrorCode.PAR_FAILED);
+            assertThat(OAuth2ErrorCode.valueOf("PAR_NOT_SUPPORTED")).isEqualTo(OAuth2ErrorCode.PAR_NOT_SUPPORTED);
+            assertThat(OAuth2ErrorCode.valueOf("ISSUER_MISMATCH")).isEqualTo(OAuth2ErrorCode.ISSUER_MISMATCH);
         }
 
         @Test

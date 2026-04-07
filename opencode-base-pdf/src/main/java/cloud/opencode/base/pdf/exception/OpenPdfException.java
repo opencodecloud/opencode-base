@@ -1,18 +1,26 @@
 package cloud.opencode.base.pdf.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
+
+import java.io.Serial;
+
 /**
  * PDF Exception - Base exception for all PDF operations
  * PDF 异常 - 所有 PDF 操作的基础异常
  *
  * <p>This exception is thrown when PDF operations fail, including parsing,
- * writing, signing, and form processing errors.</p>
- * <p>当 PDF 操作失败时抛出此异常，包括解析、写入、签名和表单处理错误。</p>
+ * writing, signing, and form processing errors. Extends {@link OpenException}
+ * to integrate with the OpenCode unified exception hierarchy.</p>
+ * <p>当 PDF 操作失败时抛出此异常，包括解析、写入、签名和表单处理错误。
+ * 继承 {@link OpenException} 以集成 OpenCode 统一异常体系。</p>
  *
  * <p><strong>Features | 主要功能:</strong></p>
  * <ul>
  *   <li>Operation type tracking - 操作类型跟踪</li>
  *   <li>Page number association for page-specific errors - 页面相关错误的页码关联</li>
  *   <li>Factory methods for common error scenarios - 常见错误场景的工厂方法</li>
+ *   <li>Error code support via OpenException - 通过 OpenException 支持错误码</li>
+ *   <li>Component name "PDF" auto-prefixed in messages - 消息中自动添加 "PDF" 组件前缀</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -30,12 +38,14 @@ package cloud.opencode.base.pdf.exception;
  *
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
+ * @see OpenException
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-pdf V1.0.0
+ * @since JDK 25, opencode-base-pdf V1.0.3
  */
-public class OpenPdfException extends RuntimeException {
+public class OpenPdfException extends OpenException {
 
-    private static final String COMPONENT = "[PDF]";
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     /** Operation type | 操作类型 */
     private final String operation;
@@ -52,7 +62,7 @@ public class OpenPdfException extends RuntimeException {
      * @param message error message | 错误消息
      */
     public OpenPdfException(String message) {
-        super(COMPONENT + " " + message);
+        super("PDF", null, message, null);
         this.operation = null;
         this.pageNumber = null;
     }
@@ -65,7 +75,7 @@ public class OpenPdfException extends RuntimeException {
      * @param cause   root cause | 根本原因
      */
     public OpenPdfException(String message, Throwable cause) {
-        super(COMPONENT + " " + message, cause);
+        super("PDF", null, message, cause);
         this.operation = null;
         this.pageNumber = null;
     }
@@ -78,7 +88,7 @@ public class OpenPdfException extends RuntimeException {
      * @param message   error message | 错误消息
      */
     public OpenPdfException(String operation, String message) {
-        super(COMPONENT + " " + message);
+        super("PDF", toErrorCode(operation), message, null);
         this.operation = operation;
         this.pageNumber = null;
     }
@@ -92,7 +102,7 @@ public class OpenPdfException extends RuntimeException {
      * @param cause     root cause | 根本原因
      */
     public OpenPdfException(String operation, String message, Throwable cause) {
-        super(COMPONENT + " " + message, cause);
+        super("PDF", toErrorCode(operation), message, cause);
         this.operation = operation;
         this.pageNumber = null;
     }
@@ -106,7 +116,7 @@ public class OpenPdfException extends RuntimeException {
      * @param message    error message | 错误消息
      */
     public OpenPdfException(String operation, int pageNumber, String message) {
-        super(COMPONENT + " " + message);
+        super("PDF", toErrorCode(operation), message, null);
         this.operation = operation;
         this.pageNumber = pageNumber;
     }
@@ -270,5 +280,33 @@ public class OpenPdfException extends RuntimeException {
     public static OpenPdfException splitFailed(String reason, Throwable cause) {
         return new OpenPdfException("split",
             String.format("PDF split failed: %s", reason), cause);
+    }
+
+    // ==================== Internal | 内部方法 ====================
+
+    /**
+     * Converts operation name to error code
+     * 将操作名称转换为错误码
+     *
+     * @param operation operation name | 操作名称
+     * @return error code | 错误码
+     */
+    private static String toErrorCode(String operation) {
+        if (operation == null) {
+            return null;
+        }
+        return switch (operation) {
+            case "parse" -> "PDF_PARSE";
+            case "read" -> "PDF_READ";
+            case "write" -> "PDF_WRITE";
+            case "sign" -> "PDF_SIGN";
+            case "form" -> "PDF_FORM";
+            case "merge" -> "PDF_MERGE";
+            case "split" -> "PDF_SPLIT";
+            case "decrypt" -> "PDF_DECRYPT";
+            case "feature" -> "PDF_FEATURE";
+            case "page" -> "PDF_PAGE";
+            default -> "PDF_" + operation.toUpperCase();
+        };
     }
 }

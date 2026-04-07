@@ -41,19 +41,24 @@ public final class JaccardSimilarity {
     public static double calculate(String s1, String s2, int nGram) {
         if (s1 == null || s2 == null) return 0.0;
         if (s1.equals(s2)) return 1.0;
-        
+
         Set<String> set1 = getNGrams(s1, nGram);
         Set<String> set2 = getNGrams(s2, nGram);
-        
+
         if (set1.isEmpty() && set2.isEmpty()) return 1.0;
-        
-        Set<String> intersection = new HashSet<>(set1);
-        intersection.retainAll(set2);
-        
-        Set<String> union = new HashSet<>(set1);
-        union.addAll(set2);
-        
-        return (double) intersection.size() / union.size();
+
+        // Compute |intersection| by counting, then derive |union| = |A| + |B| - |intersection|.
+        // Avoids allocating two full HashSet copies just for size().
+        // 通过计数求 |交集|，再推导 |并集| = |A| + |B| - |交集|，避免分配两个 HashSet 副本。
+        int intersectionSize = 0;
+        for (String ng : set1) {
+            if (set2.contains(ng)) {
+                intersectionSize++;
+            }
+        }
+        int unionSize = set1.size() + set2.size() - intersectionSize;
+        if (unionSize == 0) return 1.0;
+        return (double) intersectionSize / unionSize;
     }
 
     private static Set<String> getNGrams(String str, int n) {

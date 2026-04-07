@@ -51,7 +51,11 @@ public final class Shorts {
     }
 
     public static short fromByteArray(byte[] bytes) {
-        return (short) ((bytes[0] << 8) | (bytes[1] & 0xFF));
+        if (bytes == null || bytes.length < Short.BYTES) {
+            throw new IllegalArgumentException(
+                    "bytes must be non-null and at least " + Short.BYTES + " bytes long");
+        }
+        return (short) (((bytes[0] & 0xFF) << 8) | (bytes[1] & 0xFF));
     }
 
     public static short[] concat(short[]... arrays) {
@@ -108,6 +112,9 @@ public final class Shorts {
     }
 
     public static short constrainToRange(short value, short min, short max) {
+        if (min > max) {
+            throw new IllegalArgumentException("min (" + min + ") > max (" + max + ")");
+        }
         return value < min ? min : (value > max ? max : value);
     }
 

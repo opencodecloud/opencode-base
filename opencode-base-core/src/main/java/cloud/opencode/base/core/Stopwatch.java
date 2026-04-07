@@ -1,8 +1,14 @@
 package cloud.opencode.base.core;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+
+import cloud.opencode.base.core.tuple.Pair;
 
 /**
  * Stopwatch - A lightweight timing utility for measuring elapsed time
@@ -18,6 +24,9 @@ import java.util.regex.Pattern;
  *   <li>Start, stop, reset, and resume operations - 支持开始、停止、重置和恢复操作</li>
  *   <li>Multiple time unit conversions - 多种时间单位转换</li>
  *   <li>Fluent API design - 流式 API 设计</li>
+ *   <li>Suspend and resume without reset (suspend, resume) - 暂停和恢复（不重置）</li>
+ *   <li>Lap/split timing (split, getLaps) - 计次/分段计时</li>
+ *   <li>One-liner timing (time) - 一行代码计时</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -40,6 +49,23 @@ import java.util.regex.Pattern;
  *     .stop()
  *     .reset()
  *     .start();
+ *
+ * // Suspend/Resume | 暂停/恢复
+ * sw.suspend();
+ * // ... pause ...
+ * sw.resume();
+ *
+ * // Lap timing | 计次
+ * Stopwatch sw = Stopwatch.createStarted();
+ * // ... phase 1 ...
+ * Duration lap1 = sw.split();
+ * // ... phase 2 ...
+ * Duration lap2 = sw.split();
+ * List<Duration> laps = sw.getLaps();  // [lap1, lap2]
+ *
+ * // One-liner timing | 一行代码计时
+ * Duration elapsed = Stopwatch.time(() -> heavyComputation());
+ * var timed = Stopwatch.time(() -> fetchData());  // Pair<Result, Duration>
  * }</pre>
  *
  * <p><strong>Thread Safety | 线程安全:</strong></p>
@@ -76,6 +102,18 @@ public final class Stopwatch {
     private long startNanos;
 
     /**
+     * Lap durations (recorded via split())
+     * 计次时间记录（通过 split() 记录）
+     */
+    private final List<Duration> laps = new ArrayList<>();
+
+    /**
+     * Logical elapsed nanos at last split point (tracks accumulated time, not wall-clock)
+     * 上次分段点的逻辑累计纳秒数（追踪累计时间，非墙钟时间）
+     */
+    private long lastSplitElapsedNanos;
+
+    /**
      * Private constructor to enforce factory method usage
      * 私有构造器，强制使用工厂方法
      */
@@ -83,6 +121,7 @@ public final class Stopwatch {
         this.isRunning = false;
         this.elapsedNanos = 0;
         this.startNanos = 0;
+        this.lastSplitElapsedNanos = 0;
     }
 
     // ==================== Factory Methods | 工厂方法 ====================
@@ -105,6 +144,47 @@ public final class Stopwatch {
      */
     public static Stopwatch createStarted() {
         return new Stopwatch().start();
+    }
+
+    /**
+     * Times the execution of a callable and returns both the result and elapsed duration.
+     * 计时执行 Callable 并返回结果和经过的时间。
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * var timed = Stopwatch.time(() -> fetchData());
+     * System.out.println("Result: " + timed.left() + ", took " + timed.right());
+     * }</pre>
+     *
+     * @param task the callable to time | 待计时的任务
+     * @param <T>  the result type | 结果类型
+     * @return a Pair of (result, elapsed duration) | (结果, 经过时间) 的 Pair
+     * @throws Exception if the callable throws | 如果任务抛出异常
+     */
+    public static <T> Pair<T, Duration> time(Callable<T> task) throws Exception {
+        Stopwatch sw = createStarted();
+        T result = task.call();
+        sw.stop();
+        return Pair.of(result, sw.elapsed());
+    }
+
+    /**
+     * Times the execution of a runnable and returns the elapsed duration.
+     * 计时执行 Runnable 并返回经过的时间。
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * Duration elapsed = Stopwatch.time(() -> heavyComputation());
+     * }</pre>
+     *
+     * @param task the runnable to time | 待计时的任务
+     * @return the elapsed duration | 经过的时间
+     */
+    public static Duration time(Runnable task) {
+        Stopwatch sw = createStarted();
+        task.run();
+        sw.stop();
+        return sw.elapsed();
     }
 
     // ==================== Control Methods | 控制方法 ====================
@@ -152,7 +232,76 @@ public final class Stopwatch {
         elapsedNanos = 0;
         isRunning = false;
         startNanos = 0;
+        laps.clear();
+        lastSplitElapsedNanos = 0;
         return this;
+    }
+
+    // ==================== Suspend & Resume | 暂停与恢复 ====================
+
+    /**
+     * Suspends the stopwatch without resetting the elapsed time.
+     * 暂停秒表但不重置已经过的时间。
+     *
+     * <p>The stopwatch can be resumed later with {@link #resume()}. The elapsed time
+     * between suspend and resume is not counted.</p>
+     * <p>稍后可以通过 {@link #resume()} 恢复。暂停和恢复之间的时间不计入。</p>
+     *
+     * @return this stopwatch for fluent chaining | 此秒表，支持链式调用
+     * @throws IllegalStateException if the stopwatch is not running | 如果秒表未运行
+     */
+    public Stopwatch suspend() {
+        return stop();  // stop already accumulates elapsed and sets isRunning=false
+    }
+
+    /**
+     * Resumes a suspended stopwatch.
+     * 恢复已暂停的秒表。
+     *
+     * <p>Equivalent to calling {@link #start()} on a stopped (but not reset) stopwatch.</p>
+     * <p>等同于在已停止（但未重置）的秒表上调用 {@link #start()}。</p>
+     *
+     * @return this stopwatch for fluent chaining | 此秒表，支持链式调用
+     * @throws IllegalStateException if the stopwatch is already running | 如果秒表已在运行
+     */
+    public Stopwatch resume() {
+        return start();  // start sets isRunning=true and records new startNanos
+    }
+
+    // ==================== Lap / Split | 计次 ====================
+
+    /**
+     * Records a lap (split) time without stopping the stopwatch.
+     * 记录一个计次（分段）时间，不停止秒表。
+     *
+     * <p>Returns the duration since the last split (or since start if no previous split).
+     * The stopwatch continues running.</p>
+     * <p>返回自上次分段以来的时间（如果没有上次分段，则返回自启动以来的时间）。
+     * 秒表继续运行。</p>
+     *
+     * @return the lap duration | 本次计次的时间
+     * @throws IllegalStateException if the stopwatch is not running | 如果秒表未运行
+     */
+    public Duration split() {
+        if (!isRunning) {
+            throw new IllegalStateException("Stopwatch is not running");
+        }
+        long currentElapsed = elapsedNanos();
+        long lapNanos = currentElapsed - lastSplitElapsedNanos;
+        lastSplitElapsedNanos = currentElapsed;
+        Duration lap = Duration.ofNanos(lapNanos);
+        laps.add(lap);
+        return lap;
+    }
+
+    /**
+     * Returns all recorded lap durations as an unmodifiable list.
+     * 返回所有已记录的计次时间（不可修改列表）。
+     *
+     * @return the list of lap durations | 计次时间列表
+     */
+    public List<Duration> getLaps() {
+        return Collections.unmodifiableList(new ArrayList<>(laps));
     }
 
     // ==================== Query Methods | 查询方法 ====================

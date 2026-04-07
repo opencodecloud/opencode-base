@@ -1,6 +1,9 @@
 package cloud.opencode.base.classloader.loader;
 
 import cloud.opencode.base.classloader.exception.OpenClassLoaderException;
+import cloud.opencode.base.classloader.leak.LeakDetection;
+import cloud.opencode.base.classloader.leak.LeakDetector;
+import cloud.opencode.base.classloader.security.ClassLoadingPolicy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,6 +11,7 @@ import java.net.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Isolated ClassLoader - Supports independent class loading environment
@@ -51,7 +55,10 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
     private final Set<String> sharedPackages;
     private final LoadingStrategy loadingStrategy;
     private final ConcurrentHashMap<String, Class<?>> loadedClasses = new ConcurrentHashMap<>();
-    private volatile boolean closed = false;
+    private final LeakDetection leakDetection;
+    private final ClassLoadingPolicy policy;
+    private final String loaderName;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
      * Class loading strategy
@@ -69,11 +76,20 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
     }
 
     private IsoClassLoader(URL[] urls, ClassLoader parent, Set<String> isolatedPackages,
-                           Set<String> sharedPackages, LoadingStrategy loadingStrategy) {
+                           Set<String> sharedPackages, LoadingStrategy loadingStrategy,
+                           LeakDetection leakDetection, ClassLoadingPolicy policy, String loaderName) {
         super(urls, parent);
         this.isolatedPackages = Set.copyOf(isolatedPackages);
         this.sharedPackages = Set.copyOf(sharedPackages);
         this.loadingStrategy = loadingStrategy;
+        this.leakDetection = leakDetection;
+        this.policy = policy;
+        this.loaderName = loaderName;
+
+        // Register for leak detection
+        if (leakDetection != LeakDetection.DISABLED) {
+            LeakDetector.getInstance().track(this, loaderName, leakDetection);
+        }
     }
 
     // ==================== Factory Methods | 工厂方法 ====================
@@ -156,20 +172,76 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
             return super.loadClass(name, resolve);
         }
 
-        // Apply loading strategy
-        Class<?> clazz = switch (loadingStrategy) {
-            case PARENT_FIRST -> loadParentFirst(name);
-            case CHILD_FIRST -> loadChildFirst(name);
-            case PARENT_ONLY -> loadParentOnly(name);
-            case CHILD_ONLY -> loadChildOnly(name);
-        };
+        // Synchronize per-name to prevent: (a) duplicate defineClass LinkageError,
+        // (b) concurrent bypass of maxLoadedClasses limit
+        synchronized (getClassLoadingLock(name)) {
+            // Double-check after acquiring lock
+            loadedClass = loadedClasses.get(name);
+            if (loadedClass != null) {
+                return loadedClass;
+            }
 
-        if (resolve) {
-            resolveClass(clazz);
+            // Apply security policy name check (bytecode not available yet)
+            if (policy != null) {
+                policy.checkNameAllowed(name, loadedClasses.size());
+            }
+
+            // Apply loading strategy
+            Class<?> clazz = switch (loadingStrategy) {
+                case PARENT_FIRST -> loadParentFirst(name);
+                case CHILD_FIRST -> loadChildFirst(name);
+                case PARENT_ONLY -> loadParentOnly(name);
+                case CHILD_ONLY -> loadChildOnly(name);
+            };
+
+            if (resolve) {
+                resolveClass(clazz);
+            }
+
+            loadedClasses.put(name, clazz);
+            return clazz;
         }
+    }
 
-        loadedClasses.put(name, clazz);
-        return clazz;
+    /**
+     * Find and define a class locally, enforcing bytecode policy checks before defineClass.
+     * 本地查找并定义类，在 defineClass 之前执行字节码策略检查。
+     *
+     * <p>When a {@link ClassLoadingPolicy} is configured with {@code maxBytecodeSize} or a
+     * {@link cloud.opencode.base.classloader.security.BytecodeVerifier}, this method reads
+     * the raw bytecode, validates it against the policy, and then defines the class.
+     * Without a policy (or without bytecode-level constraints), delegates to the parent
+     * {@link URLClassLoader#findClass(String)}.</p>
+     *
+     * @param name the binary name of the class | 类的二进制名称
+     * @return the resulting Class object | 结果 Class 对象
+     * @throws ClassNotFoundException if the class could not be found | 类未找到时抛出
+     */
+    @Override
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
+        if (policy != null && (policy.maxBytecodeSize() > 0 || policy.bytecodeVerifier() != null)) {
+            // Read bytecode manually so we can inspect it before defineClass
+            String resourceName = name.replace('.', '/') + ".class";
+            URL resource = findResource(resourceName);
+            if (resource == null) {
+                throw new ClassNotFoundException(name);
+            }
+            try (InputStream in = resource.openStream()) {
+                // Use bounded read when maxBytecodeSize is set to prevent OOM on oversized classes
+                int maxSize = policy.maxBytecodeSize();
+                byte[] bytecode;
+                if (maxSize > 0) {
+                    bytecode = in.readNBytes(maxSize + 1);
+                } else {
+                    bytecode = in.readAllBytes();
+                }
+                policy.checkBytecodeAllowed(name, bytecode);
+                return defineClass(name, bytecode, 0, bytecode.length);
+            } catch (IOException e) {
+                throw new ClassNotFoundException("Failed to read class bytecode: " + name, e);
+            }
+        }
+        return super.findClass(name);
     }
 
     /**
@@ -225,8 +297,11 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
 
     @Override
     public void close() {
-        if (!closed) {
-            closed = true;
+        if (closed.compareAndSet(false, true)) {
+            // Unregister from leak detection before closing
+            if (leakDetection != LeakDetection.DISABLED) {
+                LeakDetector.getInstance().untrack(this);
+            }
             try {
                 super.close();
             } catch (IOException e) {
@@ -243,13 +318,13 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
      * @return true if closed | 已关闭返回 true
      */
     public boolean isClosed() {
-        return closed;
+        return closed.get();
     }
 
     // ==================== Private Methods | 私有方法 ====================
 
     private void checkNotClosed() {
-        if (closed) {
+        if (closed.get()) {
             throw OpenClassLoaderException.classLoaderClosed();
         }
     }
@@ -284,11 +359,11 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
             try {
                 return findClass(name);
             } catch (ClassNotFoundException e) {
-                return getParent().loadClass(name);
+                return loadFromParent(name);
             }
         }
         try {
-            return getParent().loadClass(name);
+            return loadFromParent(name);
         } catch (ClassNotFoundException e) {
             return findClass(name);
         }
@@ -299,7 +374,7 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
         // re-checking isolated status to avoid infinite recursion
         if (isSharedPackage(name)) {
             try {
-                return getParent().loadClass(name);
+                return loadFromParent(name);
             } catch (ClassNotFoundException e) {
                 return findClass(name);
             }
@@ -307,12 +382,26 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
         try {
             return findClass(name);
         } catch (ClassNotFoundException e) {
-            return getParent().loadClass(name);
+            return loadFromParent(name);
         }
     }
 
     private Class<?> loadParentOnly(String name) throws ClassNotFoundException {
-        return getParent().loadClass(name);
+        return loadFromParent(name);
+    }
+
+    /**
+     * Load class from parent classloader with null-safety.
+     * If parent is null (bootstrap classloader), uses Class.forName with null loader.
+     * 从父类加载器加载类（null 安全）。若父加载器为 null（引导类加载器），使用 Class.forName。
+     */
+    private Class<?> loadFromParent(String name) throws ClassNotFoundException {
+        ClassLoader parent = getParent();
+        if (parent != null) {
+            return parent.loadClass(name);
+        }
+        // Bootstrap classloader — use Class.forName with null loader
+        return Class.forName(name, false, null);
     }
 
     private Class<?> loadChildOnly(String name) throws ClassNotFoundException {
@@ -329,6 +418,36 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
         return Set.copyOf(loadedClasses.keySet());
     }
 
+    /**
+     * Get loader name
+     * 获取加载器名称
+     *
+     * @return loader name | 加载器名称
+     */
+    public String getLoaderName() {
+        return loaderName;
+    }
+
+    /**
+     * Get leak detection level
+     * 获取泄漏检测级别
+     *
+     * @return leak detection level | 泄漏检测级别
+     */
+    public LeakDetection getLeakDetection() {
+        return leakDetection;
+    }
+
+    /**
+     * Get class loading policy
+     * 获取类加载策略
+     *
+     * @return class loading policy, or null if not set | 类加载策略，未设置则为 null
+     */
+    public ClassLoadingPolicy getPolicy() {
+        return policy;
+    }
+
     // ==================== Builder ====================
 
     /**
@@ -341,6 +460,9 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
         private final Set<String> sharedPackages = new HashSet<>();
         private ClassLoader parent;
         private LoadingStrategy loadingStrategy = LoadingStrategy.CHILD_FIRST;
+        private LeakDetection leakDetection = LeakDetection.DISABLED;
+        private ClassLoadingPolicy policy;
+        private String loaderName = "IsoClassLoader";
 
         /**
          * Add URL to classpath
@@ -443,6 +565,42 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
         }
 
         /**
+         * Set leak detection level
+         * 设置泄漏检测级别
+         *
+         * @param leakDetection leak detection level | 泄漏检测级别
+         * @return this builder | 此构建器
+         */
+        public Builder leakDetection(LeakDetection leakDetection) {
+            this.leakDetection = Objects.requireNonNull(leakDetection, "LeakDetection must not be null");
+            return this;
+        }
+
+        /**
+         * Set class loading policy
+         * 设置类加载策略
+         *
+         * @param policy class loading policy | 类加载策略
+         * @return this builder | 此构建器
+         */
+        public Builder policy(ClassLoadingPolicy policy) {
+            this.policy = Objects.requireNonNull(policy, "ClassLoadingPolicy must not be null");
+            return this;
+        }
+
+        /**
+         * Set loader name (used in leak detection reports)
+         * 设置加载器名称（用于泄漏检测报告）
+         *
+         * @param name loader name | 加载器名称
+         * @return this builder | 此构建器
+         */
+        public Builder name(String name) {
+            this.loaderName = Objects.requireNonNull(name, "Name must not be null");
+            return this;
+        }
+
+        /**
          * Build the IsoClassLoader
          * 构建 IsoClassLoader
          *
@@ -458,7 +616,10 @@ public class IsoClassLoader extends URLClassLoader implements AutoCloseable {
                     parentLoader,
                     isolatedPackages,
                     sharedPackages,
-                    loadingStrategy
+                    loadingStrategy,
+                    leakDetection,
+                    policy,
+                    loaderName
             );
         }
     }

@@ -1,5 +1,6 @@
 package cloud.opencode.base.lunar.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,13 @@ class InvalidLunarDateExceptionTest {
             InvalidLunarDateException exception = new InvalidLunarDateException("test");
             assertThat(exception).isInstanceOf(LunarException.class);
         }
+
+        @Test
+        @DisplayName("继承OpenException")
+        void testExtendsOpenException() {
+            InvalidLunarDateException exception = new InvalidLunarDateException("test");
+            assertThat(exception).isInstanceOf(OpenException.class);
+        }
     }
 
     @Nested
@@ -39,7 +47,7 @@ class InvalidLunarDateExceptionTest {
             InvalidLunarDateException exception = new InvalidLunarDateException("Custom message");
 
             assertThat(exception.getMessage()).contains("Custom message");
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.INVALID_LUNAR_DATE);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.INVALID_LUNAR_DATE);
         }
 
         @Test
@@ -51,7 +59,7 @@ class InvalidLunarDateExceptionTest {
             assertThat(exception.getMonth()).isEqualTo(6);
             assertThat(exception.getDay()).isEqualTo(31);
             assertThat(exception.isLeap()).isTrue();
-            assertThat(exception.getErrorCode()).isEqualTo(LunarErrorCode.INVALID_LUNAR_DATE);
+            assertThat(exception.getLunarErrorCode()).isEqualTo(LunarErrorCode.INVALID_LUNAR_DATE);
         }
 
         @Test

@@ -3,6 +3,7 @@ package cloud.opencode.base.pool.policy;
 import cloud.opencode.base.pool.PooledObject;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -18,6 +19,7 @@ import java.util.List;
  *   <li>IdleTime - Evict based on idle duration - 基于空闲时长驱逐</li>
  *   <li>LRU - Least Recently Used - 最近最少使用</li>
  *   <li>LFU - Least Frequently Used - 最不经常使用</li>
+ *   <li>MaxAge - Evict based on maximum object lifetime - 基于最大对象生命周期驱逐</li>
  *   <li>Composite - Combine multiple policies - 组合多个策略</li>
  * </ul>
  *
@@ -40,6 +42,8 @@ import java.util.List;
  *         "Keep max " + max + " objects";
  *     case EvictionPolicy.LFU<T>(var minCount) ->
  *         "Evict if borrowed < " + minCount;
+ *     case EvictionPolicy.MaxAge<T>(var maxLife) ->
+ *         "Evict if age > " + maxLife;
  *     case EvictionPolicy.Composite<T>(var policies, var all) ->
  *         "Composite: " + (all ? "ALL" : "ANY");
  * };
@@ -58,7 +62,8 @@ import java.util.List;
  */
 public sealed interface EvictionPolicy<T>
         permits EvictionPolicy.IdleTime, EvictionPolicy.LRU,
-                EvictionPolicy.LFU, EvictionPolicy.Composite {
+                EvictionPolicy.LFU, EvictionPolicy.MaxAge,
+                EvictionPolicy.Composite {
 
     /**
      * Determines if the object should be evicted.
@@ -118,6 +123,30 @@ public sealed interface EvictionPolicy<T>
         @Override
         public boolean evict(PooledObject<T> obj, EvictionContext context) {
             return obj.getBorrowCount() < minBorrowCount;
+        }
+    }
+
+    /**
+     * Maximum age eviction policy.
+     * 最大生命周期驱逐策略。
+     *
+     * <p>Evicts objects that have exceeded a maximum lifetime based on creation time.
+     * Essential for database connections that must be recycled periodically.</p>
+     * <p>驱逐超过最大生命周期的对象（基于创建时间，而非空闲时间）。
+     * 对于必须定期回收的数据库连接至关重要。</p>
+     *
+     * @param <T>         the pooled object type - 池化对象类型
+     * @param maxLifetime the maximum object lifetime - 最大对象生命周期
+     * @author Leon Soo
+     * <a href="https://leonsoo.com">www.LeonSoo.com</a>
+     * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
+     * @since JDK 25, opencode-base-pool V1.0.3
+     */
+    record MaxAge<T>(Duration maxLifetime) implements EvictionPolicy<T> {
+        @Override
+        public boolean evict(PooledObject<T> obj, EvictionContext context) {
+            Duration age = Duration.between(obj.getCreateInstant(), Instant.now());
+            return age.compareTo(maxLifetime) > 0;
         }
     }
 

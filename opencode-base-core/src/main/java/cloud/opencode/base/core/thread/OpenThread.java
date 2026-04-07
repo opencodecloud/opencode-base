@@ -55,11 +55,27 @@ public final class OpenThread {
     // ==================== 线程池创建 ====================
 
     /**
+     * Creates a fixed-size thread pool with default name prefix "opencode-fixed-pool"
+     * 创建固定大小线程池，使用默认名称前缀 "opencode-fixed-pool"
+     */
+    public static ExecutorService createFixedThreadPool(int nThreads) {
+        return createFixedThreadPool(nThreads, "opencode-fixed-pool");
+    }
+
+    /**
      * Creates a fixed-size thread pool
      * 创建固定大小线程池
      */
     public static ExecutorService createFixedThreadPool(int nThreads, String namePrefix) {
         return Executors.newFixedThreadPool(nThreads, new NamedThreadFactory(namePrefix));
+    }
+
+    /**
+     * Creates a cached thread pool with default name prefix "opencode-cached-pool"
+     * 创建缓存线程池，使用默认名称前缀 "opencode-cached-pool"
+     */
+    public static ExecutorService createCachedThreadPool() {
+        return createCachedThreadPool("opencode-cached-pool");
     }
 
     /**
@@ -71,11 +87,27 @@ public final class OpenThread {
     }
 
     /**
+     * Creates a single-thread executor with default name prefix "opencode-single-pool"
+     * 创建单线程执行器，使用默认名称前缀 "opencode-single-pool"
+     */
+    public static ExecutorService createSingleThreadExecutor() {
+        return createSingleThreadExecutor("opencode-single-pool");
+    }
+
+    /**
      * Creates a single-thread executor
      * 创建单线程执行器
      */
     public static ExecutorService createSingleThreadExecutor(String namePrefix) {
         return Executors.newSingleThreadExecutor(new NamedThreadFactory(namePrefix));
+    }
+
+    /**
+     * Creates a scheduled thread pool with default name prefix "opencode-scheduled-pool"
+     * 创建调度线程池，使用默认名称前缀 "opencode-scheduled-pool"
+     */
+    public static ScheduledExecutorService createScheduledThreadPool(int corePoolSize) {
+        return createScheduledThreadPool(corePoolSize, "opencode-scheduled-pool");
     }
 
     /**
@@ -178,7 +210,7 @@ public final class OpenThread {
      * 线程睡眠（秒）
      */
     public static void sleepSeconds(long seconds) {
-        sleepMillis(seconds * 1000);
+        sleepMillis(Math.multiplyExact(seconds, 1000));
     }
 
     /**

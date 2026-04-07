@@ -45,6 +45,23 @@ public final class OpenSimilarity {
         return LevenshteinDistance.similarity(s1, s2);
     }
 
+    /**
+     * Bounded Levenshtein distance with early termination.
+     * 带阈值的有界Levenshtein距离，提前终止。
+     *
+     * <p>Returns the edit distance if {@code <= threshold}, otherwise {@code -1}.</p>
+     * <p>如果编辑距离 {@code <= threshold} 则返回距离，否则返回 {@code -1}。</p>
+     *
+     * @param s1        the first string | 第一个字符串
+     * @param s2        the second string | 第二个字符串
+     * @param threshold the maximum acceptable distance | 最大可接受距离
+     * @return the edit distance if {@code <= threshold}, otherwise {@code -1} |
+     *         如果编辑距离 {@code <= threshold} 则返回距离，否则返回 {@code -1}
+     */
+    public static int boundedLevenshteinDistance(String s1, String s2, int threshold) {
+        return LevenshteinDistance.boundedDistance(s1, s2, threshold);
+    }
+
     public static double jaccardSimilarity(String s1, String s2) {
         return JaccardSimilarity.calculate(s1, s2);
     }

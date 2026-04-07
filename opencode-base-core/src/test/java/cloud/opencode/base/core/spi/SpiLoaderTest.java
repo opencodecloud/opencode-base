@@ -262,6 +262,46 @@ class SpiLoaderTest {
         }
     }
 
+    @Nested
+    @DisplayName("loadSafe")
+    class LoadSafeTests {
+
+        @Test
+        void returnsEmptyForNonExistentService() {
+            List<?> result = SpiLoader.loadSafe(Runnable.class);
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void resultIsUnmodifiable() {
+            List<?> result = SpiLoader.loadSafe(Runnable.class);
+            assertThatThrownBy(() -> result.add(null)).isInstanceOf(UnsupportedOperationException.class);
+        }
+
+        @Test
+        void rejectsNullServiceClass() {
+            assertThatThrownBy(() -> SpiLoader.loadSafe(null))
+                    .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("loadOrdered")
+    class LoadOrderedTests {
+
+        @Test
+        void returnsNonNull() {
+            List<?> result = SpiLoader.loadOrdered(Runnable.class);
+            assertThat(result).isNotNull();
+        }
+
+        @Test
+        void resultIsUnmodifiable() {
+            List<?> result = SpiLoader.loadOrdered(Runnable.class);
+            assertThatThrownBy(() -> result.add(null)).isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
     // 测试用接口和实现
     public interface TestService {
         String getName();

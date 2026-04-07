@@ -1,5 +1,7 @@
 package cloud.opencode.base.expression.function;
 
+import cloud.opencode.base.expression.OpenExpressionException;
+
 import java.util.*;
 
 /**
@@ -272,7 +274,16 @@ public final class CollectionFunctions {
                 if (step == 0) step = 1;
             }
 
-            List<Integer> result = new ArrayList<>();
+            // Prevent unbounded list creation
+            long count = (step > 0 && end > start) ? ((long) end - start + step - 1) / step
+                    : (step < 0 && start > end) ? ((long) start - end - step - 1) / -step
+                    : 0;
+            if (count > 1_000_000) {
+                throw OpenExpressionException.evaluationError(
+                        "Range produces " + count + " elements, exceeds limit of 1000000");
+            }
+
+            List<Integer> result = new ArrayList<>((int) Math.min(count, 1_000_000));
             if (step > 0) {
                 for (int i = start; i < end; i += step) {
                     result.add(i);

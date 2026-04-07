@@ -7,7 +7,7 @@
     <parent>
         <groupId>cloud.opencode.base</groupId>
         <artifactId>opencode-base-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.3</version>
     </parent>
 
     <artifactId>opencode-base-classloader</artifactId>
@@ -39,8 +39,24 @@
         </dependency>
     </dependencies>
 
+    <properties>
+        <!-- LeakCleaner 测试需要访问 java.lang 内部（ThreadLocal/ShutdownHooks 反射清理） -->
+        <!-- JaCoCo agent 在模块路径上无法 instrument，需降回类路径运行测试 -->
+        <surefire.useModulePath>false</surefire.useModulePath>
+    </properties>
+
     <build>
         <plugins>
+            <!-- LeakCleaner 需要 add-opens java.base/java.lang（ThreadLocal/ShutdownHooks 反射） -->
+            <!-- JaCoCo on-the-fly instrumentation 不兼容 JPMS 模块路径，需关闭 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <argLine>@{argLine} --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
+                </configuration>
+            </plugin>
             <!-- 覆盖率阈值临时降低，后续逐步提升至 80% / Coverage threshold temporarily lowered -->
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -53,6 +69,34 @@
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.75</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <!-- 安全包要求更高覆盖率 / Higher threshold for security package -->
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>cloud.opencode.base.classloader.security</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.85</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <!-- 泄漏包包含反射清理代码，部分路径受模块系统限制无法在测试中覆盖 -->
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>cloud.opencode.base.classloader.leak</include>
+                                    </includes>
                                     <limits>
                                         <limit>
                                             <counter>INSTRUCTION</counter>

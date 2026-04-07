@@ -5,14 +5,23 @@ import cloud.opencode.base.cron.exception.OpenCronException;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
+import java.time.temporal.Temporal;
+import java.time.temporal.TemporalAdjuster;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * Cron Expression - Full-Featured Cron Expression Parser and Evaluator
@@ -35,6 +44,10 @@ import java.util.regex.Pattern;
  *   <li>Range wrap-around: 22-2 for hours means 22,23,0,1,2 - 范围回绕</li>
  *   <li>Forward scheduling: {@link #nextExecution}, {@link #nextExecutions} - 正向调度</li>
  *   <li>Reverse scheduling: {@link #previousExecution} - 反向调度</li>
+ *   <li>Lazy streams: {@link #stream}, {@link #reverseStream} - 惰性流式调度</li>
+ *   <li>Filtered scheduling: {@link #nextExecution(ZonedDateTime, Predicate)} - 过滤调度（节假日排除等）</li>
+ *   <li>Schedule overlap detection: {@link #nextOverlap}, {@link #hasOverlapBetween} - 调度重叠检测</li>
+ *   <li>{@link TemporalAdjuster} integration: {@code zdt.with(cronExpr)} - 时间调节器集成</li>
  *   <li>Human-readable description: {@link #describe()} - 人类可读描述</li>
  *   <li>Serializable with equals/hashCode - 可序列化，支持equals/hashCode</li>
  * </ul>
@@ -82,7 +95,7 @@ import java.util.regex.Pattern;
  * @see CronBuilder
  * @since JDK 25, opencode-base-cron V1.0.0
  */
-public final class CronExpression implements Serializable {
+public final class CronExpression implements Serializable, TemporalAdjuster {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -367,8 +380,20 @@ public final class CronExpression implements Serializable {
                     int to = Integer.parseInt(rangeParts[1]);
                     validateRange(from, min, max, cronField, field);
                     validateRange(to, min, max, cronField, field);
-                    for (int i = from; i <= to; i += step) {
-                        bits.set(i);
+                    if (from > to) {
+                        // Wrap-around range with step: e.g., 22-2/2 for hours → 22,0,2
+                        for (int i = from; i <= max; i += step) {
+                            bits.set(i);
+                        }
+                        int offset = (max + 1 - from) % step;
+                        int wrapStart = min + (step - offset) % step;
+                        for (int i = wrapStart; i <= to; i += step) {
+                            bits.set(i);
+                        }
+                    } else {
+                        for (int i = from; i <= to; i += step) {
+                            bits.set(i);
+                        }
                     }
                     continue;
                 } else {
@@ -420,7 +445,7 @@ public final class CronExpression implements Serializable {
      * @return true if the time matches | 如果匹配返回true
      */
     public boolean matches(ZonedDateTime time) {
-        java.util.Objects.requireNonNull(time, "time must not be null");
+        Objects.requireNonNull(time, "time must not be null");
         if (!seconds.get(time.getSecond())) return false;
         if (!minutes.get(time.getMinute())) return false;
         if (!hours.get(time.getHour())) return false;
@@ -529,7 +554,23 @@ public final class CronExpression implements Serializable {
      * @return the next execution time, or null if none within 4 years | 下次执行时间，如果4年内没有则返回null
      */
     public ZonedDateTime nextExecution(ZonedDateTime from) {
-        java.util.Objects.requireNonNull(from, "from must not be null");
+        return nextExecution(from, 4);
+    }
+
+    /**
+     * Gets the next execution time with configurable search window
+     * 获取可配置搜索窗口的下次执行时间
+     *
+     * @param from     the start time | 开始时间
+     * @param maxYears the maximum years to search (1-100) | 最大搜索年数（1-100）
+     * @return the next execution time, or null if none within maxYears | 下次执行时间
+     * @throws IllegalArgumentException if maxYears is not in range 1-100 | 如果maxYears不在1-100范围内
+     */
+    public ZonedDateTime nextExecution(ZonedDateTime from, int maxYears) {
+        Objects.requireNonNull(from, "from must not be null");
+        if (maxYears < 1 || maxYears > 100) {
+            throw new IllegalArgumentException("maxYears must be between 1 and 100: " + maxYears);
+        }
         ZonedDateTime next;
         if (hasSeconds) {
             next = from.plusSeconds(1).withNano(0);
@@ -537,10 +578,9 @@ public final class CronExpression implements Serializable {
             next = from.plusMinutes(1).withSecond(0).withNano(0);
         }
 
-        int maxYearAdvances = 4;
         int startYear = next.getYear();
 
-        while (next.getYear() - startYear <= maxYearAdvances) {
+        while (next.getYear() - startYear < maxYears) {
             // 1. Month
             int nm = months.nextSetBit(next.getMonthValue());
             if (nm < 0) {
@@ -619,7 +659,7 @@ public final class CronExpression implements Serializable {
      * @throws IllegalArgumentException if count is not positive | 如果count不是正数
      */
     public List<ZonedDateTime> nextExecutions(ZonedDateTime from, int count) {
-        java.util.Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(from, "from must not be null");
         if (count <= 0) {
             throw new IllegalArgumentException("count must be positive: " + count);
         }
@@ -644,7 +684,23 @@ public final class CronExpression implements Serializable {
      * @return the previous execution time, or null if none within 4 years | 上次执行时间，如果4年内没有则返回null
      */
     public ZonedDateTime previousExecution(ZonedDateTime from) {
-        java.util.Objects.requireNonNull(from, "from must not be null");
+        return previousExecution(from, 4);
+    }
+
+    /**
+     * Gets the previous execution time with configurable search window
+     * 获取可配置搜索窗口的上次执行时间
+     *
+     * @param from     the reference time | 参考时间
+     * @param maxYears the maximum years to search (1-100) | 最大搜索年数（1-100）
+     * @return the previous execution time, or null if none within maxYears | 上次执行时间
+     * @throws IllegalArgumentException if maxYears is not in range 1-100 | 如果maxYears不在1-100范围内
+     */
+    public ZonedDateTime previousExecution(ZonedDateTime from, int maxYears) {
+        Objects.requireNonNull(from, "from must not be null");
+        if (maxYears < 1 || maxYears > 100) {
+            throw new IllegalArgumentException("maxYears must be between 1 and 100: " + maxYears);
+        }
         ZonedDateTime prev;
         if (hasSeconds) {
             prev = from.minusSeconds(1).withNano(0);
@@ -652,10 +708,9 @@ public final class CronExpression implements Serializable {
             prev = from.minusMinutes(1).withSecond(0).withNano(0);
         }
 
-        int maxYearAdvances = 4;
         int startYear = prev.getYear();
 
-        while (startYear - prev.getYear() <= maxYearAdvances) {
+        while (startYear - prev.getYear() < maxYears) {
             // 1. Month
             int pm = months.previousSetBit(prev.getMonthValue());
             if (pm < 0) {
@@ -736,7 +791,7 @@ public final class CronExpression implements Serializable {
      * @throws IllegalArgumentException if count is not positive | 如果count不是正数
      */
     public List<ZonedDateTime> previousExecutions(ZonedDateTime from, int count) {
-        java.util.Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(from, "from must not be null");
         if (count <= 0) {
             throw new IllegalArgumentException("count must be positive: " + count);
         }
@@ -751,6 +806,443 @@ public final class CronExpression implements Serializable {
         return result;
     }
 
+    // ==================== Duration Convenience | 时间间隔便利方法 ====================
+
+    /**
+     * Gets the duration until the next execution
+     * 获取距下次执行的时间间隔
+     *
+     * @param from the reference time | 参考时间
+     * @return the duration to next execution, or null if none within search window | 距下次执行的Duration
+     */
+    public Duration timeToNextExecution(ZonedDateTime from) {
+        Objects.requireNonNull(from, "from must not be null");
+        ZonedDateTime next = nextExecution(from);
+        return next != null ? Duration.between(from, next) : null;
+    }
+
+    /**
+     * Gets the duration since the last execution
+     * 获取距上次执行的时间间隔
+     *
+     * @param from the reference time | 参考时间
+     * @return the duration from last execution, or null if none within search window | 距上次执行的Duration
+     */
+    public Duration timeFromLastExecution(ZonedDateTime from) {
+        Objects.requireNonNull(from, "from must not be null");
+        ZonedDateTime prev = previousExecution(from);
+        return prev != null ? Duration.between(prev, from) : null;
+    }
+
+    // ==================== Executions Between | 区间执行 ====================
+
+    /**
+     * Counts executions between two times
+     * 计算两个时间点之间的执行次数
+     *
+     * <p>The maximum count is capped at 1,000,000 to prevent excessive computation.
+     * If the count reaches this limit, 1,000,000 is returned (which may be an undercount).</p>
+     * <p>最大计数上限为1,000,000以防止过度计算。如果达到此限制，返回1,000,000（可能是不完整的计数）。</p>
+     *
+     * @param from the start time (exclusive) | 开始时间（不包含）
+     * @param to   the end time (inclusive) | 结束时间（包含）
+     * @return the count of executions (capped at 1,000,000) | 执行次数（上限1,000,000）
+     * @throws IllegalArgumentException if from is not before to | 如果from不在to之前
+     */
+    public long countExecutionsBetween(ZonedDateTime from, ZonedDateTime to) {
+        Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(to, "to must not be null");
+        if (!from.isBefore(to)) {
+            throw new IllegalArgumentException("from must be before to");
+        }
+        long count = 0;
+        ZonedDateTime current = from;
+        while (count < 1_000_000) {
+            ZonedDateTime next = nextExecution(current);
+            if (next == null || next.isAfter(to)) {
+                break;
+            }
+            count++;
+            current = next;
+        }
+        return count;
+    }
+
+    /**
+     * Lists all executions between two times
+     * 列出两个时间点之间的所有执行时间
+     *
+     * @param from the start time (exclusive) | 开始时间（不包含）
+     * @param to   the end time (inclusive) | 结束时间（包含）
+     * @return unmodifiable list of execution times | 不可修改的执行时间列表
+     * @throws IllegalArgumentException if from is not before to | 如果from不在to之前
+     */
+    public List<ZonedDateTime> executionsBetween(ZonedDateTime from, ZonedDateTime to) {
+        return executionsBetween(from, to, 100_000);
+    }
+
+    /**
+     * Lists executions between two times with a limit
+     * 列出两个时间点之间的执行时间（带限制）
+     *
+     * @param from  the start time (exclusive) | 开始时间（不包含）
+     * @param to    the end time (inclusive) | 结束时间（包含）
+     * @param limit the maximum number of results (1-1_000_000) | 最大结果数
+     * @return unmodifiable list of execution times | 不可修改的执行时间列表
+     * @throws IllegalArgumentException if from is not before to, or limit is out of range | 如果from不在to之前或limit超出范围
+     */
+    public List<ZonedDateTime> executionsBetween(ZonedDateTime from, ZonedDateTime to, int limit) {
+        Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(to, "to must not be null");
+        if (!from.isBefore(to)) {
+            throw new IllegalArgumentException("from must be before to");
+        }
+        if (limit < 1 || limit > 1_000_000) {
+            throw new IllegalArgumentException("limit must be between 1 and 1_000_000: " + limit);
+        }
+        List<ZonedDateTime> result = new ArrayList<>();
+        ZonedDateTime current = from;
+        while (result.size() < limit) {
+            ZonedDateTime next = nextExecution(current);
+            if (next == null || next.isAfter(to)) {
+                break;
+            }
+            result.add(next);
+            current = next;
+        }
+        return List.copyOf(result);
+    }
+
+    // ==================== Equivalence | 等价性 ====================
+
+    /**
+     * Checks if this expression is structurally equivalent to another
+     * 检查此表达式是否与另一个结构等价
+     *
+     * <p>Compares internal parsed state (BitSets, special fields, and field count),
+     * not the original expression strings. Note: a 5-field expression and a 6-field
+     * expression with second=0 produce the same schedule, but are considered
+     * structurally different (hasSeconds differs).</p>
+     * <p>比较内部解析状态（BitSet、特殊字段和字段数），而非原始表达式字符串。
+     * 注意：5字段表达式和秒=0的6字段表达式产生相同调度，但被视为结构不同（hasSeconds不同）。</p>
+     *
+     * @param other the other expression | 另一个表达式
+     * @return true if equivalent schedules | 如果调度等价返回true
+     */
+    public boolean isEquivalentTo(CronExpression other) {
+        if (other == null) return false;
+        if (this == other) return true;
+        return this.seconds.equals(other.seconds)
+                && this.minutes.equals(other.minutes)
+                && this.hours.equals(other.hours)
+                && this.daysOfMonth.equals(other.daysOfMonth)
+                && this.months.equals(other.months)
+                && this.daysOfWeek.equals(other.daysOfWeek)
+                && this.hasSeconds == other.hasSeconds
+                && this.domRestricted == other.domRestricted
+                && this.dowRestricted == other.dowRestricted
+                && this.lastDayOfMonth == other.lastDayOfMonth
+                && this.lastDayOffset == other.lastDayOffset
+                && this.lastWeekday == other.lastWeekday
+                && this.nearestWeekday == other.nearestWeekday
+                && this.nthDayOfWeek == other.nthDayOfWeek
+                && this.nthDayOfWeekOrdinal == other.nthDayOfWeekOrdinal
+                && this.lastDayOfWeek == other.lastDayOfWeek
+                && this.lastDayOfWeekValue == other.lastDayOfWeekValue;
+    }
+
+    // ==================== Explain | 解释 ====================
+
+    /**
+     * Gets a comprehensive explanation for debugging
+     * 获取用于调试的综合解释信息
+     *
+     * <p>The estimated interval is {@link Duration#ZERO} when fewer than 2 upcoming
+     * executions can be found within the search window.</p>
+     * <p>当搜索窗口内找到的即将执行次数少于2次时，预估间隔为 {@link Duration#ZERO}。</p>
+     *
+     * @param from the reference time for next executions | 用于计算下次执行的参考时间
+     * @return the explanation | 解释信息
+     */
+    public CronExplanation explain(ZonedDateTime from) {
+        Objects.requireNonNull(from, "from must not be null");
+        String desc = describe();
+        List<ZonedDateTime> nextExecs = nextExecutions(from, 5);
+        Duration interval = Duration.ZERO;
+        if (nextExecs.size() >= 2) {
+            interval = Duration.between(nextExecs.get(0), nextExecs.get(1));
+        }
+        return new CronExplanation(expression, desc, nextExecs, interval);
+    }
+
+    // ==================== Stream | 流式调度 ====================
+
+    /**
+     * Returns a lazy, ordered stream of future execution times
+     * 返回一个惰性的、有序的未来执行时间流
+     *
+     * <p>The stream is computed lazily — each element is calculated on demand.
+     * Use {@code .limit()}, {@code .takeWhile()}, {@code .filter()} etc. to control iteration.</p>
+     * <p>流是惰性计算的——每个元素按需计算。
+     * 使用 {@code .limit()}、{@code .takeWhile()}、{@code .filter()} 等控制迭代。</p>
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * // Next 10 executions | 下10次执行
+     * expr.stream(now).limit(10).toList();
+     *
+     * // All executions before deadline | deadline之前的所有执行
+     * expr.stream(now).takeWhile(t -> t.isBefore(deadline)).toList();
+     * }</pre>
+     *
+     * @param from the start time (exclusive) | 开始时间（不包含）
+     * @return an ordered, sequential stream of execution times | 有序的顺序执行时间流
+     */
+    public Stream<ZonedDateTime> stream(ZonedDateTime from) {
+        Objects.requireNonNull(from, "from must not be null");
+        return StreamSupport.stream(
+                Spliterators.spliteratorUnknownSize(
+                        new java.util.Iterator<>() {
+                            private ZonedDateTime current = from;
+                            private ZonedDateTime lookahead;
+                            private boolean lookaheadValid;
+
+                            @Override
+                            public boolean hasNext() {
+                                if (!lookaheadValid) {
+                                    lookahead = nextExecution(current);
+                                    lookaheadValid = true;
+                                }
+                                return lookahead != null;
+                            }
+
+                            @Override
+                            public ZonedDateTime next() {
+                                if (!hasNext()) {
+                                    throw new java.util.NoSuchElementException(
+                                            "No more executions within search window");
+                                }
+                                lookaheadValid = false;
+                                current = lookahead;
+                                return lookahead;
+                            }
+                        },
+                        Spliterator.ORDERED | Spliterator.NONNULL
+                ),
+                false
+        );
+    }
+
+    /**
+     * Returns a lazy, ordered stream of past execution times (newest first)
+     * 返回一个惰性的、有序的过去执行时间流（最新在前）
+     *
+     * <p>The stream is computed lazily — each element is calculated on demand.</p>
+     * <p>流是惰性计算的——每个元素按需计算。</p>
+     *
+     * @param from the reference time (exclusive) | 参考时间（不包含）
+     * @return an ordered, sequential stream of past execution times | 有序的顺序过去执行时间流
+     */
+    public Stream<ZonedDateTime> reverseStream(ZonedDateTime from) {
+        Objects.requireNonNull(from, "from must not be null");
+        return StreamSupport.stream(
+                Spliterators.spliteratorUnknownSize(
+                        new java.util.Iterator<>() {
+                            private ZonedDateTime current = from;
+                            private ZonedDateTime lookahead;
+                            private boolean lookaheadValid;
+
+                            @Override
+                            public boolean hasNext() {
+                                if (!lookaheadValid) {
+                                    lookahead = previousExecution(current);
+                                    lookaheadValid = true;
+                                }
+                                return lookahead != null;
+                            }
+
+                            @Override
+                            public ZonedDateTime next() {
+                                if (!hasNext()) {
+                                    throw new java.util.NoSuchElementException(
+                                            "No more executions within search window");
+                                }
+                                lookaheadValid = false;
+                                current = lookahead;
+                                return lookahead;
+                            }
+                        },
+                        Spliterator.ORDERED | Spliterator.NONNULL
+                ),
+                false
+        );
+    }
+
+    // ==================== Filtered Scheduling | 过滤调度 ====================
+
+    /**
+     * Gets the next execution time that satisfies a filter
+     * 获取满足过滤条件的下次执行时间
+     *
+     * <p>Skips execution times that do not pass the filter predicate.
+     * Stops after 10,000 skipped candidates to prevent infinite loops.</p>
+     * <p>跳过不满足过滤谓词的执行时间。跳过10,000个候选后停止以防止无限循环。</p>
+     *
+     * <p><strong>Examples | 示例:</strong></p>
+     * <pre>{@code
+     * // Skip weekends | 跳过周末
+     * expr.nextExecution(now, t -> t.getDayOfWeek().getValue() <= 5);
+     *
+     * // Skip holidays | 跳过节假日
+     * Set<LocalDate> holidays = Set.of(LocalDate.of(2026, 1, 1));
+     * expr.nextExecution(now, t -> !holidays.contains(t.toLocalDate()));
+     * }</pre>
+     *
+     * @param from   the start time (exclusive) | 开始时间（不包含）
+     * @param filter the filter predicate — returns true to accept, false to skip | 过滤谓词
+     * @return the next matching execution time, or null if none found | 下次匹配的执行时间
+     */
+    public ZonedDateTime nextExecution(ZonedDateTime from, Predicate<ZonedDateTime> filter) {
+        Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(filter, "filter must not be null");
+        ZonedDateTime current = from;
+        for (int i = 0; i < 10_000; i++) {
+            ZonedDateTime next = nextExecution(current);
+            if (next == null) {
+                return null;
+            }
+            if (filter.test(next)) {
+                return next;
+            }
+            current = next;
+        }
+        return null;
+    }
+
+    /**
+     * Gets the previous execution time that satisfies a filter
+     * 获取满足过滤条件的上次执行时间
+     *
+     * <p>Skips execution times that do not pass the filter predicate.
+     * Stops after 10,000 skipped candidates to prevent infinite loops.</p>
+     * <p>跳过不满足过滤谓词的执行时间。跳过10,000个候选后停止以防止无限循环。</p>
+     *
+     * @param from   the reference time (exclusive) | 参考时间（不包含）
+     * @param filter the filter predicate — returns true to accept, false to skip | 过滤谓词
+     * @return the previous matching execution time, or null if none found | 上次匹配的执行时间
+     */
+    public ZonedDateTime previousExecution(ZonedDateTime from, Predicate<ZonedDateTime> filter) {
+        Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(filter, "filter must not be null");
+        ZonedDateTime current = from;
+        for (int i = 0; i < 10_000; i++) {
+            ZonedDateTime prev = previousExecution(current);
+            if (prev == null) {
+                return null;
+            }
+            if (filter.test(prev)) {
+                return prev;
+            }
+            current = prev;
+        }
+        return null;
+    }
+
+    // ==================== Overlap Detection | 重叠检测 ====================
+
+    /**
+     * Finds the next time both this and another expression fire simultaneously
+     * 查找此表达式与另一个表达式同时触发的下一个时间
+     *
+     * <p>Iterates forward through both schedules to find the first overlap.
+     * Returns null if no overlap is found within 4 years.</p>
+     * <p>正向遍历两个调度以找到第一个重叠时间。如果4年内找不到重叠则返回null。</p>
+     *
+     * @param other the other cron expression | 另一个Cron表达式
+     * @param from  the start time (exclusive) | 开始时间（不包含）
+     * @return the next overlapping execution time, or null | 下一个重叠执行时间
+     */
+    public ZonedDateTime nextOverlap(CronExpression other, ZonedDateTime from) {
+        Objects.requireNonNull(other, "other must not be null");
+        Objects.requireNonNull(from, "from must not be null");
+        ZonedDateTime deadline = from.plusYears(4);
+        ZonedDateTime a = nextExecution(from);
+        ZonedDateTime b = other.nextExecution(from);
+        while (a != null && b != null && !a.isAfter(deadline) && !b.isAfter(deadline)) {
+            int cmp = a.compareTo(b);
+            if (cmp == 0) {
+                return a;
+            } else if (cmp < 0) {
+                a = nextExecution(a);
+            } else {
+                b = other.nextExecution(b);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks if this and another expression have overlapping executions in a time range
+     * 检查此表达式与另一个表达式在时间范围内是否有重叠执行
+     *
+     * @param other the other cron expression | 另一个Cron表达式
+     * @param from  the start time (exclusive) | 开始时间（不包含）
+     * @param to    the end time (inclusive) | 结束时间（包含）
+     * @return true if there is at least one overlapping execution | 如果存在重叠返回true
+     */
+    public boolean hasOverlapBetween(CronExpression other, ZonedDateTime from, ZonedDateTime to) {
+        Objects.requireNonNull(other, "other must not be null");
+        Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(to, "to must not be null");
+        if (!from.isBefore(to)) {
+            throw new IllegalArgumentException("from must be before to");
+        }
+        ZonedDateTime a = nextExecution(from);
+        ZonedDateTime b = other.nextExecution(from);
+        while (a != null && b != null && !a.isAfter(to) && !b.isAfter(to)) {
+            int cmp = a.compareTo(b);
+            if (cmp == 0) {
+                return true;
+            } else if (cmp < 0) {
+                a = nextExecution(a);
+            } else {
+                b = other.nextExecution(b);
+            }
+        }
+        return false;
+    }
+
+    // ==================== TemporalAdjuster | 时间调节器 ====================
+
+    /**
+     * Adjusts the temporal to the next execution time of this cron expression
+     * 将时间调节为此Cron表达式的下次执行时间
+     *
+     * <p>Enables idiomatic usage with {@code java.time}:</p>
+     * <p>支持 {@code java.time} 的惯用写法：</p>
+     * <pre>{@code
+     * ZonedDateTime next = ZonedDateTime.now().with(cronExpr);
+     * }</pre>
+     *
+     * @param temporal the temporal to adjust | 要调节的时间
+     * @return the next execution time | 下次执行时间
+     * @throws java.time.DateTimeException if no execution found within search window | 如果搜索窗口内找不到执行时间
+     */
+    @Override
+    public Temporal adjustInto(Temporal temporal) {
+        if (!(temporal instanceof ZonedDateTime zdt)) {
+            throw new java.time.DateTimeException(
+                    "CronExpression requires a ZonedDateTime; got: "
+                            + temporal.getClass().getSimpleName());
+        }
+        ZonedDateTime next = nextExecution(zdt);
+        if (next == null) {
+            throw new java.time.DateTimeException(
+                    "No execution found for '" + expression + "' within search window");
+        }
+        return next;
+    }
+
     // ==================== Describe | 描述 ====================
 
     /**
@@ -760,6 +1252,22 @@ public final class CronExpression implements Serializable {
      * @return the description in English | 英文描述
      */
     public String describe() {
+        return CronDescriber.describe(this);
+    }
+
+    /**
+     * Gets a human-readable description in the specified locale
+     * 获取指定语言的人类可读描述
+     *
+     * @param locale the locale (supports CHINESE/SIMPLIFIED_CHINESE for Chinese, others default to English)
+     *               语言（支持CHINESE/SIMPLIFIED_CHINESE返回中文，其他默认英文）
+     * @return the localized description | 本地化描述
+     */
+    public String describe(Locale locale) {
+        Objects.requireNonNull(locale, "locale must not be null");
+        if ("zh".equals(locale.getLanguage())) {
+            return CronDescriberZh.describe(this);
+        }
         return CronDescriber.describe(this);
     }
 

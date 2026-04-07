@@ -47,7 +47,6 @@ public class LocationSpoofingException extends GeoSecurityException {
      * @param cause the cause | 原因
      */
     public LocationSpoofingException(String message, Throwable cause) {
-        super(message, GeoErrorCode.LOCATION_SPOOFING);
-        initCause(cause);
+        super(message, cause, GeoErrorCode.LOCATION_SPOOFING);
     }
 }

@@ -26,8 +26,8 @@ class InvalidVertexExceptionTest {
         void testMessageConstructor() {
             InvalidVertexException ex = new InvalidVertexException("Vertex cannot be null");
 
-            assertThat(ex.getMessage()).isEqualTo("Vertex cannot be null");
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.INVALID_VERTEX);
+            assertThat(ex.getMessage()).contains("Vertex cannot be null");
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.INVALID_VERTEX);
         }
     }
 
@@ -61,8 +61,8 @@ class InvalidVertexExceptionTest {
         void testErrorCode() {
             InvalidVertexException ex = new InvalidVertexException("test");
 
-            assertThat(ex.getErrorCode()).isEqualTo(GraphErrorCode.INVALID_VERTEX);
-            assertThat(ex.getErrorCode().getCode()).isEqualTo(3001);
+            assertThat(ex.getGraphErrorCode()).isEqualTo(GraphErrorCode.INVALID_VERTEX);
+            assertThat(ex.getGraphErrorCode().getCode()).isEqualTo(3001);
         }
     }
 }

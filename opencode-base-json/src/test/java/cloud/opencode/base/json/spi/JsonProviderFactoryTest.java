@@ -17,6 +17,7 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -313,7 +314,7 @@ class JsonProviderFactoryTest {
 
             @Override
             public byte[] toJsonBytes(Object obj) {
-                return "{}".getBytes();
+                return "{}".getBytes(StandardCharsets.UTF_8);
             }
 
             @Override
@@ -339,6 +340,11 @@ class JsonProviderFactoryTest {
 
             @Override
             public <T> T fromJson(byte[] json, Class<T> clazz) {
+                return null;
+            }
+
+            @Override
+            public <T> T fromJson(byte[] json, TypeReference<T> typeReference) {
                 return null;
             }
 

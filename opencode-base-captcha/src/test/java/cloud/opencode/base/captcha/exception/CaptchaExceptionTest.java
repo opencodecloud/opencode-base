@@ -1,5 +1,6 @@
 package cloud.opencode.base.captcha.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -23,7 +24,7 @@ class CaptchaExceptionTest {
         void shouldCreateExceptionWithMessage() {
             CaptchaException ex = new CaptchaException("Test error message");
 
-            assertThat(ex.getMessage()).isEqualTo("Test error message");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error message");
             assertThat(ex.getCause()).isNull();
         }
 
@@ -32,7 +33,7 @@ class CaptchaExceptionTest {
         void shouldCreateExceptionWithEmptyMessage() {
             CaptchaException ex = new CaptchaException("");
 
-            assertThat(ex.getMessage()).isEmpty();
+            assertThat(ex.getRawMessage()).isEmpty();
             assertThat(ex.getCause()).isNull();
         }
 
@@ -41,7 +42,7 @@ class CaptchaExceptionTest {
         void shouldCreateExceptionWithNullMessage() {
             CaptchaException ex = new CaptchaException((String) null);
 
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
             assertThat(ex.getCause()).isNull();
         }
 
@@ -51,7 +52,7 @@ class CaptchaExceptionTest {
             String message = "Error: Invalid CAPTCHA \u4e2d\u6587 <script>alert('xss')</script>";
             CaptchaException ex = new CaptchaException(message);
 
-            assertThat(ex.getMessage()).isEqualTo(message);
+            assertThat(ex.getRawMessage()).isEqualTo(message);
         }
 
         @Test
@@ -60,8 +61,8 @@ class CaptchaExceptionTest {
             String message = "A".repeat(10_000);
             CaptchaException ex = new CaptchaException(message);
 
-            assertThat(ex.getMessage()).isEqualTo(message);
-            assertThat(ex.getMessage()).hasSize(10_000);
+            assertThat(ex.getRawMessage()).isEqualTo(message);
+            assertThat(ex.getRawMessage()).hasSize(10_000);
         }
 
         @Test
@@ -69,7 +70,7 @@ class CaptchaExceptionTest {
         void shouldPreserveWhitespaceOnlyMessage() {
             CaptchaException ex = new CaptchaException("   \t\n  ");
 
-            assertThat(ex.getMessage()).isEqualTo("   \t\n  ");
+            assertThat(ex.getRawMessage()).isEqualTo("   \t\n  ");
         }
 
         @Test
@@ -78,8 +79,8 @@ class CaptchaExceptionTest {
             String message = "Line 1\nLine 2\nLine 3";
             CaptchaException ex = new CaptchaException(message);
 
-            assertThat(ex.getMessage()).isEqualTo(message);
-            assertThat(ex.getMessage()).contains("\n");
+            assertThat(ex.getRawMessage()).isEqualTo(message);
+            assertThat(ex.getRawMessage()).contains("\n");
         }
     }
 
@@ -93,16 +94,16 @@ class CaptchaExceptionTest {
             RuntimeException cause = new RuntimeException("Root cause");
             CaptchaException ex = new CaptchaException("Test error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCause()).isEqualTo(cause);
         }
 
         @Test
         @DisplayName("should create exception with message and null cause")
         void shouldCreateExceptionWithMessageAndNullCause() {
-            CaptchaException ex = new CaptchaException("Test error", null);
+            CaptchaException ex = new CaptchaException("Test error", (Throwable) null);
 
-            assertThat(ex.getMessage()).isEqualTo("Test error");
+            assertThat(ex.getRawMessage()).isEqualTo("Test error");
             assertThat(ex.getCause()).isNull();
         }
 
@@ -112,16 +113,16 @@ class CaptchaExceptionTest {
             RuntimeException cause = new RuntimeException("Root cause");
             CaptchaException ex = new CaptchaException(null, cause);
 
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
             assertThat(ex.getCause()).isEqualTo(cause);
         }
 
         @Test
         @DisplayName("should create exception with both null values")
         void shouldCreateExceptionWithBothNullValues() {
-            CaptchaException ex = new CaptchaException(null, null);
+            CaptchaException ex = new CaptchaException(null, (Throwable) null);
 
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
             assertThat(ex.getCause()).isNull();
         }
 
@@ -177,7 +178,7 @@ class CaptchaExceptionTest {
             CaptchaException ex = new CaptchaException(cause);
 
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getMessage()).isEqualTo("java.lang.RuntimeException: Root cause");
+            assertThat(ex.getRawMessage()).isEqualTo("Root cause");
         }
 
         @Test
@@ -186,7 +187,7 @@ class CaptchaExceptionTest {
             CaptchaException ex = new CaptchaException((Throwable) null);
 
             assertThat(ex.getCause()).isNull();
-            assertThat(ex.getMessage()).isNull();
+            assertThat(ex.getRawMessage()).isNull();
         }
 
         @Test
@@ -196,16 +197,16 @@ class CaptchaExceptionTest {
             CaptchaException ex = new CaptchaException(cause);
 
             assertThat(ex.getCause()).isEqualTo(cause);
-            assertThat(ex.getMessage()).isEqualTo("java.lang.RuntimeException");
+            assertThat(ex.getRawMessage()).isNull();
         }
 
         @Test
-        @DisplayName("should derive message from cause toString")
-        void shouldDeriveMessageFromCauseToString() {
+        @DisplayName("should derive message from cause getMessage")
+        void shouldDeriveMessageFromCauseGetMessage() {
             IllegalStateException cause = new IllegalStateException("bad state");
             CaptchaException ex = new CaptchaException(cause);
 
-            assertThat(ex.getMessage()).isEqualTo(cause.toString());
+            assertThat(ex.getRawMessage()).isEqualTo(cause.getMessage());
         }
 
         @Test
@@ -223,6 +224,14 @@ class CaptchaExceptionTest {
     @Nested
     @DisplayName("Inheritance Tests")
     class InheritanceTests {
+
+        @Test
+        @DisplayName("should extend OpenException")
+        void shouldExtendOpenException() {
+            CaptchaException ex = new CaptchaException("Test");
+
+            assertThat(ex).isInstanceOf(OpenException.class);
+        }
 
         @Test
         @DisplayName("should extend RuntimeException")
@@ -266,7 +275,7 @@ class CaptchaExceptionTest {
             assertThatThrownBy(() -> {
                 throw new CaptchaException("unchecked");
             }).isInstanceOf(CaptchaException.class)
-              .hasMessage("unchecked");
+              .hasMessageContaining("unchecked");
         }
 
         @Test

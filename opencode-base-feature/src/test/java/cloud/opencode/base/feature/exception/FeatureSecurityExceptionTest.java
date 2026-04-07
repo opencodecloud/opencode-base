@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-feature V1.0.0
+ * @since JDK 25, opencode-base-feature V1.0.3
  */
 @DisplayName("FeatureSecurityException 测试")
 class FeatureSecurityExceptionTest {
@@ -26,8 +26,9 @@ class FeatureSecurityExceptionTest {
         void testMessageConstructor() {
             FeatureSecurityException ex = new FeatureSecurityException("Security error");
 
-            assertThat(ex.getMessage()).isEqualTo("Security error");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.UNAUTHORIZED);
+            assertThat(ex.getRawMessage()).isEqualTo("Security error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (4001) Security error");
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.UNAUTHORIZED);
         }
 
         @Test
@@ -37,8 +38,9 @@ class FeatureSecurityExceptionTest {
                     "Audit error", FeatureErrorCode.AUDIT_FAILED
             );
 
-            assertThat(ex.getMessage()).isEqualTo("Audit error");
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.AUDIT_FAILED);
+            assertThat(ex.getRawMessage()).isEqualTo("Audit error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (4002) Audit error");
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.AUDIT_FAILED);
         }
 
         @Test
@@ -47,9 +49,10 @@ class FeatureSecurityExceptionTest {
             Throwable cause = new RuntimeException("cause");
             FeatureSecurityException ex = new FeatureSecurityException("Security error", cause);
 
-            assertThat(ex.getMessage()).isEqualTo("Security error");
+            assertThat(ex.getRawMessage()).isEqualTo("Security error");
+            assertThat(ex.getMessage()).isEqualTo("[feature] (4001) Security error");
             assertThat(ex.getCause()).isSameAs(cause);
-            assertThat(ex.getErrorCode()).isEqualTo(FeatureErrorCode.UNAUTHORIZED);
+            assertThat(ex.getFeatureErrorCode()).isEqualTo(FeatureErrorCode.UNAUTHORIZED);
         }
     }
 

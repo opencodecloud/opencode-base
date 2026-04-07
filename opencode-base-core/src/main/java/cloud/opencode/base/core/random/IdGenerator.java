@@ -48,6 +48,9 @@ public interface IdGenerator {
      * 生成指定数量的 ID
      */
     default String[] nextIds(int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("count must be non-negative: " + count);
+        }
         String[] ids = new String[count];
         for (int i = 0; i < count; i++) {
             ids[i] = nextId();

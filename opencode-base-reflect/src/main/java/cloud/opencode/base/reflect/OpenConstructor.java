@@ -82,6 +82,7 @@ public final class OpenConstructor {
         try {
             Constructor<T> ctor = clazz.getDeclaredConstructor(parameterTypes);
             if (forceAccess) {
+                checkNotPlatformType(clazz);
                 ctor.setAccessible(true);
             }
             return ctor;
@@ -111,6 +112,7 @@ public final class OpenConstructor {
         // Try to find compatible constructor
         for (Constructor<?> ctor : clazz.getDeclaredConstructors()) {
             if (isAssignable(ctor.getParameterTypes(), parameterTypes)) {
+                checkNotPlatformType(clazz);
                 ctor.setAccessible(true);
                 return (Constructor<T>) ctor;
             }
@@ -231,6 +233,7 @@ public final class OpenConstructor {
      */
     public static <T> T newInstance(Constructor<T> constructor, Object... args) {
         try {
+            checkNotPlatformType(constructor.getDeclaringClass());
             constructor.setAccessible(true);
             return constructor.newInstance(args);
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
@@ -248,6 +251,7 @@ public final class OpenConstructor {
      * @return the instance | 实例
      */
     public static <T> T newInstanceForced(Class<T> clazz, Object... args) {
+        checkNotPlatformType(clazz);
         Class<?>[] paramTypes = getTypesFromArgs(args);
         Constructor<T> ctor = getMatchingConstructor(clazz, paramTypes);
         ctor.setAccessible(true);
@@ -369,6 +373,7 @@ public final class OpenConstructor {
      */
     @SuppressWarnings("unchecked")
     public static <T> T newInstanceByFactory(Class<T> clazz, String factoryMethod, Object... args) {
+        checkNotPlatformType(clazz);
         Method method = findFactoryMethod(clazz, factoryMethod)
                 .orElseThrow(() -> OpenReflectException.methodNotFound(clazz, factoryMethod, getTypesFromArgs(args)));
         try {
@@ -394,6 +399,19 @@ public final class OpenConstructor {
     }
 
     // ==================== Helper Methods | 辅助方法 ====================
+
+    /**
+     * Checks that the class is not a JDK platform type (prevents setAccessible on sensitive classes)
+     * 检查类是否为JDK平台类型（防止对敏感类调用setAccessible）
+     */
+    private static void checkNotPlatformType(Class<?> clazz) {
+        String pkg = clazz.getPackageName();
+        if (pkg.startsWith("java.") || pkg.startsWith("javax.") || pkg.startsWith("sun.")
+                || pkg.startsWith("jdk.") || pkg.startsWith("com.sun.")) {
+            throw new OpenReflectException(clazz, "<init>", "setAccessible",
+                    "setAccessible denied for platform type: " + clazz.getName());
+        }
+    }
 
     private static Class<?>[] getTypesFromArgs(Object[] args) {
         if (args == null || args.length == 0) {

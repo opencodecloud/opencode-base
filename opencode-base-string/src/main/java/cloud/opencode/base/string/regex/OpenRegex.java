@@ -158,7 +158,10 @@ public final class OpenRegex {
         StringBuffer sb = new StringBuffer();
         Matcher m = safeCompile(regex).matcher(str);
         while (m.find()) {
-            m.appendReplacement(sb, replacer.apply(m.group()));
+            // quoteReplacement prevents $ and \ in the replacer's result from being
+            // interpreted as backreferences by appendReplacement.
+            // 使用 quoteReplacement 防止替换结果中的 $ 和 \ 被解析为反向引用。
+            m.appendReplacement(sb, Matcher.quoteReplacement(replacer.apply(m.group())));
         }
         m.appendTail(sb);
         return sb.toString();

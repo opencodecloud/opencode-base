@@ -1,5 +1,7 @@
 package cloud.opencode.base.yml.exception;
 
+import java.io.Serial;
+
 /**
  * YAML Parse Exception - Thrown when YAML parsing fails
  * YAML 解析异常 - 当 YAML 解析失败时抛出
@@ -11,6 +13,7 @@ package cloud.opencode.base.yml.exception;
  * <ul>
  *   <li>Inherits line/column location from OpenYmlException - 从 OpenYmlException 继承行/列位置</li>
  *   <li>Wraps underlying parser exceptions - 包装底层解析器异常</li>
+ *   <li>Error code YML_PARSE_001 - 错误码 YML_PARSE_001</li>
  * </ul>
  *
  * <p><strong>Usage Examples | 使用示例:</strong></p>
@@ -31,9 +34,18 @@ package cloud.opencode.base.yml.exception;
  * @author Leon Soo
  * <a href="https://leonsoo.com">www.LeonSoo.com</a>
  * @see <a href="https://opencode.cloud">OpenCode.cloud</a>
- * @since JDK 25, opencode-base-yml V1.0.0
+ * @since JDK 25, opencode-base-yml V1.0.3
  */
 public class YmlParseException extends OpenYmlException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Default error code for parse exceptions.
+     * 解析异常的默认错误码。
+     */
+    private static final String ERROR_CODE = "YML_PARSE_001";
 
     /**
      * Constructs a parse exception with message.
@@ -42,7 +54,7 @@ public class YmlParseException extends OpenYmlException {
      * @param message the detail message | 详细消息
      */
     public YmlParseException(String message) {
-        super(message);
+        super(ERROR_CODE, message);
     }
 
     /**
@@ -54,7 +66,7 @@ public class YmlParseException extends OpenYmlException {
      * @param column  the column number | 列号
      */
     public YmlParseException(String message, int line, int column) {
-        super(message, line, column);
+        super(ERROR_CODE, message, line, column);
     }
 
     /**
@@ -65,7 +77,7 @@ public class YmlParseException extends OpenYmlException {
      * @param cause   the cause | 原因
      */
     public YmlParseException(String message, Throwable cause) {
-        super(message, cause);
+        super(ERROR_CODE, message, cause);
     }
 
     /**
@@ -78,6 +90,6 @@ public class YmlParseException extends OpenYmlException {
      * @param column  the column number | 列号
      */
     public YmlParseException(String message, Throwable cause, int line, int column) {
-        super(message, cause, line, column);
+        super(ERROR_CODE, message, cause, line, column);
     }
 }

@@ -1,5 +1,7 @@
 package cloud.opencode.base.core.thread;
 
+import java.util.Optional;
+
 /**
  * ScopedValue Utility - JDK 25 Scoped Values support (JEP 506)
  * ScopedValue 工具类 - JDK 25 作用域值支持 (JEP 506)
@@ -206,6 +208,48 @@ public final class ScopedValueUtil {
      */
     public static <T> T get(ScopedValue<T> scopedValue) {
         return scopedValue.get();
+    }
+
+    /**
+     * Get value if bound, otherwise empty Optional.
+     * 如果已绑定则获取值，否则返回空 Optional。
+     *
+     * @param <T>         the type of the scoped value
+     * @param sv          the ScopedValue to query
+     * @return an Optional containing the bound value, or empty if not bound
+     * @since JDK 25, opencode-base-core V1.0.3
+     */
+    public static <T> Optional<T> getIfBound(ScopedValue<T> sv) {
+        return sv.isBound() ? Optional.ofNullable(sv.get()) : Optional.empty();
+    }
+
+    /**
+     * Run with multiple scoped value bindings via Carrier.
+     * 通过 Carrier 运行多个 ScopedValue 绑定。
+     *
+     * @param carrier the Carrier holding scoped value bindings
+     * @param task    the task to execute
+     * @since JDK 25, opencode-base-core V1.0.3
+     */
+    public static void runWhere(ScopedValue.Carrier carrier, Runnable task) {
+        carrier.run(task);
+    }
+
+    /**
+     * Call with multiple scoped value bindings via Carrier.
+     * 通过 Carrier 调用多个 ScopedValue 绑定。
+     *
+     * @param <R>     the return type of the callable
+     * @param <X>     the exception type that may be thrown
+     * @param carrier the Carrier holding scoped value bindings
+     * @param task    the callable task to execute
+     * @return the result of the callable
+     * @throws X if the callable throws an exception
+     * @since JDK 25, opencode-base-core V1.0.3
+     */
+    public static <R, X extends Throwable> R callWhere(ScopedValue.Carrier carrier,
+                                                        ScopedValue.CallableOp<R, X> task) throws X {
+        return carrier.call(task);
     }
 
     /**

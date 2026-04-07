@@ -1,9 +1,11 @@
 
 package cloud.opencode.base.serialization.binary;
 
+import cloud.opencode.base.serialization.OpenSerializer;
 import cloud.opencode.base.serialization.Serializer;
 import cloud.opencode.base.serialization.TypeReference;
 import cloud.opencode.base.serialization.exception.OpenSerializationException;
+import cloud.opencode.base.serialization.filter.ClassFilter;
 
 import java.io.*;
 import java.lang.reflect.Type;
@@ -153,6 +155,87 @@ public class JdkSerializer implements Serializer {
      */
     private static final long MAX_REFERENCES = 1_000_000;
 
+    /**
+     * Maximum allowed byte array size for direct deserialization (64 MB).
+     * 直接反序列化时允许的最大字节数组大小（64 MB）。
+     */
+    private static final int MAX_BINARY_INPUT_SIZE = 64 * 1024 * 1024;
+
+    /**
+     * Reusable ObjectInputFilter instance — avoids lambda allocation on every deserialize() call.
+     * 可重用的 ObjectInputFilter 实例 — 避免每次 deserialize() 调用时分配 lambda。
+     *
+     * <p>Reads {@link OpenSerializer#getConfig()} on each invocation (volatile read)
+     * to respect runtime configuration changes.</p>
+     */
+    private static final ObjectInputFilter DESERIALIZATION_FILTER = filterInfo -> {
+        // Check depth | 检查深度
+        if (filterInfo.depth() > MAX_DEPTH) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "Deserialization rejected: depth {0} exceeds maximum {1}",
+                    filterInfo.depth(), MAX_DEPTH);
+            return ObjectInputFilter.Status.REJECTED;
+        }
+        // Check array size | 检查数组大小
+        if (filterInfo.arrayLength() > MAX_ARRAY_SIZE) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "Deserialization rejected: array length {0} exceeds maximum {1}",
+                    filterInfo.arrayLength(), MAX_ARRAY_SIZE);
+            return ObjectInputFilter.Status.REJECTED;
+        }
+        // Check total object references to prevent DoS via many small objects
+        // 检查总对象引用数以防止通过大量小对象进行 DoS
+        if (filterInfo.references() > MAX_REFERENCES) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "Deserialization rejected: reference count {0} exceeds maximum {1}",
+                    filterInfo.references(), MAX_REFERENCES);
+            return ObjectInputFilter.Status.REJECTED;
+        }
+        // Check class | 检查类
+        Class<?> clazz = filterInfo.serialClass();
+        if (clazz != null) {
+            String className = clazz.getName();
+            // Strip JVM array descriptor to get the component class name
+            // e.g. "[Ljavax.naming.Reference;" -> "javax.naming.Reference"
+            // 剥离 JVM 数组描述符以获取组件类名
+            String effectiveClassName = stripArrayDescriptor(className);
+
+            // Check global ClassFilter from SerializerConfig (if configured)
+            // 检查 SerializerConfig 中的全局 ClassFilter（如已配置）
+            ClassFilter globalFilter = OpenSerializer.getConfig().getClassFilter();
+            if (globalFilter != null && !globalFilter.isAllowed(effectiveClassName)) {
+                LOGGER.log(System.Logger.Level.WARNING,
+                        "Deserialization rejected by global ClassFilter: {0}", className);
+                return ObjectInputFilter.Status.REJECTED;
+            }
+            // Reject known dangerous classes | 拒绝已知危险类
+            if (DENIED_CLASSES.contains(effectiveClassName)) {
+                LOGGER.log(System.Logger.Level.WARNING,
+                        "Deserialization rejected: denied class {0}", className);
+                return ObjectInputFilter.Status.REJECTED;
+            }
+            // Reject dangerous package prefixes | 拒绝危险包前缀
+            if (effectiveClassName.startsWith("javax.naming.") ||
+                effectiveClassName.startsWith("java.rmi.") ||
+                effectiveClassName.startsWith("sun.rmi.") ||
+                effectiveClassName.startsWith("com.sun.org.apache.xalan") ||
+                effectiveClassName.startsWith("sun.")) {
+                LOGGER.log(System.Logger.Level.WARNING,
+                        "Deserialization rejected: dangerous package prefix in class {0}", className);
+                return ObjectInputFilter.Status.REJECTED;
+            }
+            // Reject classes with dangerous patterns | 拒绝具有危险模式的类
+            if (isDangerousClassName(effectiveClassName)) {
+                LOGGER.log(System.Logger.Level.WARNING,
+                        "Deserialization rejected: dangerous class name pattern in {0}", className);
+                return ObjectInputFilter.Status.REJECTED;
+            }
+        }
+        // Explicitly ALLOWED — defense-in-depth: do not rely on UNDECIDED semantics
+        // 显式 ALLOWED — 纵深防御：不依赖 UNDECIDED 语义
+        return ObjectInputFilter.Status.ALLOWED;
+    };
+
     // ==================== Serializer Implementation | 序列化器实现 ====================
 
     @Override
@@ -161,7 +244,7 @@ public class JdkSerializer implements Serializer {
             return new byte[0];
         }
 
-        try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ByteArrayOutputStream bos = new ByteArrayOutputStream(256);
              ObjectOutputStream oos = new ObjectOutputStream(bos)) {
             oos.writeObject(obj);
             oos.flush();
@@ -176,64 +259,15 @@ public class JdkSerializer implements Serializer {
         if (data == null || data.length == 0) {
             return null;
         }
+        if (data.length > MAX_BINARY_INPUT_SIZE) {
+            throw new OpenSerializationException(
+                    "Input data size " + data.length + " bytes exceeds maximum allowed " + MAX_BINARY_INPUT_SIZE + " bytes");
+        }
 
         try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
              ObjectInputStream ois = new ObjectInputStream(bis)) {
-            // Set deserialization filter for security
-            ois.setObjectInputFilter(filterInfo -> {
-                // Check depth | 检查深度
-                if (filterInfo.depth() > MAX_DEPTH) {
-                    LOGGER.log(System.Logger.Level.WARNING,
-                            "Deserialization rejected: depth {0} exceeds maximum {1}",
-                            filterInfo.depth(), MAX_DEPTH);
-                    return ObjectInputFilter.Status.REJECTED;
-                }
-                // Check array size | 检查数组大小
-                if (filterInfo.arrayLength() > MAX_ARRAY_SIZE) {
-                    LOGGER.log(System.Logger.Level.WARNING,
-                            "Deserialization rejected: array length {0} exceeds maximum {1}",
-                            filterInfo.arrayLength(), MAX_ARRAY_SIZE);
-                    return ObjectInputFilter.Status.REJECTED;
-                }
-                // Check total object references to prevent DoS via many small objects
-                // 检查总对象引用数以防止通过大量小对象进行 DoS
-                if (filterInfo.references() > MAX_REFERENCES) {
-                    LOGGER.log(System.Logger.Level.WARNING,
-                            "Deserialization rejected: reference count {0} exceeds maximum {1}",
-                            filterInfo.references(), MAX_REFERENCES);
-                    return ObjectInputFilter.Status.REJECTED;
-                }
-                // Check class | 检查类
-                Class<?> clazz = filterInfo.serialClass();
-                if (clazz != null) {
-                    String className = clazz.getName();
-                    // Reject known dangerous classes | 拒绝已知危险类
-                    if (DENIED_CLASSES.contains(className)) {
-                        LOGGER.log(System.Logger.Level.WARNING,
-                                "Deserialization rejected: denied class {0}", className);
-                        return ObjectInputFilter.Status.REJECTED;
-                    }
-                    // Reject dangerous package prefixes | 拒绝危险包前缀
-                    if (className.startsWith("javax.naming.") ||
-                        className.startsWith("java.rmi.") ||
-                        className.startsWith("sun.rmi.") ||
-                        className.startsWith("com.sun.org.apache.xalan") ||
-                        className.startsWith("sun.")) {
-                        LOGGER.log(System.Logger.Level.WARNING,
-                                "Deserialization rejected: dangerous package prefix in class {0}", className);
-                        return ObjectInputFilter.Status.REJECTED;
-                    }
-                    // Reject classes with dangerous patterns | 拒绝具有危险模式的类
-                    if (isDangerousClassName(className)) {
-                        LOGGER.log(System.Logger.Level.WARNING,
-                                "Deserialization rejected: dangerous class name pattern in {0}", className);
-                        return ObjectInputFilter.Status.REJECTED;
-                    }
-                }
-                // Return UNDECIDED so the global/process-wide filter can still reject
-                // 返回 UNDECIDED 以便全局/进程级过滤器仍然可以拒绝
-                return ObjectInputFilter.Status.UNDECIDED;
-            });
+            // Set deserialization filter for security (static instance, zero allocation)
+            ois.setObjectInputFilter(DESERIALIZATION_FILTER);
             Object obj = ois.readObject();
             return type.cast(obj);
         } catch (IOException | ClassNotFoundException e) {
@@ -256,6 +290,45 @@ public class JdkSerializer implements Serializer {
         throw OpenSerializationException.unsupportedType(type, FORMAT);
     }
 
+    // ==================== Streaming Overrides | 流式覆盖 ====================
+
+    /**
+     * Writes directly to the output stream, avoiding the intermediate byte[] allocation.
+     * 直接写入输出流，避免中间 byte[] 分配。
+     */
+    @Override
+    public void serialize(Object obj, OutputStream out) {
+        java.util.Objects.requireNonNull(out, "OutputStream must not be null");
+        if (obj == null) {
+            return;
+        }
+
+        try (ObjectOutputStream oos = new ObjectOutputStream(out)) {
+            oos.writeObject(obj);
+            oos.flush();
+        } catch (IOException e) {
+            throw OpenSerializationException.serializeFailed(obj, FORMAT, e);
+        }
+    }
+
+    /**
+     * Reads directly from the input stream, avoiding the readLimited -> byte[] -> ByteArrayInputStream double-copy.
+     * 直接从输入流读取，避免 readLimited -> byte[] -> ByteArrayInputStream 的双拷贝。
+     */
+    @Override
+    public <T> T deserialize(InputStream in, Class<T> type) {
+        java.util.Objects.requireNonNull(in, "InputStream must not be null");
+        java.util.Objects.requireNonNull(type, "Type must not be null");
+
+        try (ObjectInputStream ois = new ObjectInputStream(in)) {
+            ois.setObjectInputFilter(DESERIALIZATION_FILTER);
+            Object obj = ois.readObject();
+            return type.cast(obj);
+        } catch (IOException | ClassNotFoundException e) {
+            throw OpenSerializationException.deserializeFailed(null, type, FORMAT, e);
+        }
+    }
+
     @Override
     public String getFormat() {
         return FORMAT;
@@ -269,6 +342,31 @@ public class JdkSerializer implements Serializer {
     @Override
     public boolean supports(Class<?> type) {
         return Serializable.class.isAssignableFrom(type);
+    }
+
+    // ==================== Internal Helpers | 内部辅助 ====================
+
+    /**
+     * Strips JVM array descriptor prefix from a class name to get the component type.
+     * 剥离 JVM 数组描述符前缀以获取组件类型名。
+     *
+     * <p>Examples:</p>
+     * <ul>
+     *   <li>{@code "[Ljavax.naming.Reference;"} → {@code "javax.naming.Reference"}</li>
+     *   <li>{@code "[[Ljava.lang.String;"} → {@code "java.lang.String"}</li>
+     *   <li>{@code "[I"} → {@code "[I"} (primitive arrays are kept as-is)</li>
+     *   <li>{@code "java.lang.String"} → {@code "java.lang.String"} (no change)</li>
+     * </ul>
+     */
+    static String stripArrayDescriptor(String className) {
+        int i = 0;
+        while (i < className.length() && className.charAt(i) == '[') {
+            i++;
+        }
+        if (i > 0 && i < className.length() && className.charAt(i) == 'L' && className.endsWith(";")) {
+            return className.substring(i + 1, className.length() - 1);
+        }
+        return className;
     }
 
     /**

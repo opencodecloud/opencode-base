@@ -180,7 +180,7 @@ public final class ReportGenerator {
             writer.write("    </div>\n");
 
             // Progress bar
-            int passPercent = (int) (report.successRate() * 100);
+            int passPercent = Math.max(0, Math.min(100, (int) (report.successRate() * 100)));
             writer.write("    <div class=\"progress\">\n");
             writer.write("      <div class=\"progress-bar\" style=\"width: " + passPercent + "%\"></div>\n");
             writer.write("    </div>\n");
@@ -334,7 +334,8 @@ public final class ReportGenerator {
         return s.replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
-            .replace("\"", "&quot;");
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;");
     }
 
     private static String escapeJson(String s) {

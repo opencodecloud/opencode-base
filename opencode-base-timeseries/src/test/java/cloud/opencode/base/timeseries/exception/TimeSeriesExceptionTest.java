@@ -1,5 +1,6 @@
 package cloud.opencode.base.timeseries.exception;
 
+import cloud.opencode.base.core.exception.OpenException;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -112,6 +113,101 @@ class TimeSeriesExceptionTest {
                 .isInstanceOf(TimeSeriesException.class)
                 .extracting(e -> ((TimeSeriesException) e).errorCode())
                 .isEqualTo(TimeSeriesErrorCode.SERIES_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("OpenException Inheritance Tests")
+    class OpenExceptionInheritanceTests {
+
+        @Test
+        @DisplayName("should be instanceof OpenException")
+        void shouldBeInstanceOfOpenException() {
+            TimeSeriesException exception = new TimeSeriesException(TimeSeriesErrorCode.INVALID_TIMESTAMP);
+
+            assertThat(exception).isInstanceOf(OpenException.class);
+        }
+
+        @Test
+        @DisplayName("should be instanceof RuntimeException")
+        void shouldBeInstanceOfRuntimeException() {
+            TimeSeriesException exception = new TimeSeriesException(TimeSeriesErrorCode.INVALID_VALUE);
+
+            assertThat(exception).isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        @DisplayName("getComponent should return TimeSeries")
+        void getComponentShouldReturnTimeSeries() {
+            TimeSeriesException exception = new TimeSeriesException(TimeSeriesErrorCode.EMPTY_SERIES);
+
+            assertThat(exception.getComponent()).isEqualTo("TimeSeries");
+        }
+
+        @Test
+        @DisplayName("getErrorCode should return the error code string")
+        void getErrorCodeShouldReturnErrorCodeString() {
+            TimeSeriesException exception = new TimeSeriesException(TimeSeriesErrorCode.INVALID_TIMESTAMP);
+
+            // OpenException.getErrorCode() returns the code string
+            assertThat(exception.getErrorCode()).isEqualTo("TS-1001");
+        }
+
+        @Test
+        @DisplayName("getMessage should include component and error code in OpenException format")
+        void getMessageShouldIncludeComponentAndErrorCode() {
+            TimeSeriesException exception = new TimeSeriesException(
+                TimeSeriesErrorCode.INVALID_TIMESTAMP
+            );
+
+            String message = exception.getMessage();
+            // OpenException format: [Component] (Code) Message
+            assertThat(message).startsWith("[TimeSeries]");
+            assertThat(message).contains("(TS-1001)");
+            assertThat(message).contains("Invalid timestamp");
+        }
+
+        @Test
+        @DisplayName("getMessage with detail should include detail in formatted message")
+        void getMessageWithDetailShouldIncludeDetail() {
+            TimeSeriesException exception = new TimeSeriesException(
+                TimeSeriesErrorCode.QUERY_RANGE_TOO_LARGE,
+                "exceeded 365 days"
+            );
+
+            String message = exception.getMessage();
+            assertThat(message).startsWith("[TimeSeries]");
+            assertThat(message).contains("(TS-2001)");
+            assertThat(message).contains("Query range too large");
+            assertThat(message).contains("exceeded 365 days");
+        }
+
+        @Test
+        @DisplayName("should be catchable as OpenException")
+        void shouldBeCatchableAsOpenException() {
+            assertThatThrownBy(() -> {
+                throw new TimeSeriesException(TimeSeriesErrorCode.AGGREGATION_FAILED);
+            })
+                .isInstanceOf(OpenException.class)
+                .satisfies(e -> {
+                    OpenException oe = (OpenException) e;
+                    assertThat(oe.getComponent()).isEqualTo("TimeSeries");
+                    assertThat(oe.getErrorCode()).isEqualTo("TS-3001");
+                });
+        }
+
+        @Test
+        @DisplayName("getRawMessage should return message without component/code prefix")
+        void getRawMessageShouldReturnUnformattedMessage() {
+            TimeSeriesException exception = new TimeSeriesException(
+                TimeSeriesErrorCode.INVALID_VALUE, "negative number"
+            );
+
+            // getRawMessage() from OpenException returns super.getMessage() (no prefix)
+            String rawMessage = exception.getRawMessage();
+            assertThat(rawMessage).isEqualTo("Invalid value: negative number");
+            assertThat(rawMessage).doesNotContain("[TimeSeries]");
+            assertThat(rawMessage).doesNotContain("(TS-1002)");
         }
     }
 

@@ -231,6 +231,24 @@ class OpenSimilarityTest {
     }
 
     @Nested
+    @DisplayName("boundedLevenshteinDistance Tests")
+    class BoundedLevenshteinDistanceTests {
+
+        @Test
+        @DisplayName("Should delegate to LevenshteinDistance.boundedDistance")
+        void shouldDelegateToBoundedDistance() {
+            assertThat(OpenSimilarity.boundedLevenshteinDistance("kitten", "sitting", 3)).isEqualTo(3);
+            assertThat(OpenSimilarity.boundedLevenshteinDistance("kitten", "sitting", 2)).isEqualTo(-1);
+        }
+
+        @Test
+        @DisplayName("Should return 0 for identical strings")
+        void shouldReturnZeroForIdenticalStrings() {
+            assertThat(OpenSimilarity.boundedLevenshteinDistance("hello", "hello", 0)).isZero();
+        }
+    }
+
+    @Nested
     @DisplayName("Utility Class Tests")
     class UtilityClassTests {
 

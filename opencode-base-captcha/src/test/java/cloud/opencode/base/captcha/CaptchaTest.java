@@ -149,14 +149,14 @@ class CaptchaTest {
         }
 
         @Test
-        @DisplayName("captcha can be created with null metadata")
-        void captchaCanBeCreatedWithNullMetadata() {
+        @DisplayName("captcha with null metadata normalizes to empty map")
+        void captchaWithNullMetadataNormalizesToEmptyMap() {
             Captcha nullMetaCaptcha = new Captcha(
                 TEST_ID, CaptchaType.NUMERIC, TEST_IMAGE_DATA, TEST_ANSWER,
                 null, Instant.now(), Instant.now().plusSeconds(300)
             );
 
-            assertThat(nullMetaCaptcha.metadata()).isNull();
+            assertThat(nullMetaCaptcha.metadata()).isNotNull().isEmpty();
         }
 
         @Test
@@ -472,6 +472,8 @@ class CaptchaTest {
 
                 if (type == CaptchaType.GIF) {
                     assertThat(typedCaptcha.getMimeType()).isEqualTo("image/gif");
+                } else if (type == CaptchaType.AUDIO) {
+                    assertThat(typedCaptcha.getMimeType()).isEqualTo("audio/wav");
                 } else {
                     assertThat(typedCaptcha.getMimeType()).isEqualTo("image/png");
                 }
@@ -574,8 +576,8 @@ class CaptchaTest {
         }
 
         @Test
-        @DisplayName("getMetadata returns null when metadata map is null")
-        void getMetadataReturnsNullWhenMetadataIsNull() {
+        @DisplayName("getMetadata returns null when metadata was originally null (normalized to empty)")
+        void getMetadataReturnsNullWhenMetadataWasNull() {
             Captcha nullMetadataCaptcha = new Captcha(
                 TEST_ID, CaptchaType.ALPHANUMERIC, TEST_IMAGE_DATA, TEST_ANSWER,
                 null, Instant.now(), Instant.now().plusSeconds(300)
@@ -719,12 +721,80 @@ class CaptchaTest {
     }
 
     @Nested
+    @DisplayName("Defensive Copy Tests")
+    class DefensiveCopyTests {
+
+        @Test
+        @DisplayName("imageData is defensively copied on construction")
+        void imageDataIsDefensivelyCopied() {
+            byte[] original = {1, 2, 3};
+            Captcha c = new Captcha(
+                TEST_ID, CaptchaType.NUMERIC, original, TEST_ANSWER,
+                null, Instant.now(), Instant.now().plusSeconds(300)
+            );
+
+            // Mutate the original array
+            original[0] = 99;
+
+            // The record's copy should be unaffected
+            assertThat(c.imageData()[0]).isEqualTo((byte) 1);
+        }
+
+        @Test
+        @DisplayName("null imageData is normalized to empty byte array")
+        void nullImageDataNormalizedToEmptyArray() {
+            Captcha c = new Captcha(
+                TEST_ID, CaptchaType.NUMERIC, null, TEST_ANSWER,
+                null, Instant.now(), Instant.now().plusSeconds(300)
+            );
+
+            assertThat(c.imageData()).isNotNull().isEmpty();
+        }
+
+        @Test
+        @DisplayName("metadata is an unmodifiable copy")
+        void metadataIsUnmodifiableCopy() {
+            Map<String, Object> original = new HashMap<>();
+            original.put("key", "value");
+
+            Captcha c = new Captcha(
+                TEST_ID, CaptchaType.NUMERIC, TEST_IMAGE_DATA, TEST_ANSWER,
+                original, Instant.now(), Instant.now().plusSeconds(300)
+            );
+
+            // Mutate the original map
+            original.put("key", "changed");
+
+            // The record's copy should be unaffected
+            assertThat((String) c.getMetadata("key")).isEqualTo("value");
+
+            // The metadata map itself should be unmodifiable
+            assertThatThrownBy(() -> c.metadata().put("new", "entry"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        }
+
+        @Test
+        @DisplayName("null metadata is normalized to empty unmodifiable map")
+        void nullMetadataNormalizedToEmptyUnmodifiableMap() {
+            Captcha c = new Captcha(
+                TEST_ID, CaptchaType.NUMERIC, TEST_IMAGE_DATA, TEST_ANSWER,
+                null, Instant.now(), Instant.now().plusSeconds(300)
+            );
+
+            assertThat(c.metadata()).isNotNull().isEmpty();
+            assertThatThrownBy(() -> c.metadata().put("key", "value"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("Record Equality Tests")
     class RecordEqualityTests {
 
         @Test
-        @DisplayName("equals returns true for same byte array reference")
-        void equalsReturnsTrueForSameByteArrayReference() {
+        @DisplayName("equals returns false because defensive copy creates distinct byte arrays")
+        void equalsReturnsFalseDueToDefensiveCopy() {
+            // Defensive copy in the compact constructor means each Captcha has its own byte[]
             byte[] sharedImageData = new byte[]{1, 2, 3};
             Captcha captcha1 = new Captcha(
                 "id", CaptchaType.NUMERIC, sharedImageData, "123",
@@ -735,23 +805,7 @@ class CaptchaTest {
                 Map.of("key", "value"), Instant.EPOCH, Instant.EPOCH.plusSeconds(300)
             );
 
-            assertThat(captcha1).isEqualTo(captcha2);
-        }
-
-        @Test
-        @DisplayName("equals returns false for different byte array instances with same content")
-        void equalsReturnsFalseForDifferentByteArrayInstances() {
-            // Records use reference equality for arrays
-            Captcha captcha1 = new Captcha(
-                "id", CaptchaType.NUMERIC, new byte[]{1, 2, 3}, "123",
-                Map.of("key", "value"), Instant.EPOCH, Instant.EPOCH.plusSeconds(300)
-            );
-            Captcha captcha2 = new Captcha(
-                "id", CaptchaType.NUMERIC, new byte[]{1, 2, 3}, "123",
-                Map.of("key", "value"), Instant.EPOCH, Instant.EPOCH.plusSeconds(300)
-            );
-
-            // Different byte[] instances are not equal in records
+            // Records use reference equality for arrays; defensive clone creates distinct instances
             assertThat(captcha1).isNotEqualTo(captcha2);
         }
 
@@ -816,8 +870,10 @@ class CaptchaTest {
         }
 
         @Test
-        @DisplayName("hashCode is consistent for equal objects with same byte array reference")
-        void hashCodeIsConsistentForEqualObjects() {
+        @DisplayName("hashCode differs for captchas with defensively-copied byte arrays")
+        void hashCodeDiffersForDefensivelyCopiedArrays() {
+            // Defensive copy means two captchas built from the same source array
+            // will have distinct byte[] instances and thus different hashCodes
             byte[] sharedImageData = new byte[]{1, 2, 3};
             Captcha captcha1 = new Captcha(
                 "id", CaptchaType.NUMERIC, sharedImageData, "123",
@@ -828,7 +884,8 @@ class CaptchaTest {
                 Map.of("key", "value"), Instant.EPOCH, Instant.EPOCH.plusSeconds(300)
             );
 
-            assertThat(captcha1.hashCode()).isEqualTo(captcha2.hashCode());
+            // Record hashCode uses identity hash for arrays, so cloned arrays differ
+            assertThat(captcha1.hashCode()).isNotEqualTo(captcha2.hashCode());
         }
 
         @Test
@@ -851,6 +908,25 @@ class CaptchaTest {
         @DisplayName("toString contains record class name")
         void toStringContainsClassName() {
             assertThat(captcha.toString()).contains("Captcha");
+        }
+
+        @Test
+        @DisplayName("toString redacts the answer to prevent log exposure")
+        void toStringRedactsAnswer() {
+            String str = captcha.toString();
+
+            assertThat(str).contains("answer=***");
+            assertThat(str).doesNotContain(TEST_ANSWER);
+        }
+
+        @Test
+        @DisplayName("toString contains id and type but not the raw answer")
+        void toStringContainsIdAndTypeButNotAnswer() {
+            String str = captcha.toString();
+
+            assertThat(str).contains("id=" + TEST_ID);
+            assertThat(str).contains("type=" + CaptchaType.ALPHANUMERIC);
+            assertThat(str).doesNotContain("answer=" + TEST_ANSWER);
         }
     }
 }

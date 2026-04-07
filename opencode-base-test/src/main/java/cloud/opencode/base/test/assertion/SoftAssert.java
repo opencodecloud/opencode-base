@@ -15,9 +15,9 @@
  */
 package cloud.opencode.base.test.assertion;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
 /**
@@ -63,7 +63,7 @@ public final class SoftAssert {
      * Thread-safe list to store assertion failures
      * 线程安全列表，用于存储断言失败
      */
-    private final CopyOnWriteArrayList<AssertionError> failures = new CopyOnWriteArrayList<>();
+    private final List<AssertionError> failures = new ArrayList<>();
 
     /**
      * Creates a new SoftAssert instance
@@ -83,7 +83,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isNull(Object actual) {
-        return isNull(actual, "Expected null but was: " + actual);
+        if (actual != null) {
+            addFailure("Expected null but was: " + actual);
+        }
+        return this;
     }
 
     /**
@@ -168,7 +171,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isEqualTo(Object expected, Object actual) {
-        return isEqualTo(expected, actual, "Expected: " + expected + " but was: " + actual);
+        if (!Objects.equals(expected, actual)) {
+            addFailure("Expected: " + expected + " but was: " + actual);
+        }
+        return this;
     }
 
     /**
@@ -212,7 +218,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isNotEqualTo(Object unexpected, Object actual) {
-        return isNotEqualTo(unexpected, actual, "Expected not equal to: " + unexpected + " but was: " + actual);
+        if (Objects.equals(unexpected, actual)) {
+            addFailure("Expected not equal to: " + unexpected + " but was: " + actual);
+        }
+        return this;
     }
 
     /**
@@ -341,7 +350,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isEmpty(String actual) {
-        return isEmpty(actual, "Expected empty string but was: " + actual);
+        if (actual == null || !actual.isEmpty()) {
+            addFailure("Expected empty string but was: " + actual);
+        }
+        return this;
     }
 
     /**
@@ -394,7 +406,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert contains(String actual, String substring) {
-        return contains(actual, substring, "Expected string to contain: " + substring + " but was: " + actual);
+        if (actual == null || !actual.contains(substring)) {
+            addFailure("Expected string to contain: " + substring + " but was: " + actual);
+        }
+        return this;
     }
 
     /**
@@ -422,7 +437,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert startsWith(String actual, String prefix) {
-        return startsWith(actual, prefix, "Expected string to start with: " + prefix + " but was: " + actual);
+        if (actual == null || !actual.startsWith(prefix)) {
+            addFailure("Expected string to start with: " + prefix + " but was: " + actual);
+        }
+        return this;
     }
 
     /**
@@ -450,7 +468,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert endsWith(String actual, String suffix) {
-        return endsWith(actual, suffix, "Expected string to end with: " + suffix + " but was: " + actual);
+        if (actual == null || !actual.endsWith(suffix)) {
+            addFailure("Expected string to end with: " + suffix + " but was: " + actual);
+        }
+        return this;
     }
 
     /**
@@ -480,7 +501,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isGreaterThan(Number actual, Number expected) {
-        return isGreaterThan(actual, expected, "Expected " + actual + " > " + expected);
+        if (actual == null || expected == null || actual.doubleValue() <= expected.doubleValue()) {
+            addFailure("Expected " + actual + " > " + expected);
+        }
+        return this;
     }
 
     /**
@@ -508,7 +532,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isGreaterThanOrEqualTo(Number actual, Number expected) {
-        return isGreaterThanOrEqualTo(actual, expected, "Expected " + actual + " >= " + expected);
+        if (actual == null || expected == null || actual.doubleValue() < expected.doubleValue()) {
+            addFailure("Expected " + actual + " >= " + expected);
+        }
+        return this;
     }
 
     /**
@@ -536,7 +563,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isLessThan(Number actual, Number expected) {
-        return isLessThan(actual, expected, "Expected " + actual + " < " + expected);
+        if (actual == null || expected == null || actual.doubleValue() >= expected.doubleValue()) {
+            addFailure("Expected " + actual + " < " + expected);
+        }
+        return this;
     }
 
     /**
@@ -564,7 +594,10 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isLessThanOrEqualTo(Number actual, Number expected) {
-        return isLessThanOrEqualTo(actual, expected, "Expected " + actual + " <= " + expected);
+        if (actual == null || expected == null || actual.doubleValue() > expected.doubleValue()) {
+            addFailure("Expected " + actual + " <= " + expected);
+        }
+        return this;
     }
 
     /**
@@ -593,7 +626,11 @@ public final class SoftAssert {
      * @return this instance for chaining | 返回实例用于链式调用
      */
     public SoftAssert isBetween(Number actual, Number min, Number max) {
-        return isBetween(actual, min, max, "Expected " + actual + " between " + min + " and " + max);
+        if (actual == null || min == null || max == null ||
+                actual.doubleValue() < min.doubleValue() || actual.doubleValue() > max.doubleValue()) {
+            addFailure("Expected " + actual + " between " + min + " and " + max);
+        }
+        return this;
     }
 
     /**

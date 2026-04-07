@@ -75,6 +75,7 @@ class OpenJsonTest {
             assertThat(OpenJson.class.getMethod("fromJson", String.class, Class.class)).isNotNull();
             assertThat(OpenJson.class.getMethod("fromJson", String.class, TypeReference.class)).isNotNull();
             assertThat(OpenJson.class.getMethod("fromJson", byte[].class, Class.class)).isNotNull();
+            assertThat(OpenJson.class.getMethod("fromJson", byte[].class, TypeReference.class)).isNotNull();
             assertThat(OpenJson.class.getMethod("fromJson", InputStream.class, Class.class)).isNotNull();
             assertThat(OpenJson.class.getMethod("fromJson", Reader.class, Class.class)).isNotNull();
             assertThat(OpenJson.class.getMethod("fromJsonArray", String.class, Class.class)).isNotNull();
